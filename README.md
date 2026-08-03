@@ -231,9 +231,11 @@ Codex helped build the generator and its maintenance tooling. Both the generator
 output are reviewed, so changes to a pin or generation rule are reproducible and visible in the
 binding diff.
 
-For repository work, install the pinned tools and use the explicit workflows:
+For repository work on Debian/Ubuntu, Arch, Artix, CachyOS, or MSYS2, install the system packages,
+then the pinned tools and use the explicit workflows:
 
 ```sh
+./system_setup.sh
 mise trust
 mise install
 deno task setup
