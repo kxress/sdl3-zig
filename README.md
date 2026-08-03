@@ -16,13 +16,15 @@ documentation describe the API instead of merely exposing translated declaration
 | Library         | Zig module                                  | Enable with `addTo`        | Distribution                         |
 | --------------- | ------------------------------------------- | -------------------------- | ------------------------------------ |
 | SDL3            | `sdl`, `sdl3.core`                          | always                     | system, official prebuilt, or source |
-| SDL3_test       | `test`, `sdl3.@"test"`                      | `.test_ = true`            | system or source                     |
 | SDL3_image      | `image`, `sdl3.image`                       | `.image = true`            | system, official prebuilt, or source |
 | SDL3_ttf        | `ttf`, `sdl3.ttf`                           | `.ttf = true`              | system, official prebuilt, or source |
 | SDL3_mixer      | `mixer`, `sdl3.mixer`                       | `.mixer = true`            | system, official prebuilt, or source |
 | SDL3_net        | `net`, `sdl3.net`                           | `.net = true`              | system, official prebuilt, or source |
+| SDL3_test       | `test`, `sdl3.@"test"`                      | `.sdl3_test = true`        | system or source                     |
 | ControllerImage | `controller_image`, `sdl3.controller_image` | `.controller_image = true` | system or source                     |
 | SDL_shadercross | `shadercross`, `sdl3.shadercross`           | `.shadercross = true`      | system or source                     |
+
+SDL3_test, ControllerImage, and SDL_shadercross are optional source-only SDL packages.
 
 “Official prebuilt” means a binary published by the upstream SDL project. This project does not
 publish binaries it built itself. Source builds happen in the consuming application's Zig cache.
@@ -160,7 +162,7 @@ The default source profile enables the SDL_image and SDL_mixer features that nee
 third-party source, uses the verified FreeType bundled for SDL_ttf, and leaves HarfBuzz, PlutoSVG,
 and optional image/audio codecs disabled until explicitly configured.
 
-### Source-only companions
+### Optional source-only SDL packages
 
 `SDL3_test`, ControllerImage, and SDL_shadercross have no official package-local prebuilts. Use
 `.system` when the application supplies the libraries, or `.source` to build the verified sources.
@@ -169,7 +171,7 @@ and optional image/audio codecs disabled until explicitly configured.
 _ = sdl3.addTo(b, exe, .{
     .distribution = .source,
     .linkage = .static,
-    .test_ = true,
+    .sdl3_test = true,
     .controller_image = true,
     .shadercross = true,
 });

@@ -23,7 +23,7 @@ pub const ShadercrossDxc = enum { disabled, bundled, external, source };
 pub const AddOptions = struct {
     distribution: Distribution = .auto,
     linkage: Linkage = .shared,
-    test_: bool = false,
+    sdl3_test: bool = false,
     controller_image: bool = false,
     shadercross: bool = false,
     image: bool = false,
@@ -55,14 +55,14 @@ pub fn addTo(
         .distribution = options.distribution,
         .linkage = options.linkage,
         .enable_image = options.image,
-        .enable_test = options.test_,
+        .enable_test = options.sdl3_test,
         .enable_controller_image = options.controller_image,
         .enable_shadercross = options.shadercross,
         .enable_ttf = options.ttf,
         .enable_mixer = options.mixer,
         .enable_net = options.net,
         .link_sdl = true,
-        .link_test = options.test_,
+        .link_test = options.sdl3_test,
         .link_controller_image = options.controller_image,
         .link_shadercross = options.shadercross,
         .link_image = options.image,
@@ -84,7 +84,7 @@ pub fn addTo(
     artifact.root_module.addImport("sdl", dependency.module("sdl"));
     artifact.root_module.addImport("sdl3", dependency.module("sdl3"));
     if (options.image) artifact.root_module.addImport("image", dependency.module("image"));
-    if (options.test_) artifact.root_module.addImport("test", dependency.module("test"));
+    if (options.sdl3_test) artifact.root_module.addImport("test", dependency.module("test"));
     if (options.controller_image) artifact.root_module.addImport("controller_image", dependency.module("controller_image"));
     if (options.shadercross) artifact.root_module.addImport("shadercross", dependency.module("shadercross"));
     if (options.ttf) artifact.root_module.addImport("ttf", dependency.module("ttf"));

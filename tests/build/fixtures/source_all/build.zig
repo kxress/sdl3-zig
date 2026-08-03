@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
     _ = sdl3.addTo(b, executable, .{
         .distribution = .source,
         .linkage = linkage,
-        .test_ = true,
+        .sdl3_test = true,
         .controller_image = true,
         .shadercross = true,
         .shadercross_dxc = shadercross_dxc,
