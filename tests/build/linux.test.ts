@@ -25,6 +25,7 @@ Deno.test({
             `-Dtarget=${Deno.build.arch}-linux-gnu`,
             `-Dlinkage=${linkage}`,
             "-Ddisable_image_bmp=true",
+            "-Denable_mixer_mp3=true",
             "-p",
             `${temporary}/${linkage}/output`,
             "--cache-dir",
@@ -80,7 +81,9 @@ Deno.test({
             const setting of [
               "SDLMIXER_WAVE:BOOL=ON",
               "SDLMIXER_AIFF:BOOL=ON",
-              "SDLMIXER_MP3:BOOL=OFF",
+              "SDLMIXER_MP3:BOOL=ON",
+              "SDLMIXER_MP3_DRMP3:BOOL=ON",
+              "SDLMIXER_MP3_MPG123:BOOL=OFF",
               "SDLMIXER_FLAC:BOOL=OFF",
             ]
           ) {

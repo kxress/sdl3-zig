@@ -149,6 +149,8 @@ _ = sdl3.addTo(b, exe, .{
     .source_cmake_toolchain = "cmake/toolchain.cmake",
     .source_cmake_options = &.{
         "-DSDLIMAGE_PNG=ON",
+    },
+    .source_mixer_cmake_options = &.{
         "-DSDLMIXER_MP3=ON",
     },
 });
@@ -161,6 +163,11 @@ runtime deployment. Static and shared source outputs stay cache-local, so an app
 The default source profile enables the SDL_image and SDL_mixer features that need no additional
 third-party source, uses the verified FreeType bundled for SDL_ttf, and leaves HarfBuzz, PlutoSVG,
 and optional image/audio codecs disabled until explicitly configured.
+
+Use `source_mixer_cmake_options` for upstream SDL3_mixer codec and dependency switches without
+passing them to the other source builds. For example, `-DSDLMIXER_MP3=ON` enables Mixer’s
+self-contained `dr_mp3` decoder; use Mixer’s `SDLMIXER_VENDORED` and backend-specific CMake options
+when selecting bundled or system codec libraries.
 
 ### Optional source-only SDL packages
 

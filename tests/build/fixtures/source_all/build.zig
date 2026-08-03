@@ -19,6 +19,15 @@ pub fn build(b: *std.Build) void {
         &.{"-DSDLIMAGE_BMP=OFF"}
     else
         &.{};
+    const enable_mixer_mp3 = b.option(
+        bool,
+        "enable_mixer_mp3",
+        "Enable SDL3_mixer's self-contained MP3 decoder",
+    ) orelse false;
+    const source_mixer_cmake_options: []const []const u8 = if (enable_mixer_mp3)
+        &.{"-DSDLMIXER_MP3=ON"}
+    else
+        &.{};
     const source_cmake_toolchain: ?[]const u8 = if (target.result.os.tag == .linux)
         std.fs.path.join(
             b.allocator,
@@ -46,6 +55,7 @@ pub fn build(b: *std.Build) void {
         .mixer = true,
         .net = true,
         .source_cmake_options = source_cmake_options,
+        .source_mixer_cmake_options = source_mixer_cmake_options,
         .source_cmake_toolchain = source_cmake_toolchain,
     });
     b.installArtifact(executable);

@@ -35,6 +35,8 @@ pub const AddOptions = struct {
     source_cmake_generator: ?[]const u8 = null,
     source_cmake_toolchain: ?[]const u8 = null,
     source_cmake_options: []const []const u8 = &.{},
+    /// Additional arguments passed only to the SDL3_mixer source CMake configure step.
+    source_mixer_cmake_options: []const []const u8 = &.{},
     shadercross_dxc: ShadercrossDxc = .disabled,
     shadercross_dxc_root: ?[]const u8 = null,
 };
@@ -73,6 +75,7 @@ pub fn addTo(
         .source_cmake_generator = options.source_cmake_generator,
         .source_cmake_toolchain = options.source_cmake_toolchain,
         .source_cmake_options = options.source_cmake_options,
+        .source_mixer_cmake_options = options.source_mixer_cmake_options,
         .shadercross_dxc = options.shadercross_dxc,
         .shadercross_dxc_root = options.shadercross_dxc_root,
     });
@@ -302,6 +305,11 @@ pub fn build(b: *std.Build) void {
         "source_cmake_options",
         "Additional arguments passed to each upstream CMake configure step",
     ) orelse &.{};
+    const source_mixer_cmake_options = b.option(
+        []const []const u8,
+        "source_mixer_cmake_options",
+        "Additional arguments passed only to the SDL3_mixer CMake configure step",
+    ) orelse &.{};
     const shadercross_dxc = b.option(
         ShadercrossDxc,
         "shadercross_dxc",
@@ -372,6 +380,7 @@ pub fn build(b: *std.Build) void {
             source_cmake_generator,
             source_cmake_toolchain,
             source_cmake_options,
+            source_mixer_cmake_options,
             shadercross_dxc,
             shadercross_dxc_root,
         )
@@ -504,6 +513,7 @@ fn addCmakeSourceBuild(
     generator: ?[]const u8,
     toolchain: ?[]const u8,
     extra_options: []const []const u8,
+    mixer_options: []const []const u8,
     shadercross_dxc: ShadercrossDxc,
     shadercross_dxc_root: ?[]const u8,
 ) SourceBuild {
@@ -613,6 +623,7 @@ fn addCmakeSourceBuild(
         if (generator) |value| configure.addArgs(&.{ "-G", value });
         if (toolchain) |value| configure.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
         configure.addArgs(extra_options);
+        if (std.mem.eql(u8, component, "SDL3_mixer")) configure.addArgs(mixer_options);
         if (previous) |step| configure.step.dependOn(step);
         if (shadercross_runtime) |step| configure.step.dependOn(step);
         const install = b.addSystemCommand(if (std.mem.eql(u8, component, "ControllerImage"))
