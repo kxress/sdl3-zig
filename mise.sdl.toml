@@ -1,0 +1,220 @@
+[tools."http:sdl-source"]
+version = "3.4.12"
+url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz"
+checksum = "sha256:f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7"
+strip_components = 1
+
+[tools."http:sdl-mingw"]
+version = "3.4.12"
+url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-devel-3.4.12-mingw.zip"
+checksum = "sha256:141276f311682d33dbf1e24479230ad84e29ad9a9fa6db96c67ccff9951f22e3"
+strip_components = 0
+
+[tools."http:sdl-msvc"]
+version = "3.4.12"
+url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-devel-3.4.12-VC.zip"
+checksum = "sha256:8793a153c7eba93b1eb8022fd2356383ec446b2584e43724a72ef68d682813ab"
+strip_components = 0
+
+[tools."http:sdl-macos"]
+version = "3.4.12"
+url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.dmg"
+checksum = "sha256:c77d36d9393bb5481e38d222b75a1a63ab16274457b3d18c63fef90aaf5fc93b"
+format = "raw"
+bin = "SDL3-3.4.12.dmg"
+
+[tools."http:sdl-image-source"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4.tar.gz"
+checksum = "sha256:29751304a13d25ac513f24305fa25b06a6edd9607718c90129b8350d35fc5573"
+strip_components = 1
+
+[tools."http:sdl-image-mingw"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-devel-3.4.4-mingw.zip"
+checksum = "sha256:559ec3a7396c41751e78dfa2ddadef99982f564bfaf97cee2ca40b3e9ce99783"
+strip_components = 0
+
+[tools."http:sdl-image-msvc"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-devel-3.4.4-VC.zip"
+checksum = "sha256:a1022b99b8146480efe259744a4d369b19a14c11bbe4e4c4b312ee3e99d4718b"
+strip_components = 0
+
+[tools."http:sdl-image-macos"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4.dmg"
+checksum = "sha256:7481d597f90be0d92546a0189008c14a1e6d7b86eaa56beace2ed9f631d85282"
+format = "raw"
+bin = "SDL3_image-3.4.4.dmg"
+
+[tools."http:sdl-image-mingw-x86-runtime"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4-win32-x86.zip"
+checksum = "sha256:eb3ab5afc21dcf2ac8f2df93aea5fe4b310a4dd8a469f6c97c395f7923785171"
+strip_components = 0
+
+[tools."http:sdl-image-mingw-x86_64-runtime"]
+version = "3.4.4"
+url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4-win32-x64.zip"
+checksum = "sha256:15c88c3f4e20c0bd0640d7e6ebd40c8112cde308fc2bb5d0c92fa921f5745613"
+strip_components = 0
+
+[tools."http:sdl-ttf-source"]
+version = "3.2.2"
+url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz"
+checksum = "sha256:63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d"
+strip_components = 1
+
+[tools."http:freetype-source"]
+version = "9973564cfa63763a3e4ac67c09147899539b1e07"
+url = "https://github.com/libsdl-org/freetype/archive/9973564cfa63763a3e4ac67c09147899539b1e07.tar.gz"
+checksum = "sha256:026a05a49d114a1235d2926f4c03a9330e4b1a6efe7c217ec9607904c32907d4"
+strip_components = 1
+
+[tools."http:sdl-ttf-mingw"]
+version = "3.2.2"
+url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-devel-3.2.2-mingw.zip"
+checksum = "sha256:e44e78d6dec080f1d96bd8ac1bac98ddc2574eff980d777c223c799c5a03b1ba"
+strip_components = 0
+
+[tools."http:sdl-ttf-msvc"]
+version = "3.2.2"
+url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-devel-3.2.2-VC.zip"
+checksum = "sha256:67805c5babfc49ca0c56882dc9b8cabbcdd1e6f9edde10ddac91ddb38f3afb8c"
+strip_components = 0
+
+[tools."http:sdl-ttf-macos"]
+version = "3.2.2"
+url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.dmg"
+checksum = "sha256:2c7035eba9e63df137dbe95d2672f4c52e68d76bf6dd7c47a325f29bb6ba3cf7"
+format = "raw"
+bin = "SDL3_ttf-3.2.2.dmg"
+
+[tools."http:sdl-mixer-source"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz"
+checksum = "sha256:182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901"
+strip_components = 1
+
+[tools."http:sdl-mixer-mingw"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-devel-3.2.4-mingw.zip"
+checksum = "sha256:493a736b030a044cea10afa2d77c9b463f1fc66aec62e85c932a11464d900a16"
+strip_components = 0
+
+[tools."http:sdl-mixer-msvc"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-devel-3.2.4-VC.zip"
+checksum = "sha256:f4263ed5082fb7018059d64952017534e26821e9e878ce6b8c924b77cb17c4fb"
+strip_components = 0
+
+[tools."http:sdl-mixer-macos"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.dmg"
+checksum = "sha256:78a12346d8492c62006fce2fcc6b8a534d87fb5f4aa7e125229898ba506c69ac"
+format = "raw"
+bin = "SDL3_mixer-3.2.4.dmg"
+
+[tools."http:sdl-mixer-mingw-x86-runtime"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4-win32-x86.zip"
+checksum = "sha256:5b7f37d18c0d5dd6f099660880ea64b6e7798b95fef608857777d5d60ad82cbc"
+strip_components = 0
+
+[tools."http:sdl-mixer-mingw-x86_64-runtime"]
+version = "3.2.4"
+url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4-win32-x64.zip"
+checksum = "sha256:9af526f8defc72ca3b979a6dc4d9e549e5be4dd8db3190cfa8941923a78f73cb"
+strip_components = 0
+
+[tools."http:sdl-net-source"]
+version = "3.2.0"
+url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-3.2.0.tar.gz"
+checksum = "sha256:098522fc26d4e302ef9348aee6e76e67fe504dfefd7f596236568f8330570c41"
+strip_components = 1
+
+[tools."http:sdl-net-mingw"]
+version = "3.2.0"
+url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-devel-3.2.0-mingw.zip"
+checksum = "sha256:d088ff439140ec4f400d954381713a6ca4b433016eb3732e3b6273eefa96b3c5"
+strip_components = 0
+
+[tools."http:sdl-net-msvc"]
+version = "3.2.0"
+url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-devel-3.2.0-VC.zip"
+checksum = "sha256:1408aaad19d414fbabf329d2933b173de579dc3e8b495f6d09f7bb3f62889320"
+strip_components = 0
+
+[tools."http:sdl-net-macos"]
+version = "3.2.0"
+url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-3.2.0.dmg"
+checksum = "sha256:0f28e62ce224f2edd8badfc6d607854ec7d34650f56dfbf7f16377cb0f1086a5"
+format = "raw"
+bin = "SDL3_net-3.2.0.dmg"
+
+[tools."http:controller-image-source"]
+version = "0.0.2"
+url = "https://github.com/icculus/ControllerImage/archive/55841e94c59ed9bd99891a4f97fd07a8ea5edb60.tar.gz"
+checksum = "sha256:2b9e56ead1a6008666aeaf34c7dbd828b9078b3aa8f443453f37642e141864a7"
+strip_components = 1
+
+[tools."http:sdl-shadercross-source"]
+version = "3.0.0"
+url = "https://github.com/libsdl-org/SDL_shadercross/archive/e55cf5e31ced6f3d1be5cc6d0c50e99384f9f4ba.tar.gz"
+checksum = "sha256:342bb6a8e734745eb5951f25c87fa7aad62f46b3736def8681d9fa7ad046887f"
+strip_components = 1
+
+[tools."http:spirv-cross-source"]
+version = "1a6169566c73d3da552748fc372fe2bbb856e46e"
+url = "https://github.com/KhronosGroup/SPIRV-Cross/archive/1a6169566c73d3da552748fc372fe2bbb856e46e.tar.gz"
+checksum = "sha256:0f295b214b164e42a1d21537c8da7b44569806c16220dda9798558edfaacd11e"
+strip_components = 1
+
+[tools."http:spirv-headers-source"]
+version = "ad9184e76a66b1001c29db9b0a3e87f646c64de0"
+url = "https://github.com/KhronosGroup/SPIRV-Headers/archive/ad9184e76a66b1001c29db9b0a3e87f646c64de0.tar.gz"
+checksum = "sha256:b5b7eba62453eb8c6f6a5fbf7155b71cde693bafe9cd5f03b79ed8c714816afe"
+strip_components = 1
+
+[tools."http:spirv-tools-source"]
+version = "0539c81f69a3daeb706fd3477dca61435b475156"
+url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/0539c81f69a3daeb706fd3477dca61435b475156.tar.gz"
+checksum = "sha256:fb48ad981129d939863d5d46c8a5b3b70577bc95665b4c1afb0f14a090b50d53"
+strip_components = 1
+
+[tools."http:dxc-source"]
+version = "2c84a1c5ab7091608c97df6ba5ccf46e71c322eb"
+url = "https://github.com/libsdl-org/DirectXShaderCompiler/archive/2c84a1c5ab7091608c97df6ba5ccf46e71c322eb.tar.gz"
+checksum = "sha256:aaabe9adc8bd15aab887b122537d79bd9544b64934ca6f44c83e15c4b1d81549"
+strip_components = 1
+
+[tools."http:dxc-directx-headers-source"]
+version = "980971e835876dc0cde415e8f9bc646e64667bf7"
+url = "https://github.com/microsoft/DirectX-Headers/archive/980971e835876dc0cde415e8f9bc646e64667bf7.tar.gz"
+checksum = "sha256:b5a4b6d8806ff7f29f19879f83d015dbe8740676d4ca0b48647a789cc7773c4e"
+strip_components = 1
+
+[tools."http:dxc-spirv-headers-source"]
+version = "04f10f650d514df88b76d25e83db360142c7b174"
+url = "https://github.com/KhronosGroup/SPIRV-Headers/archive/04f10f650d514df88b76d25e83db360142c7b174.tar.gz"
+checksum = "sha256:1b220e3eec1714f0451b0e3652979bd280edf10893f617837b88e6359a804ded"
+strip_components = 1
+
+[tools."http:dxc-spirv-tools-source"]
+version = "fbe4f3ad913c44fe8700545f8ffe35d1382b7093"
+url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/fbe4f3ad913c44fe8700545f8ffe35d1382b7093.tar.gz"
+checksum = "sha256:cabb35f4eef0da3ef72ad9edd596af4191d7507a8f35c05df526d2d5ff889f59"
+strip_components = 1
+
+[tools."http:dxc-linux-runtime"]
+version = "1.9.2602"
+url = "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/linux_dxc_2026_02_20.x86_64.tar.gz"
+checksum = "sha256:a1d3e3b5e1c5685b3eb27d5e8890e41d87df45def05112a2d6f1a63a931f7d60"
+strip_components = 1
+
+[tools."http:dxc-windows-runtime"]
+version = "1.9.2602"
+url = "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/dxc_2026_02_20.zip"
+checksum = "sha256:a1e89031421cf3c1fca6627766ab3020ca4f962ac7e2caa7fab2b33a8436151e"
+strip_components = 1

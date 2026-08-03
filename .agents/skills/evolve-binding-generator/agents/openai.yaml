@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evolve Binding Generator"
+  short_description: "Evolve generic SDL-to-Zig generation rules"
+  default_prompt: "Use $evolve-binding-generator to implement a generic SDL binding-generator change."

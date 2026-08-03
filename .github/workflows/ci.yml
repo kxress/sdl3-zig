@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    name: Linux release checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Run release checks
+        run: deno task release-check
+
+  windows-distributions:
+    name: Windows native distributions
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Validate native MinGW and MSVC distributions
+        run: deno task test:windows-build

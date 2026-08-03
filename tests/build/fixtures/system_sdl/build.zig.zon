@@ -1,0 +1,16 @@
+.{
+    .name = .sdl3_linking_test,
+    .version = "0.0.0",
+    .fingerprint = 0xb84a2228b937f6c6,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .sdl3 = .{ .path = "../../../.." },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "image.zig",
+        "all.zig",
+        "library.zig",
+    },
+}

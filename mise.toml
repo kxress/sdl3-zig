@@ -1,0 +1,15 @@
+[tools]
+"conda:castxml" = "0.7.0"
+"conda:clang" = "19.1.7"
+"conda:doxygen" = "1.17.0"
+"conda:7zip" = "25.01"
+"conda:bash" = { version = "5.2.37", os = ["linux", "macos"] }
+"conda:coreutils" = { version = "9.5", os = ["linux", "macos"] }
+"conda:diffutils" = { version = "3.12", os = ["linux", "macos"] }
+"conda:gzip" = { version = "1.14", os = ["linux", "macos"] }
+"conda:tar" = { version = "1.35", os = ["linux", "macos"] }
+deno = "2.9.3"
+zig = "0.16.0"
+
+[env]
+DENO_DIR = "{{config_root}}/.deno"

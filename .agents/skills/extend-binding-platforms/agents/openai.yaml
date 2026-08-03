@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extend Binding Platforms"
+  short_description: "Extend target-aware SDL binding generation"
+  default_prompt: "Use $extend-binding-platforms to add a target platform to SDL binding generation."

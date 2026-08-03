@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prepare SDL Release"
+  short_description: "Prepare and validate an SDL bindings release"
+  default_prompt: "Use $prepare-release to prepare and validate the next SDL bindings release."

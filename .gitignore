@@ -1,0 +1,8 @@
+.deno/
+.zig-cache/
+zig-out/
+zig-pkg/
+.mise.local.toml
+UNRELATED_NOTES.md
+docs/
+vendor/
