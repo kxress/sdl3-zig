@@ -37,6 +37,7 @@ interface RenderContext {
   naming: ZigNaming;
   renderedTypeIds: Set<string>;
   emittedNames: Map<string, string>;
+  coverageNames: Set<string>;
   namespaceExports: Array<{ cName: string; publicName: string }>;
   namespaceNames: Set<string>;
   reservedPublicNames?: Set<string>;
@@ -47,6 +48,12 @@ interface RenderContext {
   ownedStringRecords: Map<string, OwnedStringRecordInfo>;
   functionPlans: Map<string, FunctionPlan>;
   needsOwnedStringSupport: boolean;
+}
+
+export interface RenderedBindings {
+  source: string;
+  symbols: PublicSymbol[];
+  coverageNames: string[];
 }
 
 interface ResourceInfo {
@@ -102,12 +109,13 @@ export function renderSemanticBindings(
   model: ApiModel,
   profile: LibraryProfile,
   dependencyApis: ReadonlyMap<string, PublicApi>,
-): { source: string; symbols: PublicSymbol[] } {
+): RenderedBindings {
   const context = createContext(model, profile, dependencyApis);
   const source = renderPublicBindings(context);
   return {
     source,
     symbols: collectPublicSymbols(context),
+    coverageNames: [...context.coverageNames].sort(),
   };
 }
 
@@ -168,6 +176,7 @@ function createContext(
     naming,
     renderedTypeIds: new Set(),
     emittedNames: new Map(),
+    coverageNames: new Set(),
     namespaceExports: [],
     namespaceNames: new Set(),
     documentationMembers: new Map(),
@@ -1791,7 +1800,11 @@ function renderPublicTypeDeclaration(
   context: RenderContext,
   lines: string[],
 ): void {
-  if (context.renderedTypeIds.has(node.id) || isPrimitiveTypedef(node)) return;
+  if (context.renderedTypeIds.has(node.id)) return;
+  if (isPrimitiveTypedef(node)) {
+    if (node.attributes.name) context.coverageNames.add(node.attributes.name);
+    return;
+  }
   const name = context.publicTypeNames.get(node.id);
   if (!name) return;
   const rawName = context.rawTypeNames.get(node.id) ?? node.attributes.name ?? name;
@@ -1803,6 +1816,7 @@ function renderPublicTypeDeclaration(
     const targetName = resolvedNamedTypeName(target, context.publicTypeNames, context);
     if (targetName === name) {
       context.renderedTypeIds.add(node.id);
+      context.coverageNames.add(rawName);
       return;
     }
     lines.push(...documentationLines(
@@ -2679,6 +2693,10 @@ function renderObjectMacroExpression(
   macro: ObjectMacro,
   context: RenderContext,
 ): string | undefined {
+  if (macro.replacement.includes("(") && /\(\s*[A-Za-z_]\w*\s*\)/.test(macro.replacement)) {
+    const casted = stripKnownIntegerCasts(macro.replacement, context);
+    if (casted !== macro.replacement) return `c.${macro.name}`;
+  }
   let expression = stripOuterParentheses(macro.replacement.trim())
     .replaceAll(/\b(0[xX][0-9a-fA-F]+|[0-9]+)(?:[uUlL]+)\b/g, "$1");
   const identifiers = expression.match(/(?<![0-9A-Za-z_.])[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
@@ -2827,6 +2845,13 @@ function renderGenericUtilityMacro(name: string, publicName: string): string[] |
       return [
         `pub inline fn ${publicName}(value: anytype) void {`,
         "    @memset(std.mem.asBytes(value), 0);",
+        "}",
+      ];
+    case "SDL_INIT_INTERFACE":
+      return [
+        `pub inline fn ${publicName}(interface: anytype) void {`,
+        "    @memset(std.mem.asBytes(interface), 0);",
+        "    interface.*.version = @sizeOf(@TypeOf(interface.*));",
         "}",
       ];
     case "SDL_copyp":
@@ -3463,8 +3488,10 @@ function renderPublicFunctions(
     const plan = functionPlan(node, context);
     if (
       plan.variadic &&
-      !isConstCharPointerType(plan.arguments.at(-1)?.type ?? "", context)
+      !isConstCharPointerType(plan.arguments.at(-1)?.type ?? "", context) &&
+      !isConstWcharPointerType(plan.arguments.at(-1)?.type ?? "", context)
     ) continue;
+    context.coverageNames.add(cName);
     const baseName = context.naming.functionName(cName);
     const disambiguated = moduleNames.has(baseName) ? `${baseName}Default` : baseName;
     const name = uniqueIdentifier(disambiguated, moduleNames);
@@ -3972,6 +3999,10 @@ function renderVariadicFunction(
   }
   const formatArgument = argumentsList.at(-1)!;
   const charFormat = isConstCharPointerType(formatArgument.type, context);
+  const wideFormat = isConstWcharPointerType(formatArgument.type, context);
+  if (!charFormat && !wideFormat) {
+    throw new Error(`Unsupported variadic format for ${node.attributes.name}`);
+  }
   const fixedArguments = argumentsList.slice(0, -1);
   const fixedNames = publicParameterNames(fixedArguments, context);
   const parameters = [
@@ -4001,7 +4032,7 @@ function renderVariadicFunction(
     ? `.{ ${fixedValues.join(", ")}, ${formatValue} }`
     : `.{${formatValue}}`;
   const scan = node.attributes.name.toLowerCase().includes("scanf");
-  const checkedArguments = `validateCVarargs(format, args, ${scan})`;
+  const checkedArguments = charFormat ? `validateCVarargs(format, args, ${scan})` : "args";
   const call = `@call(.auto, c.${node.attributes.name}, ${tuple} ++ ${checkedArguments})`;
   if (!returnId || returnType === "void") {
     lines.push(`    ${call};`);
@@ -5187,6 +5218,7 @@ function registerPrimaryEmission(
   context: RenderContext,
 ): void {
   context.emittedNames.set(cName, publicName);
+  context.coverageNames.add(cName);
   registerNamespaceExport(cName, publicName, context);
 }
 
@@ -6062,6 +6094,21 @@ function isConstCharPointerType(id: string, context: RenderContext): boolean {
   }
   const target = unwrapTransparentType(cv.attributes.type, context);
   return target?.kind === "FundamentalType" && target.attributes.name === "char";
+}
+
+function isConstWcharPointerType(id: string, context: RenderContext): boolean {
+  const pointer = unwrapTransparentType(id, context);
+  if (pointer?.kind !== "PointerType" || !pointer.attributes.type) return false;
+  const cv = context.byId.get(pointer.attributes.type);
+  if (cv?.kind !== "CvQualifiedType" || cv.attributes.const !== "1" || !cv.attributes.type) {
+    return false;
+  }
+  let target = context.byId.get(cv.attributes.type);
+  while (target?.kind === "CvQualifiedType" || target?.kind === "ElaboratedType") {
+    target = target.attributes.type ? context.byId.get(target.attributes.type) : undefined;
+  }
+  return target?.attributes.name === "wchar_t" ||
+    unwrapTransparentType(cv.attributes.type, context)?.attributes.name === "wchar_t";
 }
 
 function resourceTypeNameForPointer(id: string, context: RenderContext): string | undefined {

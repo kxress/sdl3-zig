@@ -1629,7 +1629,7 @@ pub inline fn createMixer(spec: ?*const sdl.audio.Spec) sdl.Error!Mixer {
 /// Create a mixer that plays sound directly to an audio device.
 ///
 /// This is usually the function you want, vs createMixer().
-/// You can choose a specific device ID to open, following SDL's usual rules, but often the correct choice is to specify SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) and let SDL figure out what device to use (and seamlessly transition you to new hardware if the default changes).
+/// You can choose a specific device ID to open, following SDL's usual rules, but often the correct choice is to specify sdl.audio.deviceDefaultPlayback and let SDL figure out what device to use (and seamlessly transition you to new hardware if the default changes).
 /// Only playback devices make sense here. Attempting to open a recording device will fail.
 /// This will call sdl.init.default(sdl.init.Flags.audio) internally; it's safe to call sdl.init.default() before this call, too, if you intend to enumerate audio devices to choose one to open here.
 /// An audio format can be requested, and the system will try to set the hardware to those specifications, or as close as possible, but this is just a hint. SDL_mixer will handle all data conversion behind the scenes in any case, and specifying a NULL spec is a reasonable choice. The best reason to specify a format is because you know all your data is in that format and it might save some unnecessary CPU time on conversion.
@@ -1638,7 +1638,7 @@ pub inline fn createMixer(spec: ?*const sdl.audio.Spec) sdl.Error!Mixer {
 /// When done with the mixer, it can be destroyed with Mixer.deinit().
 ///
 /// - **Parameters:**
-///   - `devid`: the device to open for playback, or SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) for the default.
+///   - `devid`: the device to open for playback, or sdl.audio.deviceDefaultPlayback for the default.
 ///   - `spec`: the audio format to request from the device. May be NULL.
 ///
 /// - **Returns:** a mixer that can be used to play audio, or NULL on failure; call sdl.error_.get() for more information.

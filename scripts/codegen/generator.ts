@@ -54,6 +54,10 @@ export async function generateBindings(options: GenerateOptions): Promise<Genera
       options.profile,
       rendered.symbols,
       options.sourceLabel,
+      new Set([
+        ...rendered.symbols.map((symbol) => symbol.cName),
+        ...rendered.coverageNames,
+      ]),
     ),
   };
 }

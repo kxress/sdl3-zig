@@ -1227,10 +1227,10 @@ const TextData = extern struct {
 
 /// A text engine interface.
 ///
-/// This structure should be initialized using SDL_INIT_INTERFACE (C macro outside this module)()
+/// This structure should be initialized using sdl.stdinc.initInterface()
 ///
 /// - **Since:** This struct is available since SDL_ttf 3.0.0.
-/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
+/// - **See also:** sdl.stdinc.initInterface
 const TextEngine = extern struct {
     /// Field `version`.
     version: u32,

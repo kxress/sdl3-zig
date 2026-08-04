@@ -87,6 +87,16 @@ export const codegenConfiguration: CodegenConfiguration = {
         coverageExclusions: [
           {
             names: [
+              "SDL_BeginThreadFunction",
+              "SDL_EndThreadFunction",
+              "SDL_MALLOC",
+              "SDL_NO_THREAD_SAFETY_ANALYSIS",
+            ],
+            reason:
+              "Compiler, runtime, or thread-safety annotation selected by the C headers rather than a portable runtime binding.",
+          },
+          {
+            names: [
               "SDL_ACQUIRE",
               "SDL_ACQUIRE_SHARED",
               "SDL_ACQUIRED_AFTER",

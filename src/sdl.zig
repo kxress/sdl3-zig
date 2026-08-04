@@ -8340,7 +8340,7 @@ const IconvDataT = struct {
 
     /// This function converts text between encodings, reading from and writing to a buffer.
     ///
-    /// It returns the number of successful conversions on success. On error, SDL_ICONV_E2BIG (C macro outside this module) is returned when the output buffer is too small, or SDL_ICONV_EILSEQ (C macro outside this module) is returned when an invalid input sequence is encountered, or SDL_ICONV_EINVAL (C macro outside this module) is returned when an incomplete input sequence is encountered.
+    /// It returns the number of successful conversions on success. On error, stdinc.iconvE2Big is returned when the output buffer is too small, or stdinc.iconvEilseq is returned when an invalid input sequence is encountered, or stdinc.iconvEinval is returned when an incomplete input sequence is encountered.
     /// On exit:
     /// - inbuf will point to the beginning of the next multibyte sequence. On error, this is the location of the problematic input sequence. On success, this is the end of the input sequence.
     /// - inbytesleft will be set to the number of bytes left to convert, which will be 0 on success.
@@ -9098,10 +9098,10 @@ const IoStream = struct {
 /// The function pointers that drive an ioStream.IoStream.
 ///
 /// Applications can provide this struct to ioStream.openIo() to create their own implementation of ioStream.IoStream. This is not necessarily required, as SDL already offers several common types of I/O streams, via functions like ioStream.ioFromFile() and ioStream.ioFromMem().
-/// This structure should be initialized using SDL_INIT_INTERFACE (C macro outside this module)()
+/// This structure should be initialized using stdinc.initInterface()
 ///
 /// - **Since:** This struct is available since SDL 3.2.0.
-/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
+/// - **See also:** stdinc.initInterface
 const IoStreamInterface = extern struct {
     /// Field `version`.
     version: u32,
@@ -12620,11 +12620,11 @@ const Vertex = extern struct {
 
 /// The structure that describes a virtual joystick.
 ///
-/// This structure should be initialized using SDL_INIT_INTERFACE (C macro outside this module)(). All elements of this structure are optional.
+/// This structure should be initialized using stdinc.initInterface(). All elements of this structure are optional.
 ///
 /// - **Since:** This struct is available since SDL 3.2.0.
 /// - **See also:** joystick.attachVirtual
-/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
+/// - **See also:** stdinc.initInterface
 /// - **See also:** joystick.VirtualSensorDesc
 /// - **See also:** joystick.VirtualTouchpadDesc
 const VirtualJoystickDesc = extern struct {
@@ -19793,6 +19793,132 @@ const android_external_storage_write = c.SDL_ANDROID_EXTERNAL_STORAGE_WRITE;
 /// SDL constant `platform_android`.
 pub const platform_android = c.SDL_PLATFORM_ANDROID;
 
+/// A value used to request a default playback audio device.
+///
+/// Several functions that require an audio.DeviceId will accept this value to signify the app just wants the system to choose a default device instead of the app providing a specific one.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn audioDeviceDefaultPlayback() @TypeOf(c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK) {
+    return c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+}
+
+/// A value used to request a default recording audio device.
+///
+/// Several functions that require an audio.DeviceId will accept this value to signify the app just wants the system to choose a default device instead of the app providing a specific one.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn audioDeviceDefaultRecording() @TypeOf(c.SDL_AUDIO_DEVICE_DEFAULT_RECORDING) {
+    return c.SDL_AUDIO_DEVICE_DEFAULT_RECORDING;
+}
+
+/// Output buffer was too small.
+inline fn iconvE2Big() @TypeOf(c.SDL_ICONV_E2BIG) {
+    return c.SDL_ICONV_E2BIG;
+}
+
+/// Invalid input sequence was encountered.
+inline fn iconvEilseq() @TypeOf(c.SDL_ICONV_EILSEQ) {
+    return c.SDL_ICONV_EILSEQ;
+}
+
+/// Incomplete input sequence was encountered.
+inline fn iconvEinval() @TypeOf(c.SDL_ICONV_EINVAL) {
+    return c.SDL_ICONV_EINVAL;
+}
+
+/// Generic error. Check error_.get()?
+inline fn iconvError() @TypeOf(c.SDL_ICONV_ERROR) {
+    return c.SDL_ICONV_ERROR;
+}
+
+/// SDL macro stdinc.maxSint16.
+inline fn maxSint16() @TypeOf(c.SDL_MAX_SINT16) {
+    return c.SDL_MAX_SINT16;
+}
+
+/// SDL macro stdinc.maxSint32.
+inline fn maxSint32() @TypeOf(c.SDL_MAX_SINT32) {
+    return c.SDL_MAX_SINT32;
+}
+
+/// SDL macro stdinc.maxSint8.
+inline fn maxSint8() @TypeOf(c.SDL_MAX_SINT8) {
+    return c.SDL_MAX_SINT8;
+}
+
+/// SDL macro stdinc.maxUint16.
+inline fn maxUint16() @TypeOf(c.SDL_MAX_UINT16) {
+    return c.SDL_MAX_UINT16;
+}
+
+/// SDL macro stdinc.maxUint32.
+inline fn maxUint32() @TypeOf(c.SDL_MAX_UINT32) {
+    return c.SDL_MAX_UINT32;
+}
+
+/// SDL macro stdinc.maxUint8.
+inline fn maxUint8() @TypeOf(c.SDL_MAX_UINT8) {
+    return c.SDL_MAX_UINT8;
+}
+
+/// SDL macro stdinc.minSint16.
+inline fn minSint16() @TypeOf(c.SDL_MIN_SINT16) {
+    return c.SDL_MIN_SINT16;
+}
+
+/// SDL macro stdinc.minSint32.
+inline fn minSint32() @TypeOf(c.SDL_MIN_SINT32) {
+    return c.SDL_MIN_SINT32;
+}
+
+/// SDL macro stdinc.minSint8.
+inline fn minSint8() @TypeOf(c.SDL_MIN_SINT8) {
+    return c.SDL_MIN_SINT8;
+}
+
+/// SDL macro stdinc.minUint16.
+inline fn minUint16() @TypeOf(c.SDL_MIN_UINT16) {
+    return c.SDL_MIN_UINT16;
+}
+
+/// SDL macro stdinc.minUint32.
+inline fn minUint32() @TypeOf(c.SDL_MIN_UINT32) {
+    return c.SDL_MIN_UINT32;
+}
+
+/// SDL macro stdinc.minUint8.
+inline fn minUint8() @TypeOf(c.SDL_MIN_UINT8) {
+    return c.SDL_MIN_UINT8;
+}
+
+/// The touch.Id for touch events simulated with mouse input.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn mouseTouchId() @TypeOf(c.SDL_MOUSE_TOUCHID) {
+    return c.SDL_MOUSE_TOUCHID;
+}
+
+/// The mouse.Id for mouse events simulated with pen input.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn penMouseId() @TypeOf(c.SDL_PEN_MOUSEID) {
+    return c.SDL_PEN_MOUSEID;
+}
+
+/// The touch.Id for touch events simulated with pen input.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn penTouchId() @TypeOf(c.SDL_PEN_TOUCHID) {
+    return c.SDL_PEN_TOUCHID;
+}
+
+/// The mouse.Id for mouse events simulated with touch input.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn touchMouseId() @TypeOf(c.SDL_TOUCH_MOUSEID) {
+    return c.SDL_TOUCH_MOUSEID;
+}
+
 /// The number of elements in a static array.
 ///
 /// This will compile but return incorrect results for a pointer to an array; it has to be an array the compiler knows the size of.
@@ -20326,6 +20452,40 @@ inline fn iconvUtf8Ucs4(allocator_: std.mem.Allocator, source: [:0]const u8) Err
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iconvWcharUtf8(allocator_: std.mem.Allocator, source: [*:0]const std.c.wchar_t) Error![:0]u8 {
     return iconvString(allocator_, "UTF-8", "WCHAR_T", @ptrCast(source), (wcslen(@ptrCast(source)) + 1) * @sizeOf(std.c.wchar_t));
+}
+
+/// A macro to initialize an SDL interface.
+///
+/// This macro will initialize an SDL interface structure and should be called before you fill out the fields with your implementation.
+/// You can use it like this:
+/// ```c
+/// SDL_IOStreamInterfaceiface;
+///
+/// SDL_INIT_INTERFACE(&iface);
+///
+/// //Fillintheinterfacefunctionpointerswithyourimplementation
+/// iface.seek=...
+///
+/// stream=SDL_OpenIO(&iface,NULL);
+/// ```
+///
+/// If you are using designated initializers, you can use the size of the interface as the version, e.g.
+/// ```c
+/// SDL_IOStreamInterfaceiface={
+/// .version=sizeof(iface),
+/// .seek=...
+/// };
+/// stream=SDL_OpenIO(&iface,NULL);
+/// ```
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** ioStream.Interface
+/// - **See also:** storage.Interface
+/// - **See also:** joystick.VirtualDesc
+inline fn initInterface(interface: anytype) void {
+    @memset(std.mem.asBytes(interface), 0);
+    interface.*.version = @sizeOf(@TypeOf(interface.*));
 }
 
 /// A macro to standardize error reporting on unsupported operations.
@@ -21763,7 +21923,7 @@ inline fn atoi(str: [:0]const u8) c_int {
 /// When no longer needed, the virtual joystick can be removed by calling joystick.detachVirtual().
 ///
 /// - **Parameters:**
-///   - `desc`: joystick description, initialized using SDL_INIT_INTERFACE (C macro outside this module)().
+///   - `desc`: joystick description, initialized using stdinc.initInterface().
 ///
 /// - **Returns:** the joystick instance ID, or 0 on failure; call error_.get() for more information.
 /// - **Thread safety:** It is safe to call this function from any thread.
@@ -25661,7 +25821,7 @@ const GetAudioDeviceFormatResult = struct {
 /// Get the current audio format of a specific audio device.
 ///
 /// For an opened device, this will report the format the device is currently using. If the device isn't yet opened, this will report the device's preferred format (or a reasonable default if this can't be determined).
-/// You may also specify SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) or SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module) here, which is useful for getting a reasonable recommendation before opening the system-recommended default device.
+/// You may also specify audio.deviceDefaultPlayback or audio.deviceDefaultRecording here, which is useful for getting a reasonable recommendation before opening the system-recommended default device.
 /// You can also use this to request the current device buffer size. This is specified in sample frames and represents the amount of data SDL will feed to the physical hardware in each chunk. This can be converted to milliseconds of audio with the following equation:
 /// `ms = (int) ((((Sint64) frames) * 1000) / spec.freq);`
 /// Buffer size is only important if you need low-level control over the audio playback timing. Most apps do not need this.
@@ -25701,7 +25861,7 @@ inline fn getAudioDeviceGain(devid: AudioDeviceId) f32 {
 
 /// Get the human-readable name of a specific audio device.
 ///
-/// **WARNING**: this function will work with SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) and SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module), returning the current default physical devices' names. However, as the default device may change at any time, it is likely better to show a generic name to the user, like "System
+/// **WARNING**: this function will work with audio.deviceDefaultPlayback and audio.deviceDefaultRecording, returning the current default physical devices' names. However, as the default device may change at any time, it is likely better to show a generic name to the user, like "System
 /// default audio device" or perhaps "default [currently %s]". Do not store this name to disk to reidentify the device in a later run of the program, as the default might change in general, and the string will be the name of a specific device and not the abstract system default.
 ///
 /// - **Parameters:**
@@ -33788,7 +33948,7 @@ inline fn hideWindow(window: ?Window) Error!void {
 
 /// This function converts text between encodings, reading from and writing to a buffer.
 ///
-/// It returns the number of successful conversions on success. On error, SDL_ICONV_E2BIG (C macro outside this module) is returned when the output buffer is too small, or SDL_ICONV_EILSEQ (C macro outside this module) is returned when an invalid input sequence is encountered, or SDL_ICONV_EINVAL (C macro outside this module) is returned when an incomplete input sequence is encountered.
+/// It returns the number of successful conversions on success. On error, stdinc.iconvE2Big is returned when the output buffer is too small, or stdinc.iconvEilseq is returned when an invalid input sequence is encountered, or stdinc.iconvEinval is returned when an incomplete input sequence is encountered.
 /// On exit:
 /// - inbuf will point to the beginning of the next multibyte sequence. On error, this is the location of the problematic input sequence. On success, this is the end of the input sequence.
 /// - inbytesleft will be set to the number of bytes left to convert, which will be 0 on success.
@@ -33822,7 +33982,7 @@ inline fn iconv(cd: IconvT, inbuf: ?*?[*:0]const u8, inbytesleft: ?*c_ulong, out
 ///   - `tocode`: The target character encoding, must not be NULL.
 ///   - `fromcode`: The source character encoding, must not be NULL.
 ///
-/// - **Returns:** a handle that must be freed with stdinc.IconvDataT.close, or SDL_ICONV_ERROR (C macro outside this module) on failure.
+/// - **Returns:** a handle that must be freed with stdinc.IconvDataT.close, or stdinc.iconvError on failure.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.IconvDataT.iconv
@@ -35987,7 +36147,7 @@ inline fn onApplicationWillTerminate() void {
 ///
 /// You can open both playback and recording devices through this function. Playback devices will take data from bound audio streams, mix it, and send it to the hardware. Recording devices will feed any bound audio streams with a copy of any incoming data.
 /// An opened audio device starts out with no audio streams bound. To start audio playing, bind a stream and supply audio data to it. Unlike SDL2, there is no audio callback; you only bind audio streams and make sure they have data flowing into them (however, you can simulate SDL2's semantics fairly closely by using audio.openDeviceStream instead of this function).
-/// If you don't care about opening a specific device, pass a `devid` of either `SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module)` or `SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module)`. In this case, SDL will try to pick the most reasonable default, and may also switch between physical devices seamlessly later, if the most reasonable default changes during the lifetime of this opened device (user changed the default in the OS's system preferences, the default got unplugged so the system jumped to a new default, the user plugged in headphones on a mobile device, etc). Unless you have a good reason to choose a specific device, this is probably what you want.
+/// If you don't care about opening a specific device, pass a `devid` of either `audio.deviceDefaultPlayback` or `audio.deviceDefaultRecording`. In this case, SDL will try to pick the most reasonable default, and may also switch between physical devices seamlessly later, if the most reasonable default changes during the lifetime of this opened device (user changed the default in the OS's system preferences, the default got unplugged so the system jumped to a new default, the user plugged in headphones on a mobile device, etc). Unless you have a good reason to choose a specific device, this is probably what you want.
 /// You may request a specific format for the audio device, but there is no promise the device will honor that request for several reasons. As such, it's only meant to be a hint as to what data your app will provide. Audio streams will accept data in whatever format you specify and manage conversion for you as appropriate. audio.getDeviceFormat can tell you the preferred format for the device before opening and the actual format the device is using after opening.
 /// It's legal to open the same device ID more than once; each successful open will generate a new logical audio.DeviceId that is managed separately from others on the same physical device. This allows libraries to open a device separately from the main app and bind its own streams without conflicting.
 /// It is also legal to open a device ID returned by a previous call to this function; doing so just creates another logical device on the same physical device. This may be useful for making logical groupings of audio streams.
@@ -35996,7 +36156,7 @@ inline fn onApplicationWillTerminate() void {
 /// When done with an audio device, possibly at the end of the app's life, one should call audio.closeDevice() on the returned device id.
 ///
 /// - **Parameters:**
-///   - `devid`: the device instance id to open, or SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) or SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module) for the most reasonable default device.
+///   - `devid`: the device instance id to open, or audio.deviceDefaultPlayback or audio.deviceDefaultRecording for the most reasonable default device.
 ///   - `spec`: the requested device configuration. Can be NULL to use reasonable defaults.
 ///
 /// - **Returns:** the device ID on success or 0 on failure; call error_.get() for more information.
@@ -36020,12 +36180,12 @@ inline fn openAudioDevice(devid: AudioDeviceId, spec: ?*const AudioSpec) Error!A
 /// Also unlike other functions, the audio device begins paused. This is to map more closely to SDL2-style behavior, since there is no extra step here to bind a stream to begin audio flowing. The audio device should be resumed with audio.Stream.resumeDevice().
 /// This function works with both playback and recording devices.
 /// The `spec` parameter represents the app's side of the audio stream. That is, for recording audio, this will be the output format, and for playing audio, this will be the input format. If spec is NULL, the system will choose the format, and the app can use audio.Stream.getFormat() to obtain this information later.
-/// If you don't care about opening a specific audio device, you can (and probably *should*), use SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) for playback and SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module) for recording.
+/// If you don't care about opening a specific audio device, you can (and probably *should*), use audio.deviceDefaultPlayback for playback and audio.deviceDefaultRecording for recording.
 /// One can optionally provide a callback function; if NULL, the app is expected to queue audio data for playback (or unqueue audio data if capturing). Otherwise, the callback will begin to fire once the device is unpaused.
 /// Destroying the returned stream with audio.Stream.deinit will also close the audio device associated with this stream.
 ///
 /// - **Parameters:**
-///   - `devid`: an audio device to open, or SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK (C macro outside this module) or SDL_AUDIO_DEVICE_DEFAULT_RECORDING (C macro outside this module).
+///   - `devid`: an audio device to open, or audio.deviceDefaultPlayback or audio.deviceDefaultRecording.
 ///   - `spec`: the audio stream's data format. Can be NULL.
 ///   - `callback`: a callback where the app will provide new data for playback, or receive new data for recording. Can be NULL, in which case the app will need to call audio.Stream.putData or audio.Stream.getData as necessary.
 ///   - `userdata`: app-controlled pointer passed to callback. Can be NULL. Ignored if callback is NULL.
@@ -36171,14 +36331,14 @@ inline fn openHapticFromMouse() Error!Haptic {
 /// This function makes a copy of `iface` and the caller does not need to keep it around after this call.
 ///
 /// - **Parameters:**
-///   - `iface`: the interface that implements this ioStream.IoStream, initialized using SDL_INIT_INTERFACE (C macro outside this module)().
+///   - `iface`: the interface that implements this ioStream.IoStream, initialized using stdinc.initInterface().
 ///   - `userdata`: the pointer that will be passed to the interface functions.
 ///
 /// - **Returns:** a pointer to the allocated memory on success or NULL on failure; call error_.get() for more information.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** ioStream.IoStream.close
-/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
+/// - **See also:** stdinc.initInterface
 /// - **See also:** ioStream.ioFromConstMem
 /// - **See also:** ioStream.ioFromFile
 /// - **See also:** ioStream.ioFromMem
@@ -36230,7 +36390,7 @@ inline fn openSensor(instance_id: SensorId) Error!Sensor {
 /// This function makes a copy of `iface` and the caller does not need to keep it around after this call.
 ///
 /// - **Parameters:**
-///   - `iface`: the interface that implements this storage, initialized using SDL_INIT_INTERFACE (C macro outside this module)().
+///   - `iface`: the interface that implements this storage, initialized using stdinc.initInterface().
 ///   - `userdata`: the pointer that will be passed to the interface functions.
 ///
 /// - **Returns:** a storage container on success or NULL on failure; call error_.get() for more information.
@@ -36238,7 +36398,7 @@ inline fn openSensor(instance_id: SensorId) Error!Sensor {
 /// - **See also:** storage.Storage.close
 /// - **See also:** storage.Storage.getFileSize
 /// - **See also:** storage.Storage.getSpaceRemaining
-/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
+/// - **See also:** stdinc.initInterface
 /// - **See also:** storage.Storage.readFile
 /// - **See also:** storage.Storage.ready
 /// - **See also:** storage.Storage.writeFile
@@ -36940,7 +37100,7 @@ inline fn rand(n: i32) i32 {
 /// You likely want to use stdinc.rand() to get a psuedo-random number instead.
 /// There are no guarantees as to the quality of the random sequence produced, and this should not be used for security (cryptography, passwords) or where money is on the line (loot-boxes, casinos). There are many random number libraries available with different characteristics and you should pick one of those to meet any serious needs.
 ///
-/// - **Returns:** a random value in the range of [0-SDL_MAX_UINT32 (C macro outside this module)].
+/// - **Returns:** a random value in the range of [0-stdinc.maxUint32].
 /// - **Thread safety:** All calls should be made from a single thread
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.rand
@@ -36958,7 +37118,7 @@ inline fn randBits() u32 {
 /// - **Parameters:**
 ///   - `state`: a pointer to the current random number state, this may not be NULL.
 ///
-/// - **Returns:** a random value in the range of [0-SDL_MAX_UINT32 (C macro outside this module)].
+/// - **Returns:** a random value in the range of [0-stdinc.maxUint32].
 /// - **Thread safety:** This function is thread-safe, as long as the state pointer isn't shared between threads.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.randR
@@ -42874,6 +43034,26 @@ inline fn swapFloat(x: f32) f32 {
     return c.SDL_SwapFloat(x);
 }
 
+/// This works exactly like swprintf() but doesn't require access to a C runtime.
+///
+/// Format a wide string of up to `maxlen`-1 wchar_t values, converting each '' item with values provided through variable arguments.
+/// While some C runtimes differ on how to deal with too-large strings, this function null-terminates the output, by treating the null-terminator as part of the `maxlen` count. Note that if `maxlen` is zero, however, no wide characters will be written at all.
+/// This function returns the number of *wide characters* (not *codepoints*) that should be written, excluding the null-terminator character. If this returns a number >= `maxlen`, it means the output string was truncated. A negative return value means an error occurred.
+/// Referencing the output string's pointer with a format item is undefined behavior.
+///
+/// - **Parameters:**
+///   - `text`: the buffer to write the wide string into. Must not be NULL.
+///   - `maxlen`: the maximum wchar_t values to write, including the null-terminator.
+///   - `fmt`: a printf-style format string. Must not be NULL.
+///   - `...`: a list of values to be used with the format string.
+///
+/// - **Returns:** the number of wide characters that should be written, not counting the null-terminator char, or a negative value on error.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn swprintf(text: *std.c.wchar_t, maxlen: c_ulong, format: *const std.c.wchar_t, args: anytype) c_int {
+    return @call(.auto, c.SDL_swprintf, .{ @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[0].type.?, @ptrCast(text)), @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[1].type.?, maxlen), @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[2].type.?, @ptrCast(format)) } ++ args);
+}
+
 /// Block until any pending window state is finalized.
 ///
 /// On asynchronous windowing systems, this acts as a synchronization barrier for pending window state. It will attempt to wait until any pending window state has been applied and is guaranteed to return within finite time. Note that for how long it can potentially block depends on the underlying window system, as window state changes may involve somewhat lengthy animations that must complete before the window is in its final requested state.
@@ -43805,7 +43985,7 @@ inline fn vsscanf(text: [:0]const u8, fmt: [:0]const u8, ap: std.builtin.VaList)
 
 /// This works exactly like vswprintf() but doesn't require access to a C runtime.
 ///
-/// Functions identically to SDL_swprintf (C API outside this module)(), except it takes a `va_list` instead of using `...` variable arguments.
+/// Functions identically to stdinc.swprintf(), except it takes a `va_list` instead of using `...` variable arguments.
 ///
 /// - **Parameters:**
 ///   - `text`: the buffer to write the string into. Must not be NULL.
@@ -45632,6 +45812,8 @@ pub const audio = struct {
     pub const convertSamples = root.convertAudioSamples;
     pub const createStream = root.createAudioStream;
     pub const defineFormat = root.defineAudioFormat;
+    pub const deviceDefaultPlayback = root.audioDeviceDefaultPlayback;
+    pub const deviceDefaultRecording = root.audioDeviceDefaultRecording;
     pub const DeviceId = root.AudioDeviceId;
     pub const devicePaused = root.audioDevicePaused;
     pub const flushStream = root.flushAudioStream;
@@ -48907,7 +49089,7 @@ pub const misc = struct {
 /// mouse device for touch and pen input, which often can make a desktop
 /// application work on a touchscreen phone without any code changes. Apps that
 /// care about touch/pen separately from mouse input should filter out events
-/// with a `which` field of SDL_TOUCH_MOUSEID (C macro outside this module)/SDL_PEN_MOUSEID (C macro outside this module).
+/// with a `which` field of touch.touchMouseId/pen.mouseId.
 pub const mouse = struct {
     pub const button_left = root.button_left;
     pub const button_lmask = root.button_lmask;
@@ -49053,6 +49235,8 @@ pub const pen = struct {
     pub const input_eraser_tip = root.pen_input_eraser_tip;
     pub const input_in_proximity = root.pen_input_in_proximity;
     pub const InputFlags = root.PenInputFlags;
+    pub const mouseId = root.penMouseId;
+    pub const touchId = root.penTouchId;
 };
 
 /// SDL offers facilities for pixel management.
@@ -49742,6 +49926,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -49749,6 +49937,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49781,6 +49970,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -49790,6 +49985,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -49865,6 +50066,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -49960,6 +50162,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -49967,6 +50173,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49999,6 +50206,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -50008,6 +50221,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -50083,6 +50302,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50174,6 +50394,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -50181,6 +50405,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50213,6 +50438,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -50222,6 +50453,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -50297,6 +50534,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50388,6 +50626,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -50395,6 +50637,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50427,6 +50670,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -50436,6 +50685,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -50511,6 +50766,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50606,6 +50862,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -50613,6 +50873,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50645,6 +50906,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -50654,6 +50921,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -50729,6 +51002,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50820,6 +51094,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -50827,6 +51105,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50859,6 +51138,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -50868,6 +51153,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -50943,6 +51234,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51034,6 +51326,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -51041,6 +51337,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -51073,6 +51370,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -51082,6 +51385,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -51161,6 +51470,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51252,6 +51562,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const GetOriginalMemoryFunctionsResult = root.GetOriginalMemoryFunctionsResult;
     pub const iconv = root.iconv;
     pub const IconvDataT = root.IconvDataT;
+    pub const iconvE2Big = root.iconvE2Big;
+    pub const iconvEilseq = root.iconvEilseq;
+    pub const iconvEinval = root.iconvEinval;
+    pub const iconvError = root.iconvError;
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
@@ -51259,6 +51573,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
     pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
     pub const iconvWcharUtf8 = root.iconvWcharUtf8;
+    pub const initInterface = root.initInterface;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -51291,6 +51606,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
+    pub const maxSint16 = root.maxSint16;
+    pub const maxSint32 = root.maxSint32;
+    pub const maxSint8 = root.maxSint8;
+    pub const maxUint16 = root.maxUint16;
+    pub const maxUint32 = root.maxUint32;
+    pub const maxUint8 = root.maxUint8;
     pub const memcmp = root.memcmp;
     pub const memcpy = root.memcpy;
     pub const memmove = root.memmove;
@@ -51300,6 +51621,12 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
+    pub const minSint16 = root.minSint16;
+    pub const minSint32 = root.minSint32;
+    pub const minSint8 = root.minSint8;
+    pub const minUint16 = root.minUint16;
+    pub const minUint32 = root.minUint32;
+    pub const minUint8 = root.minUint8;
     pub const modf = root.modf;
     pub const modff = root.modff;
     pub const ModffResult = root.ModffResult;
@@ -51375,6 +51702,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
+    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -52030,7 +52358,7 @@ pub const timer = struct {
 /// be useful for making a some desktop apps work on a phone without
 /// significant changes. For apps that care about mouse and touch input
 /// separately, they should ignore mouse events that have a `which` field of
-/// SDL_TOUCH_MOUSEID (C macro outside this module).
+/// touch.touchMouseId.
 pub const touch = struct {
     pub const DeviceType = root.TouchDeviceType;
     pub const Finger = root.Finger;
@@ -52040,6 +52368,8 @@ pub const touch = struct {
     pub const getDeviceType = root.getTouchDeviceType;
     pub const getFingers = root.getTouchFingers;
     pub const Id = root.TouchId;
+    pub const mouseTouchId = root.mouseTouchId;
+    pub const touchMouseId = root.touchMouseId;
 };
 
 /// SDL offers a way to add items to the "system tray" (more correctly called

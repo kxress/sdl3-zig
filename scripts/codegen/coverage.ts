@@ -25,8 +25,9 @@ export function collectLibraryCoverage(
   profile: LibraryProfile,
   symbols: PublicSymbol[],
   sourceLabel: string,
+  coverageNames: ReadonlySet<string> = new Set(symbols.map((symbol) => symbol.cName)),
 ): LibraryCoverage {
-  const emitted = new Set(symbols.map((symbol) => symbol.cName));
+  const emitted = coverageNames;
   const entries = new Map<string, CoverageEntry>();
 
   for (const node of model.nodes) {
