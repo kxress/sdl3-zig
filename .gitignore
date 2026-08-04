@@ -6,3 +6,9 @@ zig-pkg/
 UNRELATED_NOTES.md
 docs/
 vendor/
+
+# Keep the published target notes in version control while leaving other docs scratch space ignored.
+!docs/
+docs/*
+!docs/targets/
+!docs/targets/*.md
