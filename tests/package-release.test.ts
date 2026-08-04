@@ -1,6 +1,17 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { validateReleaseTree } from "../scripts/package-release.ts";
+import {
+  validateReleaseArchive,
+  validateReleaseArchiveMembers,
+  validateReleaseTree,
+} from "../scripts/package-release.ts";
 import { binaryArtifactNames, loadSdlRelease, packagePaths } from "../scripts/sdl-release.ts";
+import {
+  distributionPolicy,
+  findPrebuiltTarget,
+  prebuiltTargets,
+  targetName,
+  windowsOptionalArchitectures,
+} from "../scripts/distribution-policy.ts";
 import { withTempDirectory } from "./build/support.ts";
 
 Deno.test("release staging rejects local source-build roots", async () => {
@@ -11,6 +22,52 @@ Deno.test("release staging rejects local source-build roots", async () => {
       Error,
       "Release tree contains a local build root: sdl3-source",
     );
+  });
+});
+
+Deno.test("release archive validation requires an exact, safe package member set", () => {
+  const expected = ["sdl3-3.4.12+9", "sdl3-3.4.12+9/README.md"];
+  validateReleaseArchiveMembers(
+    ["sdl3-3.4.12+9/", "sdl3-3.4.12+9/README.md"],
+    "sdl3-3.4.12+9",
+    expected,
+  );
+  validateReleaseArchiveMembers(
+    ["sdl3-3.4.12+9/README.md", "sdl3-3.4.12+9/"],
+    "sdl3-3.4.12+9",
+    expected,
+  );
+  assertRejects(
+    () =>
+      Promise.resolve().then(() =>
+        validateReleaseArchiveMembers(
+          ["sdl3-3.4.12+9/", "../outside"],
+          "sdl3-3.4.12+9",
+        )
+      ),
+    Error,
+    "Unsafe",
+  );
+});
+
+Deno.test("release archive validation checks a real tarball against its staged tree", async () => {
+  await withTempDirectory("sdl-release-archive-", async (temporary) => {
+    const packageName = "sdl3-test";
+    const packageRoot = `${temporary}/${packageName}`;
+    const archive = `${temporary}/${packageName}.tar.gz`;
+    await Deno.mkdir(`${packageRoot}/src`, { recursive: true });
+    await Deno.writeTextFile(`${packageRoot}/README.md`, "release");
+    await Deno.writeTextFile(`${packageRoot}/src/module.zig`, "pub const value = 1;\n");
+    const result = await new Deno.Command("tar", {
+      args: ["--sort=name", "--mtime=@0", "-czf", archive, "-C", temporary, packageName],
+    }).output();
+    if (!result.success) throw new Error(new TextDecoder().decode(result.stderr));
+    await validateReleaseArchive(archive, packageName, [
+      packageName,
+      `${packageName}/README.md`,
+      `${packageName}/src`,
+      `${packageName}/src/module.zig`,
+    ]);
   });
 });
 
@@ -100,4 +157,29 @@ Deno.test("package metadata declares every official optional Windows runtime art
     assertEquals(component.windowsOptionalRuntime.dlls, runtime.dlls);
     assertEquals(component.windowsOptionalRuntime.licenses, runtime.licenses);
   }
+});
+
+Deno.test("distribution policy accepts every packaged target and rejects matrix gaps", () => {
+  for (const target of prebuiltTargets) {
+    assertEquals(findPrebuiltTarget(target.os, target.abi, target.arch), target);
+    assert(targetName(target).length !== 0);
+  }
+
+  for (const os of ["windows", "macos"] as const) {
+    for (const abi of os === "windows" ? ["gnu", "msvc"] as const : [null]) {
+      for (const arch of ["x86", "x86_64", "aarch64"] as const) {
+        const accepted = prebuiltTargets.some((target) =>
+          target.os === os && target.abi === abi && target.arch === arch
+        );
+        assertEquals(findPrebuiltTarget(os, abi, arch) !== undefined, accepted);
+      }
+    }
+  }
+
+  assertEquals(distributionPolicy.modes, ["none", "system", "prebuilt", "source"]);
+  assertEquals(distributionPolicy.prebuilt.linkage, "shared");
+  assertEquals(windowsOptionalArchitectures, {
+    mingw: ["x86", "x86_64"],
+    msvc: ["x86", "x86_64"],
+  });
 });

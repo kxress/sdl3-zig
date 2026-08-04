@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_image_c");
+pub const c = @import("sdl3_image_c");
 const sdl = @import("sdl");
 const root = @This();
 
@@ -455,7 +455,7 @@ pub inline fn freeAnimation(anim: ?*Animation) void {
 
 /// Get the next frame in an animation decoder.
 ///
-/// This function decodes the next frame in the animation decoder, returning it as an sdl.surface.Surface. The returned surface should be freed with sdl.surface.destroy() when no longer needed.
+/// This function decodes the next frame in the animation decoder, returning it as an sdl.surface.Surface. The returned surface should be freed with SDL_FreeSurface (C API outside this module)() when no longer needed.
 /// If the animation decoder has no more frames or an error occurred while decoding the frame, this function returns false. In that case, please call sdl.error_.get() for more information. If sdl.error_.get() returns an empty string, that means there are no more available frames. If sdl.error_.get() returns a valid string, that means the decoding failed.
 ///
 /// - **Parameters:**
@@ -507,51 +507,10 @@ pub inline fn getAnimationDecoderStatus(decoder: ?AnimationDecoder) AnimationDec
     return @enumFromInt(result);
 }
 
-/// Load an image from an SDL data source into a GPU texture.
+/// Get the image currently in the clipboard.
 ///
-/// An sdl.gpu.Texture represents an image in GPU memory, usable by SDL's GPU API. Regardless of the source format of the image, this function will create a GPU texture with the format sdl.gpu.TextureFormat.r8g8b8a8_unorm with no mip levels. It can be bound as a sampled texture from a graphics or compute pipeline and as a a readonly storage texture in a compute pipeline.
-/// If `closeio` is true, `src` will be closed before returning, whether this function succeeds or not. SDL_image reads everything it needs from `src` during this call in any case.
-/// There is a separate function to read files from disk without having to deal with sdl.ioStream.IoStream: `loadGpuTexture(device, copy_pass, "filename.jpg", width, height) will call this function and manage those details for you, determining the file type from the filename's extension.
-/// There is also loadGpuTextureTypedIo(), which is equivalent to this function except a file extension (like "BMP", "JPG", etc) can be specified, in case SDL_image cannot autodetect the file format.
-/// When done with the returned texture, the app should dispose of it with a call to sdl.gpu.Texture.deinit().
-///
-/// - **Parameters:**
-///   - `device`: the sdl.gpu.Device to use to create the GPU texture.
-///   - `copy_pass`: the sdl.gpu.CopyPass to use to upload the loaded image to the GPU texture.
-///   - `src`: an sdl.ioStream.IoStream that data will be read from.
-///   - `closeio`: true to close/free the sdl.ioStream.IoStream before returning, false to leave it open.
-///   - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
-///   - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
-///
-/// - **Returns:** a new GPU texture, or NULL on error.
-/// - **Since:** This function is available since SDL_image 3.4.0.
-/// - **See also:** loadGpuTexture
-/// - **See also:** loadGpuTextureTypedIo */ extern SDL_DECLSPEC (C macro outside this module) sdl.gpu.Texture * SDLCALL loadGpuTextureIo(sdl.gpu.Device *device, sdl.gpu.CopyPass *copy_pass, sdl.ioStream.IoStream *src, bool closeio, int *width, int *height);
-///
-/// /** Load an image from an SDL data source into a GPU texture.
-/// An sdl.gpu.Texture represents an image in GPU memory, usable by SDL's GPU API. Regardless of the source format of the image, this function will create a GPU texture with the format sdl.gpu.TextureFormat.r8g8b8a8_unorm with no mip levels. It can be bound as a sampled texture from a graphics or compute pipeline and as a a readonly storage texture in a compute pipeline.
-/// If `closeio` is true, `src` will be closed before returning, whether this function succeeds or not. SDL_image reads everything it needs from `src` during this call in any case.
-/// Even though this function accepts a file type, SDL_image may still try other decoders that are capable of detecting file type from the contents of the image data, but may rely on the caller-provided type string for formats that it cannot autodetect. If `type` is NULL, SDL_image will rely solely on its ability to guess the format.
-/// There is a separate function to read files from disk without having to deal with sdl.ioStream.IoStream: `loadGpuTexture(device, copy_pass, "filename.jpg", width, height) will call this function and manage those details for you, determining the file type from the filename's extension.
-/// There is also loadGpuTextureIo(), which is equivalent to this function except that it will rely on SDL_image to determine what type of data it is loading, much like passing a NULL for type.
-/// When done with the returned texture, the app should dispose of it with a call to sdl.gpu.Texture.deinit().
-///
-/// - **Parameters:**
-///   - `device`: the sdl.gpu.Device to use to create the GPU texture.
-///   - `copy_pass`: the sdl.gpu.CopyPass to use to upload the loaded image to the GPU texture.
-///   - `src`: an sdl.ioStream.IoStream that data will be read from.
-///   - `closeio`: true to close/free the sdl.ioStream.IoStream before returning, false to leave it open.
-///   - `type`: a filename extension that represent this data ("BMP", "GIF", "PNG", etc).
-///   - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
-///   - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
-///
-/// - **Returns:** a new GPU texture, or NULL on error.
-/// - **Since:** This function is available since SDL_image 3.4.0.
-/// - **See also:** loadGpuTexture
-/// - **See also:** loadGpuTextureIo */ extern SDL_DECLSPEC (C macro outside this module) sdl.gpu.Texture * SDLCALL loadGpuTextureTypedIo(sdl.gpu.Device *device, sdl.gpu.CopyPass *copy_pass, sdl.ioStream.IoStream *src, bool closeio, const char *type, int *width, int *height);
-///
-/// /** Get the image currently in the clipboard.
-/// When done with the returned surface, the app should dispose of it with a call to sdl.surface.destroy().
+/// When done with the returned surface, the app should dispose of it with a
+/// call to sdl.surface.destroy().
 ///
 /// - **Returns:** a new SDL surface, or NULL if no supported image is available.
 /// - **Since:** This function is available since SDL_image 3.4.0.
@@ -1571,13 +1530,90 @@ pub inline fn loadGpuTexture(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.Copy
     return if (result == null) null else @ptrCast(result);
 }
 
-/// SDL operation `loadGpuTextureIo`.
+/// Load an image from an SDL data source into a GPU texture.
+///
+/// An sdl.gpu.Texture represents an image in GPU memory, usable by SDL's GPU
+/// API. Regardless of the source format of the image, this function will
+/// create a GPU texture with the format sdl.gpu.TextureFormat.r8g8b8a8_unorm
+/// with no mip levels. It can be bound as a sampled texture from a graphics or
+/// compute pipeline and as a a readonly storage texture in a compute pipeline.
+///
+/// If `closeio` is true, `src` will be closed before returning, whether this
+/// function succeeds or not. SDL_image reads everything it needs from `src`
+/// during this call in any case.
+///
+/// There is a separate function to read files from disk without having to deal
+/// with sdl.ioStream.IoStream: `loadGpuTexture(device, copy_pass, "filename.jpg",
+/// width, height) will call this function and manage those details for you,
+/// determining the file type from the filename's extension.
+///
+/// There is also loadGpuTextureTypedIo(), which is equivalent to this
+/// function except a file extension (like "BMP", "JPG", etc) can be specified,
+/// in case SDL_image cannot autodetect the file format.
+///
+/// When done with the returned texture, the app should dispose of it with a
+/// call to sdl.gpu.Texture.deinit().
+///
+/// - **Returns:** a new GPU texture, or NULL on error.
+/// - **Since:** This function is available since SDL_image 3.4.0.
+/// - **See also:** loadGpuTexture
+/// - **See also:** loadGpuTextureTypedIo
+/// - **Parameters:**
+///
+/// - `device`: the sdl.gpu.Device to use to create the GPU texture.
+/// - `copy_pass`: the sdl.gpu.CopyPass to use to upload the loaded image to the GPU texture.
+/// - `src`: an sdl.ioStream.IoStream that data will be read from.
+/// - `closeio`: true to close/free the sdl.ioStream.IoStream before returning, false to leave it open.
+/// - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
+/// - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
 pub inline fn loadGpuTextureIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.CopyPass, src: ?*sdl.ioStream.IoStream, closeio: bool, width: ?*c_int, height: ?*c_int) ?*sdl.gpu.Texture {
     const result = c.IMG_LoadGPUTexture_IO(@ptrCast(device), @ptrCast(copy_pass), @ptrCast(src), closeio, @ptrCast(width), @ptrCast(height));
     return if (result == null) null else @ptrCast(result);
 }
 
-/// SDL operation `loadGpuTextureTypedIo`.
+/// Load an image from an SDL data source into a GPU texture.
+///
+/// An sdl.gpu.Texture represents an image in GPU memory, usable by SDL's GPU
+/// API. Regardless of the source format of the image, this function will
+/// create a GPU texture with the format sdl.gpu.TextureFormat.r8g8b8a8_unorm
+/// with no mip levels. It can be bound as a sampled texture from a graphics or
+/// compute pipeline and as a a readonly storage texture in a compute pipeline.
+///
+/// If `closeio` is true, `src` will be closed before returning, whether this
+/// function succeeds or not. SDL_image reads everything it needs from `src`
+/// during this call in any case.
+///
+/// Even though this function accepts a file type, SDL_image may still try
+/// other decoders that are capable of detecting file type from the contents of
+/// the image data, but may rely on the caller-provided type string for formats
+/// that it cannot autodetect. If `type_` is NULL, SDL_image will rely solely on
+/// its ability to guess the format.
+///
+/// There is a separate function to read files from disk without having to deal
+/// with sdl.ioStream.IoStream: `loadGpuTexture(device, copy_pass, "filename.jpg",
+/// width, height) will call this function and manage those details for you,
+/// determining the file type from the filename's extension.
+///
+/// There is also loadGpuTextureIo(), which is equivalent to this function
+/// except that it will rely on SDL_image to determine what type of data it is
+/// loading, much like passing a NULL for type.
+///
+/// When done with the returned texture, the app should dispose of it with a
+/// call to sdl.gpu.Texture.deinit().
+///
+/// - **Returns:** a new GPU texture, or NULL on error.
+/// - **Since:** This function is available since SDL_image 3.4.0.
+/// - **See also:** loadGpuTexture
+/// - **See also:** loadGpuTextureIo
+/// - **Parameters:**
+///
+/// - `device`: the sdl.gpu.Device to use to create the GPU texture.
+/// - `copy_pass`: the sdl.gpu.CopyPass to use to upload the loaded image to the GPU texture.
+/// - `src`: an sdl.ioStream.IoStream that data will be read from.
+/// - `closeio`: true to close/free the sdl.ioStream.IoStream before returning, false to leave it open.
+/// - `type_`: a filename extension that represent this data ("BMP", "GIF", "PNG", etc).
+/// - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
+/// - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
 pub inline fn loadGpuTextureTypedIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.CopyPass, src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8, width: ?*c_int, height: ?*c_int) ?*sdl.gpu.Texture {
     const result = c.IMG_LoadGPUTextureTyped_IO(@ptrCast(device), @ptrCast(copy_pass), @ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null, @ptrCast(width), @ptrCast(height));
     return if (result == null) null else @ptrCast(result);
@@ -2861,4 +2897,953 @@ pub inline fn saveWebpAnimationIo(anim: ?*Animation, closeio: bool, quality: c_i
 /// - **Since:** This function is available since SDL_image 3.0.0.
 pub inline fn version() c_int {
     return c.IMG_Version();
+}
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.Animation;
+        _ = root.AnimationDecoder;
+        _ = root.AnimationDecoderStatus;
+        _ = root.AnimationEncoder;
+        _ = root.addAnimationEncoderFrame;
+        _ = root.createAnimatedCursor;
+        _ = root.createAnimationDecoder;
+        _ = root.createAnimationDecoderIo;
+        _ = root.createAnimationDecoderWithProperties;
+        _ = root.createAnimationEncoder;
+        _ = root.createAnimationEncoderIo;
+        _ = root.createAnimationEncoderWithProperties;
+        _ = root.freeAnimation;
+        _ = root.getAnimationDecoderFrame;
+        _ = root.getAnimationDecoderProperties;
+        _ = root.getAnimationDecoderStatus;
+        _ = root.getClipboardImage;
+        _ = root.isAni;
+        _ = root.isAvif;
+        _ = root.isBmp;
+        _ = root.isCur;
+        _ = root.isGif;
+        _ = root.isIco;
+        _ = root.isJpg;
+        _ = root.isJxl;
+        _ = root.isLbm;
+        _ = root.isPcx;
+        _ = root.isPng;
+        _ = root.isPnm;
+        _ = root.isQoi;
+        _ = root.isSvg;
+        _ = root.isTif;
+        _ = root.isWebp;
+        _ = root.isXcf;
+        _ = root.isXpm;
+        _ = root.isXv;
+        _ = root.load;
+        _ = root.loadAniAnimationIo;
+        _ = root.loadAnimation;
+        _ = root.loadAnimationIo;
+        _ = root.loadAnimationTypedIo;
+        _ = root.loadApngAnimationIo;
+        _ = root.loadAvifAnimationIo;
+        _ = root.loadAvifIo;
+        _ = root.loadBmpIo;
+        _ = root.loadCurIo;
+        _ = root.loadGifAnimationIo;
+        _ = root.loadGifIo;
+        _ = root.loadGpuTexture;
+        _ = root.loadGpuTextureIo;
+        _ = root.loadGpuTextureTypedIo;
+        _ = root.loadIcoIo;
+        _ = root.loadIo;
+        _ = root.loadJpgIo;
+        _ = root.loadJxlIo;
+        _ = root.loadLbmIo;
+        _ = root.loadPcxIo;
+        _ = root.loadPngIo;
+        _ = root.loadPnmIo;
+        _ = root.loadQoiIo;
+        _ = root.loadSizedSvgIo;
+        _ = root.loadSvgIo;
+        _ = root.loadTexture;
+        _ = root.loadTextureIo;
+        _ = root.loadTextureTypedIo;
+        _ = root.loadTgaIo;
+        _ = root.loadTifIo;
+        _ = root.loadTypedIo;
+        _ = root.loadWebpAnimationIo;
+        _ = root.loadWebpIo;
+        _ = root.loadXcfIo;
+        _ = root.loadXpmIo;
+        _ = root.loadXvIo;
+        _ = root.prop_animation_decoder_create_avif_allow_incremental_boolean;
+        _ = root.prop_animation_decoder_create_avif_allow_progressive_boolean;
+        _ = root.prop_animation_decoder_create_avif_max_threads_number;
+        _ = root.prop_animation_decoder_create_filename_string;
+        _ = root.prop_animation_decoder_create_gif_num_colors_number;
+        _ = root.prop_animation_decoder_create_gif_transparent_color_index_number;
+        _ = root.prop_animation_decoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_decoder_create_io_stream_pointer;
+        _ = root.prop_animation_decoder_create_time_base_denominator_number;
+        _ = root.prop_animation_decoder_create_time_base_numerator_number;
+        _ = root.prop_animation_decoder_create_type_string;
+        _ = root.prop_animation_encoder_create_avif_key_frame_interval_number;
+        _ = root.prop_animation_encoder_create_avif_max_threads_number;
+        _ = root.prop_animation_encoder_create_filename_string;
+        _ = root.prop_animation_encoder_create_gif_use_lut_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_autoclose_boolean;
+        _ = root.prop_animation_encoder_create_io_stream_pointer;
+        _ = root.prop_animation_encoder_create_quality_number;
+        _ = root.prop_animation_encoder_create_time_base_denominator_number;
+        _ = root.prop_animation_encoder_create_time_base_numerator_number;
+        _ = root.prop_animation_encoder_create_type_string;
+        _ = root.prop_metadata_author_string;
+        _ = root.prop_metadata_copy_right_string;
+        _ = root.prop_metadata_creation_time_string;
+        _ = root.prop_metadata_description_string;
+        _ = root.prop_metadata_frame_count_number;
+        _ = root.prop_metadata_ignore_props_boolean;
+        _ = root.prop_metadata_loop_count_number;
+        _ = root.prop_metadata_title_string;
+        _ = root.readXpmFromArray;
+        _ = root.readXpmFromArrayToRgb888;
+        _ = root.resetAnimationDecoder;
+        _ = root.save;
+        _ = root.saveAniAnimationIo;
+        _ = root.saveAnimation;
+        _ = root.saveAnimationTypedIo;
+        _ = root.saveApngAnimationIo;
+        _ = root.saveAvif;
+        _ = root.saveAvifAnimationIo;
+        _ = root.saveAvifIo;
+        _ = root.saveBmp;
+        _ = root.saveBmpIo;
+        _ = root.saveCur;
+        _ = root.saveCurIo;
+        _ = root.saveGif;
+        _ = root.saveGifAnimationIo;
+        _ = root.saveGifIo;
+        _ = root.saveIco;
+        _ = root.saveIcoIo;
+        _ = root.saveJpg;
+        _ = root.saveJpgIo;
+        _ = root.savePng;
+        _ = root.savePngIo;
+        _ = root.saveTga;
+        _ = root.saveTgaIo;
+        _ = root.saveTypedIo;
+        _ = root.saveWebp;
+        _ = root.saveWebpAnimationIo;
+        _ = root.saveWebpIo;
+        _ = root.version;
+    }
 }

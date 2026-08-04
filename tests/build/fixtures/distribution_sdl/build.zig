@@ -22,8 +22,8 @@ pub fn build(b: *std.Build) void {
     const distribution = b.option(
         sdl3.Distribution,
         "distribution",
-        "Select auto, none, system, or prebuilt",
-    ) orelse .auto;
+        "Select none, system, or prebuilt",
+    ) orelse .none;
     if (!image) @panic("the provided SDL fixture requires -Dimage=true");
 
     const executable = b.addExecutable(.{

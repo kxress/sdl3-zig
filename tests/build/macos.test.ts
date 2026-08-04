@@ -1,6 +1,8 @@
 import { stageReleaseTree } from "../../scripts/package-release.ts";
+import { prebuiltTargetsFor, targetName } from "../../scripts/distribution-policy.ts";
 import {
   buildDistributionConsumer,
+  command,
   run,
   stageDistributionConsumer,
   withTempDirectory,
@@ -44,6 +46,24 @@ Deno.test({
           await Deno.stat(`${cache}/sdl3-source/lib/libSDL3_test.a`);
           await Deno.stat(`${cache}/sdl3-source/bin/shadercross`);
           await Deno.stat(`${cache}/sdl3-source-build/ControllerImage/libcontrollerimage.a`);
+          if (linkage === "shared") {
+            for (
+              const library of [
+                "SDL3",
+                "SDL3_shadercross",
+                "SDL3_image",
+                "SDL3_ttf",
+                "SDL3_mixer",
+                "SDL3_net",
+              ]
+            ) {
+              await Deno.stat(`${temporary}/${linkage}/output/lib/lib${library}.dylib`);
+            }
+            await assertRpath(
+              `${temporary}/${linkage}/output/bin/cmake-source-all`,
+              "@executable_path/../lib",
+            );
+          }
           await run(
             `${cache}/sdl3-source-build/ControllerImage/make-controllerimage-data`,
             ["${Deno.cwd()}/vendor/ControllerImage/art"],
@@ -51,7 +71,6 @@ Deno.test({
           );
           await run(`${temporary}/${linkage}/output/bin/cmake-source-all`, [], {
             cwd: `${temporary}/${linkage}`,
-            env: { DYLD_LIBRARY_PATH: `${cache}/sdl3-source/lib` },
           });
         });
       }
@@ -67,14 +86,34 @@ Deno.test({
       const packageRoot = await stageReleaseTree(`${temporary}/package`);
       const consumer = await stageDistributionConsumer(temporary, packageRoot);
 
-      for (const target of ["x86_64-macos", "aarch64-macos"]) {
+      for (const target of prebuiltTargetsFor("macos").map(targetName)) {
         await test.step(`${target} prebuilts link and install`, async () => {
-          await buildDistributionConsumer(consumer, temporary, target, `${temporary}/${target}`, [
+          const output = `${temporary}/${target}`;
+          await buildDistributionConsumer(consumer, temporary, target, output, [
+            "-Ddistribution=prebuilt",
             ...companions.map((library) => `-D${library}=true`),
             "-Doptional_codecs=true",
           ]);
+          for (const framework of ["SDL3", "SDL3_image", "SDL3_ttf", "SDL3_mixer", "SDL3_net"]) {
+            await Deno.stat(`${output}/lib/${framework}.framework/${framework}`);
+          }
+          await assertRpath(`${output}/bin/sdl-distribution-consumer`, "@executable_path/../lib");
+          await run(`${output}/bin/sdl-distribution-consumer`, [], { cwd: output });
         });
       }
     });
   },
 });
+
+async function assertRpath(executable: string, expected: string): Promise<void> {
+  const result = await command("otool", ["-l", executable]);
+  if (!result.success) {
+    throw new Error(
+      `otool could not inspect ${executable}:\n${new TextDecoder().decode(result.stderr)}`,
+    );
+  }
+  const output = new TextDecoder().decode(result.stdout);
+  if (!output.includes(expected)) {
+    throw new Error(`${executable} is missing rpath ${expected}`);
+  }
+}

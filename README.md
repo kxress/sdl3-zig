@@ -47,7 +47,8 @@ content hash to `build.zig.zon`. During development, you can use a checkout inst
 },
 ```
 
-The package requires Zig 0.16.0 or newer.
+The package requires exactly Zig 0.16.0. Newer Zig versions are unsupported until the repository
+deliberately advances this pin.
 
 ## Add SDL to your application
 
@@ -72,6 +73,7 @@ pub fn build(b: *std.Build) void {
     });
 
     _ = sdl3.addTo(b, exe, .{
+        .distribution = .system,
         .image = true,
         .ttf = true,
         .mixer = true,
@@ -106,11 +108,18 @@ static or shared linkage independently; it is never inferred from the host or to
 
 | Distribution | Behavior                                                                                                                      |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `.auto`      | Uses official package-local prebuilts on Windows and macOS; links system libraries elsewhere. Never selects source builds.    |
 | `.prebuilt`  | Requires a supported official Windows or macOS prebuilt. Upstream publishes shared libraries only.                            |
 | `.system`    | Links libraries supplied by the system or by the application. Static and shared both work when those libraries are available. |
 | `.source`    | Builds the selected verified upstream source trees with their upstream CMake projects in the consumer's Zig cache.            |
 | `.none`      | Exposes bindings without choosing or linking a native implementation.                                                         |
+
+Distribution selection is explicit; the build never changes it based on the host target. The
+top-level package build defaults to `.none` when no distribution is specified.
+
+System distributions require each selected library's pkg-config version to meet the pinned component
+baseline. For caller-supplied libraries without metadata, pass
+`-Dallow_unknown_system_versions=true` or provide entries such as
+`-Dsystem_version_overrides=image=3.4.12`.
 
 For example, a Linux application can request static system libraries explicitly:
 
@@ -157,12 +166,69 @@ _ = sdl3.addTo(b, exe, .{
 ```
 
 The consumer controls its compiler, SDK, sysroot, CMake generator, toolchain, feature settings, and
-runtime deployment. Static and shared source outputs stay cache-local, so an application selecting
-`.shared` must stage its runtime libraries itself.
+runtime deployment. For shared source builds, `install_runtime` stages the selected SDL-family
+runtime libraries into the consumer's `bin`/`lib` install prefix and adds a relative runtime search
+path on Linux and macOS. Set `install_runtime = false` when another packaging step owns runtime
+deployment; the source libraries then remain cache-local.
+
+Custom packagers can obtain a selected source runtime as a `std.Build.LazyPath` from the dependency
+returned by `addTo`, for example `sdl3.sourceRuntimeArtifact(b, dependency, .sdl)`. The returned
+artifact is staged as a regular loader-facing file after CMake completes, so packaging does not
+depend on the private CMake or Zig cache layout.
+
+When ControllerImage is enabled for a source distribution, set
+`install_controller_image_data = true` to install the generated databases at
+`share/ControllerImage/controllerimage-standard.bin` and
+`share/ControllerImage/controllerimage-kenney.bin`. The standard database is also available to a
+custom packager as `sdl3.sourceControllerImageDataArtifact(b, dependency)`; both files are generated
+only from the verified `vendor/ControllerImage/art` tree. This option is source-only and has no
+effect for `.system`, where the application owns the ControllerImage data deployment.
+
+SDL source builds use the explicit `headless` feature profile by default. It disables SDL's audio,
+video, GPU, renderer, and camera subsystems so a source build does not silently depend on a display
+or device SDK. Select the `desktop` profile, or override individual features, through the public
+`AddOptions.source_features` field:
+
+```zig
+_ = sdl3.addTo(b, exe, .{
+    .distribution = .source,
+    .source_features = .{
+        .profile = .desktop,
+        .camera = false,
+    },
+});
+```
+
+The equivalent build options are `-Dsource_feature_profile=headless|desktop` and `-Dsource_audio`,
+`-Dsource_video`, `-Dsource_gpu`, `-Dsource_renderer`, and `-Dsource_camera`. These focused
+overrides take precedence over the profile. Raw `source_cmake_options` are appended last and
+therefore remain the final escape hatch for upstream options and platform-specific driver selection.
+Enabling a subsystem does not guarantee that a runtime device or display is available; applications
+should still handle `SDL_Init` and resource-creation failures.
 
 The default source profile enables the SDL_image and SDL_mixer features that need no additional
 third-party source, uses the verified FreeType bundled for SDL_ttf, and leaves HarfBuzz, PlutoSVG,
 and optional image/audio codecs disabled until explicitly configured.
+
+### Install a consumer allocator
+
+The generated core module exposes `sdl3.core.AllocatorBridge` for applications that must route SDL's
+process-wide `malloc`, `calloc`, `realloc`, and `free` callbacks through a `std.mem.Allocator`:
+
+```zig
+var backing = std.heap.DebugAllocator(.{}){};
+defer _ = backing.deinit();
+try sdl3.core.AllocatorBridge.install(backing.allocator());
+```
+
+Install it before any other SDL call and keep the backing allocator state alive for the rest of the
+process. The copied allocator value is borrowed globally; the bridge has no replacement or teardown
+operation, and a second install returns `error.AlreadyInstalled`. If SDL reports existing tracked
+allocations, installation returns `error.AllocationsAlreadyMade`. The bridge stores an allocation
+header so reallocations and frees return the exact original span to the backing allocator while
+retaining C's maximum alignment. `SDL_SetMemoryFunctions` has no aligned-allocation callback, so
+`SDL_aligned_alloc` remains SDL-managed; over-aligned Zig allocations should continue to use the
+existing `sdl3.core.allocator` directly.
 
 Use `source_mixer_cmake_options` for upstream SDL3_mixer codec and dependency switches without
 passing them to the other source builds. For example, `-DSDLMIXER_MP3=ON` enables Mixer’s
@@ -185,14 +251,24 @@ _ = sdl3.addTo(b, exe, .{
 ```
 
 - SDL3_test appears as `sdl3.@"test"`, because `test` is a Zig keyword.
-- ControllerImage includes verified `art/` source assets. Generate and ship its
-  `controllerimage-standard.bin` data file with the application, then load it through
-  `sdl3.controller_image.addDataFromFile()`.
+- ControllerImage includes verified `art/` source assets. For a source distribution,
+  `install_controller_image_data = true` installs its generated databases under
+  `share/ControllerImage`; otherwise a custom packager can use `sourceControllerImageDataArtifact`.
+  Load the standard database through `sdl3.controller_image.addDataFromFile()`.
 - SDL_shadercross always includes SPIRV-Cross for source builds. Its default
   `.shadercross_dxc = .disabled` supports SPIR-V translation but not DXIL operations. Use `.bundled`
   for pinned official Microsoft DXC runtimes on Linux or Windows, `.external` with
   `shadercross_dxc_root` for a consumer-supplied runtime, or `.source` to build the pinned DXC
-  source closure locally. This project does not release locally built DXC or shadercross binaries.
+  source closure locally. Bundled and external DXC support x86_64 Linux and x86, x86_64, or AArch64
+  Windows targets; unsupported pairs are rejected before CMake. For those modes, `install_runtime`
+  also installs `dxcompiler` and `dxil` beside the selected SDL runtimes, while custom packagers can
+  obtain them with `sourceRuntimeArtifact(b, dependency, .shadercross_dxc_dxcompiler)` and
+  `sourceRuntimeArtifact(b, dependency, .shadercross_dxc_dxil)`. This project does not release
+  locally built DXC or shadercross binaries.
+- The opt-in [shader build helper](examples/shaders/README.md) consumes checked-in GLSL, HLSL, or
+  Zig shader inputs and emits SPIR-V, DXIL, MSL, and reflection metadata. It is a small artifact
+  workflow, not a rendering framework; GLSL requires an external `glslangValidator`, and DXIL
+  requires a shadercross build with DXC enabled.
 
 ## What “Zig-idiomatic” means here
 
@@ -227,6 +303,13 @@ zig build docs
 
 The HTML output in `zig-out/docs` includes every public module and optional companion.
 
+The `Documentation Pages` workflow publishes only an existing release tag. Its prepare job runs the
+coverage, target, binding, and documentation gates, then packages the generated HTML once. The
+deploy job downloads and revalidates that artifact without regenerating it. Published versions live
+under their immutable `v3.4.12+N` path, while `latest/` is the explicit stable alias; the artifact
+manifest retains prior version directories and records the exact source commit and coverage-ledger
+hash.
+
 ## Generation and maintenance
 
 `mise.sdl.toml` is the artifact lock, recording SDL-family releases, source URLs, checksums, and
@@ -256,8 +339,18 @@ deno task release-check
 `fetch` populates the ignored local cache of verified upstream source trees when it is absent or
 does not match the pinned artifact manifest. `generate` rewrites bindings and package metadata.
 `check` runs formatting, type checks, source verification, metadata tests, binding tests, and
-consumer build tests. `deno task package:release` validates or repopulates that cache, then
-assembles the deterministic archive and its SHA-256 and Zig-hash sidecars.
+consumer build tests. Binding checks also validate generated documentation references and reject
+embedded C declarations or unresolved local links. `deno task package:release` validates or
+repopulates that cache, then assembles the deterministic archive and its SHA-256 and Zig-hash
+sidecars. The archive also contains a generated `THIRD_PARTY_NOTICES` inventory with the hashes of
+every notice retained from the locked source and prebuilt inputs.
+
+For the five SDL-family source archives that publish detached signatures, source verification also
+checks the exact archive bytes with `gpgv`. The trusted release-key fingerprints are pinned in
+`scripts/sync-sources.ts`; adding or retiring a key is a reviewed rotation that updates that list
+and its signature-fixture tests. The keyserver is used only to retrieve material matching those
+fingerprints. Other release assets are verified by their pinned SHA-256 checksums and are not
+represented as signed when upstream publishes no signature.
 
 ## Examples
 

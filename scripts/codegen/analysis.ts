@@ -12,6 +12,7 @@ export interface AnalyzeOptions {
   includeDirectories: string[];
   publicIncludeDirectories: string[];
   apiPrefixes: string[];
+  macroPrefixes?: string[];
   defines: string[];
   targets: string[];
   documentationInput: string;
@@ -49,6 +50,13 @@ export interface Constant {
   header?: string;
 }
 
+export interface FunctionMacro {
+  name: string;
+  parameters: string[];
+  replacement: string;
+  header?: string;
+}
+
 export interface ApiModel {
   target: string;
   analysisTargets: string[];
@@ -62,6 +70,8 @@ export interface ApiModel {
   constants: Constant[];
   publicNodeTargets: Record<string, string[]>;
   constantTargets: Record<string, string[]>;
+  functionMacros?: FunctionMacro[];
+  functionMacroTargets?: Record<string, string[]>;
 }
 
 const declarationKinds = new Set([
@@ -92,7 +102,7 @@ function buildCastXmlCommand(
     "--castxml-cc-gnu-c",
     "clang",
     "-target",
-    options.target,
+    compilerTarget(options.target),
     ...targetIdentityArguments(options.target),
     ...includeAndDefineArguments(options),
   ];
@@ -117,11 +127,19 @@ function targetIdentityArguments(target: string): string[] {
     "-U__WIN64__",
     "-U__APPLE__",
     "-U__MACH__",
+    "-UTARGET_OS_MACCATALYST",
+    "-UTARGET_OS_IOS",
+    "-UTARGET_OS_IPHONE",
+    "-UTARGET_OS_TV",
+    "-UTARGET_OS_SIMULATOR",
+    "-UTARGET_OS_VISION",
     "-USDL_PLATFORM_LINUX",
     "-USDL_PLATFORM_WINDOWS",
     "-USDL_PLATFORM_WIN32",
     "-USDL_PLATFORM_APPLE",
     "-USDL_PLATFORM_MACOS",
+    "-USDL_PLATFORM_IOS",
+    "-USDL_PLATFORM_TVOS",
     "-USDL_PLATFORM_UNIX",
   ];
   if (normalized.includes("windows")) {
@@ -133,13 +151,42 @@ function targetIdentityArguments(target: string): string[] {
     if (normalized.startsWith("x86_64") || normalized.startsWith("aarch64")) {
       args.push("-D_WIN64=1");
     }
-  } else if (normalized.includes("macos")) {
+  } else if (
+    normalized.includes("macos") || normalized.includes("ios") || normalized.includes("tvos")
+  ) {
     // CastXML only supplies structure to the generator. Defining SDL's platform
     // identity and supplying minimal platform-definition headers avoids requiring
     // an Apple SDK on the generation host.
     args.push(
       "-D__APPLE__=1",
       "-D__MACH__=1",
+      "-DSDL_PLATFORM_APPLE=1",
+    );
+    if (normalized.includes("ios")) {
+      args.push(
+        "-DTARGET_OS_IPHONE=1",
+        "-DTARGET_OS_IOS=1",
+        "-DSDL_PLATFORM_IOS=1",
+      );
+    } else if (normalized.includes("tvos")) {
+      args.push(
+        "-DTARGET_OS_TV=1",
+        "-DSDL_PLATFORM_TVOS=1",
+      );
+    } else {
+      args.push("-DSDL_PLATFORM_MACOS=1");
+    }
+    if (normalized.includes("simulator")) args.push("-DTARGET_OS_SIMULATOR=1");
+  } else if (normalized.includes("emscripten")) {
+    args.push(
+      "-D__EMSCRIPTEN__=1",
+      "-D__wasm32__=1",
+    );
+  } else if (normalized.includes("android")) {
+    args.push(
+      "-D__ANDROID__=1",
+      "-DANDROID=1",
+      "-D__ANDROID_API__=21",
     );
   } else if (normalized.includes("linux")) {
     args.push(
@@ -152,6 +199,17 @@ function targetIdentityArguments(target: string): string[] {
     );
   }
   return args;
+}
+
+function compilerTarget(target: string): string {
+  const normalized = target.toLowerCase();
+  if (normalized.includes("android")) {
+    // Android's public SDL headers intentionally avoid including the NDK headers. Use the
+    // host's LP64 GNU ABI for structural traversal so generation remains SDK-independent; the
+    // consumer build still compiles and ABI-checks the selected declarations for Android.
+    return "x86_64-linux-gnu";
+  }
+  return target;
 }
 
 function buildMacroCommand(
@@ -290,6 +348,8 @@ function parseCastXml(
     constantTargets: Object.fromEntries(
       constants.map((constant) => [constantIdentity(constant), [options.target]]),
     ),
+    functionMacros: [],
+    functionMacroTargets: {},
   };
 }
 
@@ -352,8 +412,21 @@ export async function analyzeTargets(
 
       const macroCommand = buildMacroCommand(targetOptions, shim);
       const macroResult = await runCommand(macroCommand.command, macroCommand.args);
+      model.functionMacros = parseFunctionMacros(
+        macroResult.stdout,
+        [...resolvedOptions.apiPrefixes, ...(resolvedOptions.macroPrefixes ?? [])],
+      ).filter((macro) =>
+        macro.header !== undefined && isPublicSourcePath(macro.header, resolvedOptions)
+      );
+      model.functionMacroTargets = Object.fromEntries(
+        (model.functionMacros ?? []).map((macro) => [macro.name, [target]]),
+      );
       const macroLocations = parseMacroLocations(macroResult.stdout);
-      const macroNames = parseMacroNames(macroResult.stdout, resolvedOptions.apiPrefixes).filter(
+      const macroNames = parseMacroNames(
+        macroResult.stdout,
+        resolvedOptions.apiPrefixes,
+        resolvedOptions.macroPrefixes,
+      ).filter(
         (name) => {
           const location = macroLocations[name];
           return location !== undefined && isPublicSourcePath(location, resolvedOptions);
@@ -419,6 +492,12 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
     ),
     constantTargets: Object.fromEntries(
       first.constants.map((constant) => [constantIdentity(constant), [first.target]]),
+    ),
+    functionMacros: (first.functionMacros ?? []).map((macro) => ({ ...macro })),
+    functionMacroTargets: Object.fromEntries(
+      Object.entries(first.functionMacroTargets ?? {}).map((
+        [name, targets],
+      ) => [name, [...targets]]),
     ),
   };
   const publicIds = new Set(merged.publicNodeIds);
@@ -493,6 +572,22 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
       }
       addAvailability(merged.constantTargets, identity, model.target, targets);
     }
+
+    const mergedFunctionMacros = new Map(
+      (merged.functionMacros ?? []).map((macro) => [macro.name, macro]),
+    );
+    for (const macro of model.functionMacros ?? []) {
+      if (!mergedFunctionMacros.has(macro.name)) {
+        mergedFunctionMacros.set(macro.name, { ...macro });
+        merged.functionMacros?.push({ ...macro });
+      }
+      addAvailability(
+        merged.functionMacroTargets ?? (merged.functionMacroTargets = {}),
+        macro.name,
+        model.target,
+        targets,
+      );
+    }
   }
 
   return merged;
@@ -558,7 +653,9 @@ async function createTargetAnalysisSupport(
   index: number,
 ): Promise<string[]> {
   const normalized = target.toLowerCase();
-  if (normalized.includes("macos")) {
+  if (
+    normalized.includes("macos") || normalized.includes("ios") || normalized.includes("tvos")
+  ) {
     const directory = `${temporaryDirectory}/target-support-${index}`;
     await Deno.mkdir(directory);
     await Deno.writeTextFile(
@@ -568,11 +665,11 @@ async function createTargetAnalysisSupport(
     await Deno.writeTextFile(
       `${directory}/TargetConditionals.h`,
       [
-        "#define TARGET_OS_MACCATALYST 0",
-        "#define TARGET_OS_IOS 0",
-        "#define TARGET_OS_IPHONE 0",
-        "#define TARGET_OS_TV 0",
-        "#define TARGET_OS_SIMULATOR 0",
+        `#define TARGET_OS_MACCATALYST 0`,
+        `#define TARGET_OS_IOS ${normalized.includes("ios") ? 1 : 0}`,
+        `#define TARGET_OS_IPHONE ${normalized.includes("ios") ? 1 : 0}`,
+        `#define TARGET_OS_TV ${normalized.includes("tvos") ? 1 : 0}`,
+        `#define TARGET_OS_SIMULATOR ${normalized.includes("simulator") ? 1 : 0}`,
         "#define TARGET_OS_VISION 0",
         "",
       ].join("\n"),
@@ -607,7 +704,11 @@ function renderAnalysisShim(translationUnit: string): string {
   ].join("\n");
 }
 
-function parseMacroNames(output: string, apiPrefixes: string[] = ["SDL_"]): string[] {
+function parseMacroNames(
+  output: string,
+  apiPrefixes: string[] = ["SDL_"],
+  macroPrefixes: string[] = [],
+): string[] {
   const definitions = [...parseMacroDefinitions(output).values()];
 
   const contextualIdentifiers = new Set([
@@ -646,7 +747,7 @@ function parseMacroNames(output: string, apiPrefixes: string[] = ["SDL_"]): stri
     ...new Set(
       definitions
         .filter((definition) =>
-          apiPrefixes.some((prefix) => definition.name.startsWith(prefix)) &&
+          [...apiPrefixes, ...macroPrefixes].some((prefix) => definition.name.startsWith(prefix)) &&
           !definition.name.endsWith("_h_") &&
           !definition.functionLike &&
           definition.replacement.trim().length !== 0
@@ -669,8 +770,25 @@ function parseMacroLocations(output: string): Record<string, string> {
 interface ParsedMacroDefinition {
   name: string;
   functionLike: boolean;
+  parameters: string[];
   replacement: string;
   header?: string;
+}
+
+function parseFunctionMacros(output: string, prefixes: string[]): FunctionMacro[] {
+  return [...parseMacroDefinitions(output).values()]
+    .filter((definition) =>
+      definition.functionLike &&
+      prefixes.some((prefix) => definition.name.startsWith(prefix)) &&
+      definition.replacement.trim().length > 0
+    )
+    .map((definition) => ({
+      name: definition.name,
+      parameters: definition.parameters,
+      replacement: definition.replacement,
+      header: definition.header,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function parseMacroDefinitions(output: string): Map<string, ParsedMacroDefinition> {
@@ -694,6 +812,9 @@ function parseMacroDefinitions(output: string): Map<string, ParsedMacroDefinitio
     definitions.set(definition[1], {
       name: definition[1],
       functionLike: definition[2] !== undefined,
+      parameters: definition[2]
+        ? definition[2].slice(1, -1).split(",").map((parameter) => parameter.trim()).filter(Boolean)
+        : [],
       replacement: definition[3],
       header,
     });
@@ -739,7 +860,33 @@ function normalizeLiteral(value: string): string | null {
   if (/^(?:true|false)$/.test(value)) return value;
   if (/^"(?:[^"\\]|\\.)*"$/.test(value)) return value;
   if (/^'(?:[^'\\]|\\.)'$/.test(value)) return value;
+  const expression = stripBalancedParentheses(value.trim())
+    .replace(/\b(0[xX][0-9a-fA-F]+|[0-9]+)(?:[uUlL]+)\b/g, "$1");
+  if (
+    expression.length > 0 &&
+    /^[0-9A-Fa-fxX\s()+\-*/%<>&|^~.]+$/.test(expression) &&
+    /[0-9]/.test(expression)
+  ) return expression;
   return null;
+}
+
+function stripBalancedParentheses(value: string): string {
+  let result = value;
+  while (result.startsWith("(") && result.endsWith(")")) {
+    let depth = 0;
+    let enclosesAll = true;
+    for (const [index, character] of [...result].entries()) {
+      if (character === "(") depth++;
+      else if (character === ")") depth--;
+      if (depth === 0 && index < result.length - 1) {
+        enclosesAll = false;
+        break;
+      }
+    }
+    if (!enclosesAll || depth !== 0) break;
+    result = result.slice(1, -1).trim();
+  }
+  return result;
 }
 
 function decodeCString(value: string): string {
@@ -791,6 +938,7 @@ function isPublicNode(
     "publicIncludeDirectories" | "apiPrefixes"
   >,
 ): boolean {
+  if (isImplementationArtifact(node.attributes.name)) return false;
   const locationId = node.attributes.location;
   const location = locations[locationId];
   const fileReference = node.attributes.file || location?.file;
@@ -801,6 +949,11 @@ function isPublicNode(
     return options.apiPrefixes.some((prefix) => (node.attributes.name ?? "").startsWith(prefix));
   }
   return isPublicSourcePath(fileName, options);
+}
+
+function isImplementationArtifact(name: string | undefined): boolean {
+  return name !== undefined &&
+    (name.startsWith("__builtin_") || /^SDL_size_.*_builtin$/.test(name));
 }
 
 function isPublicSourcePath(

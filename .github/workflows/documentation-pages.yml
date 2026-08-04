@@ -1,0 +1,188 @@
+name: Documentation Pages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-pages
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate and package tagged documentation
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+      commit: ${{ steps.metadata.outputs.commit }}
+    steps:
+      - name: Check out exact release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tagged release commit
+        id: metadata
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n1 "$RELEASE_TAG")"
+          package_version=$(sed -n 's/^[[:space:]]*\.version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' build.zig.zon | head -n1)
+          test "$RELEASE_TAG" = "v$package_version"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+
+      - name: Acquire verified upstream inputs
+        run: deno task fetch
+
+      - name: Compare coverage with the previous tagged release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          previous_tag=$(git tag --list 'v*' --sort=-version:refname | grep -Fxv "$RELEASE_TAG" | head -n1 || true)
+          if [ -z "$previous_tag" ]; then
+            echo "No previous tagged coverage ledger exists; this is the baseline release."
+          else
+            git show "$previous_tag:api_coverage.json" > .previous-api-coverage.json
+            deno run --allow-read scripts/api-coverage.ts diff .previous-api-coverage.json
+          fi
+
+      - name: Run publication gates
+        run: deno task check
+
+      - name: Generate documentation once
+        run: deno task docs
+
+      - name: Preserve previously published versions
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: .pages-site
+          fetch-depth: 1
+
+      - name: Package immutable and latest documentation paths
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
+        run: >-
+          deno task package:docs -- --root zig-out/docs --output .docs-site
+          --existing .pages-site --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
+
+      - name: Validate packaged Pages artifact
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
+        run: >-
+          deno task validate:docs -- --root .docs-site --tag "$RELEASE_TAG"
+          --commit "$RELEASE_COMMIT"
+
+      - name: Upload validated documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdl3-documentation-site
+          path: .docs-site
+          include-hidden-files: true
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy validated documentation artifact
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download validated documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdl3-documentation-site
+          path: .docs-site
+
+      - name: Check out validation helper at the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_tag }}
+          path: validation
+          fetch-depth: 1
+
+      - name: Install Deno for artifact validation
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Validate downloaded artifact without regenerating documentation
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: >-
+          deno run --allow-read validation/scripts/package-documentation.ts validate
+          --root .docs-site --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
+
+      - name: Check out retained Pages history
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: .pages-site
+          fetch-depth: 1
+
+      - name: Persist retained version history
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git -C .pages-site rev-parse --git-dir >/dev/null 2>&1; then
+            mkdir -p .pages-site
+            git -C .pages-site init
+            git -C .pages-site checkout --orphan gh-pages
+            git -C .pages-site remote add origin \
+              "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"
+          fi
+          git -C .pages-site rm -r --ignore-unmatch .
+          cp -a .docs-site/. .pages-site/
+          git -C .pages-site config user.name "github-actions[bot]"
+          git -C .pages-site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .pages-site add -A
+          git -C .pages-site commit -m "Publish documentation ${RELEASE_TAG}" || true
+          git -C .pages-site push origin HEAD:gh-pages
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .docs-site
+
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

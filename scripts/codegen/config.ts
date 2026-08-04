@@ -1,4 +1,4 @@
-import type { LibraryProfile } from "./profile.ts";
+import type { ConstantFamily, LibraryProfile } from "./profile.ts";
 
 export interface LibraryConfiguration {
   id: string;
@@ -19,6 +19,7 @@ export interface CodegenConfiguration {
 }
 
 const documentationPredefined = [
+  "SDL_WIKI_DOCUMENTATION_SECTION=1",
   "SDL_DISABLE_OLD_NAMES=1",
   "SDL_PLATFORM_LINUX=1",
   "SDL_PLATFORM_WINDOWS=1",
@@ -47,6 +48,15 @@ export const codegenConfiguration: CodegenConfiguration = {
     "x86_64-linux-gnu",
     "x86_64-windows-gnu",
     "aarch64-macos",
+    "aarch64-ios",
+    "aarch64-ios-simulator",
+    "x86_64-ios-simulator",
+    "aarch64-tvos",
+    "aarch64-tvos-simulator",
+    "x86_64-tvos-simulator",
+    "wasm32-emscripten",
+    "aarch64-linux-android21",
+    "x86_64-linux-android21",
   ],
   documentationPredefined,
   libraries: [
@@ -66,17 +76,25 @@ export const codegenConfiguration: CodegenConfiguration = {
           free: "SDL_free",
           alignedAlloc: "SDL_aligned_alloc",
           alignedFree: "SDL_aligned_free",
+          setMemoryFunctions: "SDL_SetMemoryFunctions",
+          getNumAllocations: "SDL_GetNumAllocations",
         },
         releaseFunctions: ["SDL_free"],
         headerPrefixes: ["SDL_"],
-        rootHeaders: [],
+        rootHeaders: ["SDL_main.h"],
         namespaceStrategy: { kind: "documented_category" },
+        constantFamilies: [{ prefix: "SDLK_", typedef: "SDL_Keycode" }],
       },
-      headers: ["SDL3/SDL.h"],
+      headers: [
+        "SDL3/SDL.h",
+        "SDL3/SDL_main.h",
+        "SDL3/SDL_vulkan.h",
+        "SDL3/SDL_revision.h",
+      ],
       includeDirectories: [coreIncludeDirectory],
       publicIncludeDirectories: [coreIncludeDirectory],
       documentation: `${coreIncludeDirectory}/SDL3`,
-      sourceLabel: "SDL3/SDL.h",
+      sourceLabel: "SDL3 public headers",
       output: "sdl.zig",
     },
     {
@@ -95,6 +113,7 @@ export const codegenConfiguration: CodegenConfiguration = {
           free: "SDL_free",
         },
         releaseFunctions: ["SDL_free"],
+        constantFamilies: [{ prefix: "VERBOSE_", typedef: "SDLTest_VerboseFlags" }],
         headerPrefixes: ["SDL_"],
         rootHeaders: ["SDL_test.h"],
         namespaceStrategy: { kind: "header_stem" },
@@ -144,6 +163,7 @@ export const codegenConfiguration: CodegenConfiguration = {
         "SDL3_ttf/SDL_textengine.h",
       ],
       rootHeaders: ["SDL_ttf.h"],
+      constantFamilies: [{ prefix: "TTF_SUBSTRING_", typedef: "TTF_SubStringFlags" }],
       sourceLabel: "SDL3_ttf public headers",
     }),
     companionLibrary({
@@ -221,6 +241,7 @@ interface CompanionLibraryOptions {
   rootHeaders: string[];
   sourceLabel?: string;
   releaseFunctions?: string[];
+  constantFamilies?: ConstantFamily[];
   headerPrefixes?: string[];
   documentation?: string;
   includeDirectory?: string;
@@ -246,6 +267,7 @@ function companionLibrary(
         free: "SDL_free",
       },
       releaseFunctions: options.releaseFunctions ?? ["SDL_free"],
+      constantFamilies: options.constantFamilies,
       headerPrefixes: options.headerPrefixes ?? ["SDL_"],
       rootHeaders: options.rootHeaders,
       namespaceStrategy: { kind: "header_stem" },

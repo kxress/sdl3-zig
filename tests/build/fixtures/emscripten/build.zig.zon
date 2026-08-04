@@ -1,0 +1,15 @@
+.{
+    .name = .sdl3_emscripten_consumer,
+    .version = "0.0.0",
+    .fingerprint = 0xd37a6fb49c95028b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .sdl3 = .{ .path = "../../../.." },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+        "assets",
+    },
+}

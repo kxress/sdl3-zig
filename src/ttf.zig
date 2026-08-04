@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_ttf_c");
+pub const c = @import("sdl3_ttf_c");
 const sdl = @import("sdl");
 const root = @This();
 
@@ -146,7 +146,7 @@ const CopyOperation = extern struct {
     /// Field `dst`.
     dst: sdl.rect.Rect,
     /// Field `reserved`.
-    reserved: ?*void,
+    reserved: ?*anyopaque,
 };
 comptime {
     if (@sizeOf(CopyOperation) != @sizeOf(c.TTF_CopyOperation)) @compileError("ABI size mismatch for CopyOperation");
@@ -464,18 +464,19 @@ pub const Font = struct {
     /// Query a font's current style.
     ///
     /// The font styles are a set of bit flags, OR'd together:
-    /// - `style_normal` (is zero)
-    /// - `style_bold`
-    /// - `style_italic`
-    /// - `style_underline`
-    /// - `style_strikethrough`
+    /// - `FontStyleFlags.normal` (is zero)
+    /// - `FontStyleFlags.bold`
+    /// - `FontStyleFlags.italic`
+    /// - `FontStyleFlags.underline`
+    /// - `FontStyleFlags.strikethrough`
     ///
     /// - **Returns:** the current font style, as a set of bit flags.
     /// - **Thread safety:** It is safe to call this function from any thread.
     /// - **Since:** This function is available since SDL_ttf 3.0.0.
     /// - **See also:** Font.setStyle
     pub inline fn getStyle(self: @This()) FontStyleFlags {
-        return c.TTF_GetFontStyle(@ptrCast(self.value));
+        const result = c.TTF_GetFontStyle(@ptrCast(self.value));
+        return @bitCast(result);
     }
 
     /// Query a font's style name.
@@ -1124,7 +1125,7 @@ pub const Font = struct {
     /// - **Thread safety:** This function should be called on the thread that created the font.
     /// - **Since:** This function is available since SDL_ttf 3.0.0.
     /// - **See also:** Font.getSize
-    /// - **See also:** Font.getDpi
+    /// - **See also:** TTF_GetFontSizeDPI (C API outside this module)
     /// Returns `error.SdlFailure` when SDL_ttf reports failure.
     pub inline fn setSizeDpi(self: @This(), ptsize: f32, hdpi: c_int, vdpi: c_int) sdl.Error!void {
         if (!c.TTF_SetFontSizeDPI(@ptrCast(self.value), ptsize, hdpi, vdpi)) return error.SdlFailure;
@@ -1134,11 +1135,11 @@ pub const Font = struct {
     ///
     /// This updates any Text objects using this font, and clears already-generated glyphs, if any, from the cache.
     /// The font styles are a set of bit flags, OR'd together:
-    /// - `style_normal` (is zero)
-    /// - `style_bold`
-    /// - `style_italic`
-    /// - `style_underline`
-    /// - `style_strikethrough`
+    /// - `FontStyleFlags.normal` (is zero)
+    /// - `FontStyleFlags.bold`
+    /// - `FontStyleFlags.italic`
+    /// - `FontStyleFlags.underline`
+    /// - `FontStyleFlags.strikethrough`
     ///
     /// - **Parameters:**
     ///   - `style`: the new style values to set, OR'd together.
@@ -1147,7 +1148,7 @@ pub const Font = struct {
     /// - **Since:** This function is available since SDL_ttf 3.0.0.
     /// - **See also:** Font.getStyle
     pub inline fn setStyle(self: @This(), style: FontStyleFlags) void {
-        c.TTF_SetFontStyle(@ptrCast(self.value), style);
+        c.TTF_SetFontStyle(@ptrCast(self.value), @bitCast(style));
     }
 
     /// Set a font's current wrap alignment option.
@@ -1292,7 +1293,7 @@ const TextData = extern struct {
     /// Field `engine`.
     engine: ?*TextEngine,
     /// Field `engine_text`.
-    engine_text: ?*void,
+    engine_text: ?*anyopaque,
 };
 comptime {
     if (@sizeOf(TextData) != @sizeOf(c.TTF_TextData)) @compileError("ABI size mismatch for TextData");
@@ -1317,19 +1318,29 @@ comptime {
 
 /// A text engine interface.
 ///
-/// This structure should be initialized using SDL_INIT_INTERFACE (C macro)()
+/// This structure should be initialized using SDL_INIT_INTERFACE (C macro outside this module)()
 ///
 /// - **Since:** This struct is available since SDL_ttf 3.0.0.
-/// - **See also:** SDL_INIT_INTERFACE (C macro)
+/// - **See also:** SDL_INIT_INTERFACE (C macro outside this module)
 const TextEngine = extern struct {
     /// Field `version`.
     version: u32,
     /// Field `userdata`.
-    userdata: ?*void,
+    userdata: ?*anyopaque,
     /// Field `CreateText`.
-    create_text: ?**const fn (arg0: ?*anyopaque, arg1: ?*Text) callconv(.c) bool,
+    create_text: ?*const fn (arg0: ?*anyopaque, arg1: ?*Text) callconv(.c) bool,
     /// Field `DestroyText`.
-    destroy_text: ?**const fn (arg0: ?*anyopaque, arg1: ?*Text) callconv(.c) void,
+    destroy_text: ?*const fn (arg0: ?*anyopaque, arg1: ?*Text) callconv(.c) void,
+
+    /// Return a zero-initialized interface with its ABI version set for this build.
+    pub inline fn init() @This() {
+        var value: @This() = std.mem.zeroes(@This());
+        value.version = @sizeOf(@This());
+        return value;
+    }
+
+    /// A zero-initialized interface with its ABI version set for this build.
+    pub const default: @This() = @This().init();
 };
 comptime {
     if (@sizeOf(TextEngine) != @sizeOf(c.TTF_TextEngine)) @compileError("ABI size mismatch for TextEngine");
@@ -1350,13 +1361,63 @@ const TextLayout = opaque {};
 /// - **Since:** This datatype is available since SDL_ttf 3.0.0.
 /// - **See also:** Font.setStyle
 /// - **See also:** Font.getStyle
-pub const FontStyleFlags = u32;
+pub const FontStyleFlags = packed struct(u32) {
+    /// Bold style
+    bold: bool = false,
+    /// Italic style
+    italic: bool = false,
+    /// Underlined text
+    underline: bool = false,
+    /// Strikethrough text
+    strikethrough: bool = false,
+    /// Unknown or currently unused bits preserved during integer round trips.
+    reserved_0: u28 = 0,
+
+    /// Preserve every known and unknown flag bit.
+    pub inline fn fromInt(value: u32) @This() {
+        return @bitCast(value);
+    }
+
+    /// Convert this flag set to its integer representation.
+    pub inline fn toInt(self: @This()) u32 {
+        return @bitCast(self);
+    }
+
+    /// Composite flag value `TTF_STYLE_NORMAL`.
+    pub const normal: @This() = fromInt(@intCast(c.TTF_STYLE_NORMAL));
+};
 
 /// Flags for SubString
 ///
 /// - **Since:** This datatype is available since SDL_ttf 3.0.0.
 /// - **See also:** SubString
-pub const SubStringFlags = u32;
+pub const SubStringFlags = packed struct(u32) {
+    /// Unknown or currently unused bits preserved during integer round trips.
+    reserved_0: u8 = 0,
+    /// This substring contains the beginning of the text
+    text_start: bool = false,
+    /// This substring contains the beginning of line `line_index`
+    line_start: bool = false,
+    /// This substring contains the end of line `line_index`
+    line_end: bool = false,
+    /// This substring contains the end of the text
+    text_end: bool = false,
+    /// Unknown or currently unused bits preserved during integer round trips.
+    reserved_1: u20 = 0,
+
+    /// Preserve every known and unknown flag bit.
+    pub inline fn fromInt(value: u32) @This() {
+        return @bitCast(value);
+    }
+
+    /// Convert this flag set to its integer representation.
+    pub inline fn toInt(self: @This()) u32 {
+        return @bitCast(self);
+    }
+
+    /// Composite flag value `TTF_SUBSTRING_DIRECTION_MASK`.
+    pub const direction_mask: @This() = fromInt(@intCast(c.TTF_SUBSTRING_DIRECTION_MASK));
+};
 
 /// A text engine draw operation.
 ///
@@ -1437,15 +1498,15 @@ pub const style_strikethrough = c.TTF_STYLE_STRIKETHROUGH;
 /// Underlined text
 pub const style_underline = c.TTF_STYLE_UNDERLINE;
 /// The mask for the flow direction for this substring
-pub const substring_direction_mask = c.TTF_SUBSTRING_DIRECTION_MASK;
+pub const sub_string_flags_direction_mask = c.TTF_SUBSTRING_DIRECTION_MASK;
 /// This substring contains the end of line `line_index`
-pub const substring_line_end = c.TTF_SUBSTRING_LINE_END;
+pub const sub_string_flags_line_end = c.TTF_SUBSTRING_LINE_END;
 /// This substring contains the beginning of line `line_index`
-pub const substring_line_start = c.TTF_SUBSTRING_LINE_START;
+pub const sub_string_flags_line_start = c.TTF_SUBSTRING_LINE_START;
 /// This substring contains the end of the text
-pub const substring_text_end = c.TTF_SUBSTRING_TEXT_END;
+pub const sub_string_flags_text_end = c.TTF_SUBSTRING_TEXT_END;
 /// This substring contains the beginning of the text
-pub const substring_text_start = c.TTF_SUBSTRING_TEXT_START;
+pub const sub_string_flags_text_start = c.TTF_SUBSTRING_TEXT_START;
 
 /// Add a fallback font.
 ///
@@ -2037,11 +2098,11 @@ pub inline fn getFontSize(font: ?Font) f32 {
 /// Query a font's current style.
 ///
 /// The font styles are a set of bit flags, OR'd together:
-/// - `style_normal` (is zero)
-/// - `style_bold`
-/// - `style_italic`
-/// - `style_underline`
-/// - `style_strikethrough`
+/// - `FontStyleFlags.normal` (is zero)
+/// - `FontStyleFlags.bold`
+/// - `FontStyleFlags.italic`
+/// - `FontStyleFlags.underline`
+/// - `FontStyleFlags.strikethrough`
 ///
 /// - **Parameters:**
 ///   - `font`: the font to query.
@@ -2051,7 +2112,8 @@ pub inline fn getFontSize(font: ?Font) f32 {
 /// - **Since:** This function is available since SDL_ttf 3.0.0.
 /// - **See also:** Font.setStyle
 pub inline fn getFontStyle(font: ?Font) FontStyleFlags {
-    return c.TTF_GetFontStyle(if (font) |resource| @ptrCast(resource.value) else null);
+    const result = c.TTF_GetFontStyle(if (font) |resource| @ptrCast(resource.value) else null);
+    return @bitCast(result);
 }
 
 /// Query a font's style name.
@@ -2248,7 +2310,7 @@ pub inline fn getGlyphScript(ch: u32) u32 {
 /// Get the geometry data needed for drawing the text.
 ///
 /// `text` must have been created using a textengine.TextEngine from createGpuTextEngine().
-/// The positive X-axis is taken towards the right and the positive Y-axis is taken upwards for both the vertex and the texture coordinates, i.e, it follows the same convention used by the sdl API. If you want to use a different coordinate system you will need to transform the vertices yourself.
+/// The positive X-axis is taken towards the right and the positive Y-axis is taken upwards for both the vertex and the texture coordinates, i.e, it follows the same convention used by the SDL_GPU (C macro outside this module) API. If you want to use a different coordinate system you will need to transform the vertices yourself.
 /// If the text looks blocky use linear filtering.
 ///
 /// - **Parameters:**
@@ -2315,7 +2377,7 @@ pub const GetNextTextSubStringResult = struct {
 
 /// Get the next substring in a text object
 ///
-/// If called at the end of the text, this will return a zero length substring with the substring_text_end flag set.
+/// If called at the end of the text, this will return a zero length substring with the SubStringFlags.text_end flag set.
 ///
 /// - **Parameters:**
 ///   - `text`: the Text to query.
@@ -2347,7 +2409,7 @@ pub inline fn getNumFontFaces(font: ?Font) c_int {
 
 /// Get the previous substring in a text object
 ///
-/// If called at the start of the text, this will return a zero length substring with the substring_text_start flag set.
+/// If called at the start of the text, this will return a zero length substring with the SubStringFlags.text_start flag set.
 ///
 /// - **Parameters:**
 ///   - `text`: the Text to query.
@@ -2643,7 +2705,7 @@ pub const GetTextSubStringResult = struct {
 
 /// Get the substring of a text object that surrounds a text offset.
 ///
-/// If `offset` is less than 0, this will return a zero length substring at the beginning of the text with the substring_text_start flag set. If `offset` is greater than or equal to the length of the text string, this will return a zero length substring at the end of the text with the substring_text_end flag set.
+/// If `offset` is less than 0, this will return a zero length substring at the beginning of the text with the SubStringFlags.text_start flag set. If `offset` is greater than or equal to the length of the text string, this will return a zero length substring at the end of the text with the SubStringFlags.text_end flag set.
 ///
 /// - **Parameters:**
 ///   - `text`: the Text to query.
@@ -2669,7 +2731,7 @@ pub const GetTextSubStringForLineResult = struct {
 
 /// Get the substring of a text object that contains the given line.
 ///
-/// If `line` is less than 0, this will return a zero length substring at the beginning of the text with the substring_text_start flag set. If `line` is greater than or equal to `text->num_lines` this will return a zero length substring at the end of the text with the substring_text_end flag set.
+/// If `line` is less than 0, this will return a zero length substring at the beginning of the text with the SubStringFlags.text_start flag set. If `line` is greater than or equal to `text->num_lines` this will return a zero length substring at the end of the text with the SubStringFlags.text_end flag set.
 ///
 /// - **Parameters:**
 ///   - `text`: the Text to query.
@@ -3401,7 +3463,7 @@ pub inline fn setFontSize(font: ?Font, ptsize: f32) sdl.Error!void {
 /// - **Thread safety:** This function should be called on the thread that created the font.
 /// - **Since:** This function is available since SDL_ttf 3.0.0.
 /// - **See also:** Font.getSize
-/// - **See also:** Font.getDpi
+/// - **See also:** TTF_GetFontSizeDPI (C API outside this module)
 ///
 /// Returns `error.SdlFailure` when SDL_ttf reports failure.
 pub inline fn setFontSizeDpi(font: ?Font, ptsize: f32, hdpi: c_int, vdpi: c_int) sdl.Error!void {
@@ -3412,11 +3474,11 @@ pub inline fn setFontSizeDpi(font: ?Font, ptsize: f32, hdpi: c_int, vdpi: c_int)
 ///
 /// This updates any Text objects using this font, and clears already-generated glyphs, if any, from the cache.
 /// The font styles are a set of bit flags, OR'd together:
-/// - `style_normal` (is zero)
-/// - `style_bold`
-/// - `style_italic`
-/// - `style_underline`
-/// - `style_strikethrough`
+/// - `FontStyleFlags.normal` (is zero)
+/// - `FontStyleFlags.bold`
+/// - `FontStyleFlags.italic`
+/// - `FontStyleFlags.underline`
+/// - `FontStyleFlags.strikethrough`
 ///
 /// - **Parameters:**
 ///   - `font`: the font to set a new style on.
@@ -3426,7 +3488,7 @@ pub inline fn setFontSizeDpi(font: ?Font, ptsize: f32, hdpi: c_int, vdpi: c_int)
 /// - **Since:** This function is available since SDL_ttf 3.0.0.
 /// - **See also:** Font.getStyle
 pub inline fn setFontStyle(font: ?Font, style: FontStyleFlags) void {
-    c.TTF_SetFontStyle(if (font) |resource| @ptrCast(resource.value) else null, style);
+    c.TTF_SetFontStyle(if (font) |resource| @ptrCast(resource.value) else null, @bitCast(style));
 }
 
 /// Set a font's current wrap alignment option.
@@ -3734,3 +3796,1211 @@ pub const textengine = struct {
     pub const TextEngine = root.TextEngine;
     pub const TextLayout = root.TextLayout;
 };
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.CopyOperation;
+        _ = root.Direction;
+        _ = root.DrawCommand;
+        _ = root.DrawOperation;
+        _ = root.FillOperation;
+        _ = root.Font;
+        _ = root.FontStyleFlags;
+        _ = root.GpuAtlasDrawSequence;
+        _ = root.GpuTextEngineWinding;
+        _ = root.HintingFlags;
+        _ = root.HorizontalAlignment;
+        _ = root.ImageType;
+        _ = root.SubString;
+        _ = root.SubStringFlags;
+        _ = root.Text;
+        _ = root.TextData;
+        _ = root.TextEngine;
+        _ = root.TextLayout;
+        _ = root.addFallbackFont;
+        _ = root.appendTextString;
+        _ = root.clearFallbackFonts;
+        _ = root.copyFont;
+        _ = root.createGpuTextEngine;
+        _ = root.createGpuTextEngineWithProperties;
+        _ = root.createRendererTextEngine;
+        _ = root.createRendererTextEngineWithProperties;
+        _ = root.createSurfaceTextEngine;
+        _ = root.createText;
+        _ = root.deleteTextString;
+        _ = root.destroyGpuTextEngine;
+        _ = root.destroyRendererTextEngine;
+        _ = root.destroySurfaceTextEngine;
+        _ = root.destroyText;
+        _ = root.drawRendererText;
+        _ = root.drawSurfaceText;
+        _ = root.fontHasGlyph;
+        _ = root.fontIsFixedWidth;
+        _ = root.fontIsScalable;
+        _ = root.font_weight_black;
+        _ = root.font_weight_bold;
+        _ = root.font_weight_extra_black;
+        _ = root.font_weight_extra_bold;
+        _ = root.font_weight_extra_light;
+        _ = root.font_weight_light;
+        _ = root.font_weight_medium;
+        _ = root.font_weight_normal;
+        _ = root.font_weight_semi_bold;
+        _ = root.font_weight_thin;
+        _ = root.getFontAscent;
+        _ = root.getFontDescent;
+        _ = root.getFontDirection;
+        _ = root.getFontDpi;
+        _ = root.getFontFamilyName;
+        _ = root.getFontGeneration;
+        _ = root.getFontHeight;
+        _ = root.getFontHinting;
+        _ = root.getFontKerning;
+        _ = root.getFontLineSkip;
+        _ = root.getFontOutline;
+        _ = root.getFontProperties;
+        _ = root.getFontScript;
+        _ = root.getFontSdf;
+        _ = root.getFontSize;
+        _ = root.getFontStyle;
+        _ = root.getFontStyleName;
+        _ = root.getFontWeight;
+        _ = root.getFontWrapAlignment;
+        _ = root.getFreeTypeVersion;
+        _ = root.getGlyphImage;
+        _ = root.getGlyphImageForIndex;
+        _ = root.getGlyphKerning;
+        _ = root.getGlyphMetrics;
+        _ = root.getGlyphScript;
+        _ = root.getGpuTextDrawData;
+        _ = root.getGpuTextEngineWinding;
+        _ = root.getHarfBuzzVersion;
+        _ = root.getNextTextSubString;
+        _ = root.getNumFontFaces;
+        _ = root.getPreviousTextSubString;
+        _ = root.getStringSize;
+        _ = root.getStringSizeWrapped;
+        _ = root.getTextColor;
+        _ = root.getTextColorFloat;
+        _ = root.getTextDirection;
+        _ = root.getTextEngine;
+        _ = root.getTextFont;
+        _ = root.getTextPosition;
+        _ = root.getTextProperties;
+        _ = root.getTextScript;
+        _ = root.getTextSize;
+        _ = root.getTextSubString;
+        _ = root.getTextSubStringForLine;
+        _ = root.getTextSubStringForPoint;
+        _ = root.getTextSubStringsForRange;
+        _ = root.getTextWrapWidth;
+        _ = root.init;
+        _ = root.insertTextString;
+        _ = root.measureString;
+        _ = root.openFont;
+        _ = root.openFontIo;
+        _ = root.openFontWithProperties;
+        _ = root.prop_font_create_existing_font;
+        _ = root.prop_font_create_face_number;
+        _ = root.prop_font_create_filename_string;
+        _ = root.prop_font_create_horizontal_dpi_number;
+        _ = root.prop_font_create_io_stream_autoclose_boolean;
+        _ = root.prop_font_create_io_stream_offset_number;
+        _ = root.prop_font_create_io_stream_pointer;
+        _ = root.prop_font_create_size_float;
+        _ = root.prop_font_create_vertical_dpi_number;
+        _ = root.prop_font_outline_line_cap_number;
+        _ = root.prop_font_outline_line_join_number;
+        _ = root.prop_font_outline_miter_limit_number;
+        _ = root.prop_gpu_text_engine_atlas_texture_size;
+        _ = root.prop_gpu_text_engine_device;
+        _ = root.prop_renderer_text_engine_atlas_texture_size;
+        _ = root.prop_renderer_text_engine_renderer;
+        _ = root.quit;
+        _ = root.removeFallbackFont;
+        _ = root.renderGlyphBlended;
+        _ = root.renderGlyphLcd;
+        _ = root.renderGlyphShaded;
+        _ = root.renderGlyphSolid;
+        _ = root.renderTextBlended;
+        _ = root.renderTextBlendedWrapped;
+        _ = root.renderTextLcd;
+        _ = root.renderTextLcdWrapped;
+        _ = root.renderTextShaded;
+        _ = root.renderTextShadedWrapped;
+        _ = root.renderTextSolid;
+        _ = root.renderTextSolidWrapped;
+        _ = root.setFontDirection;
+        _ = root.setFontHinting;
+        _ = root.setFontKerning;
+        _ = root.setFontLanguage;
+        _ = root.setFontLineSkip;
+        _ = root.setFontOutline;
+        _ = root.setFontScript;
+        _ = root.setFontSdf;
+        _ = root.setFontSize;
+        _ = root.setFontSizeDpi;
+        _ = root.setFontStyle;
+        _ = root.setFontWrapAlignment;
+        _ = root.setGpuTextEngineWinding;
+        _ = root.setTextColor;
+        _ = root.setTextColorFloat;
+        _ = root.setTextDirection;
+        _ = root.setTextEngine;
+        _ = root.setTextFont;
+        _ = root.setTextPosition;
+        _ = root.setTextScript;
+        _ = root.setTextString;
+        _ = root.setTextWrapWhitespaceVisible;
+        _ = root.setTextWrapWidth;
+        _ = root.stringToTag;
+        _ = root.style_bold;
+        _ = root.style_italic;
+        _ = root.style_normal;
+        _ = root.style_strikethrough;
+        _ = root.style_underline;
+        _ = root.sub_string_flags_direction_mask;
+        _ = root.sub_string_flags_line_end;
+        _ = root.sub_string_flags_line_start;
+        _ = root.sub_string_flags_text_end;
+        _ = root.sub_string_flags_text_start;
+        _ = root.tagToString;
+        _ = root.textWrapWhitespaceVisible;
+        _ = root.updateText;
+        _ = root.version;
+        _ = root.wasInit;
+    }
+}

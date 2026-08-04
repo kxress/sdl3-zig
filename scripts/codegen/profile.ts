@@ -16,6 +16,11 @@ export interface PublicApi {
   references: PublicReference[];
 }
 
+export interface ConstantFamily {
+  prefix: string;
+  typedef: string;
+}
+
 export interface LocalAllocatorProfile {
   provider: "local";
   malloc: string;
@@ -23,6 +28,8 @@ export interface LocalAllocatorProfile {
   free: string;
   alignedAlloc: string;
   alignedFree: string;
+  setMemoryFunctions?: string;
+  getNumAllocations?: string;
 }
 
 export interface DependencyAllocatorProfile {
@@ -50,6 +57,7 @@ export interface LibraryProfile {
   headerPrefixes: string[];
   rootHeaders: string[];
   namespaceStrategy: NamespaceStrategy;
+  constantFamilies?: ConstantFamily[];
 }
 
 export type NamespaceStrategy =

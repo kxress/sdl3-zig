@@ -1,5 +1,6 @@
 import { copy } from "@std/fs/copy";
 import { join } from "@std/path";
+import { verifyDetachedSignature } from "./source-signature.ts";
 import { runCommand } from "./utils/command.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 
@@ -12,6 +13,17 @@ const sources = [
   ["SDL3_ttf", "http:sdl-ttf-source"],
   ["SDL3_mixer", "http:sdl-mixer-source"],
   ["SDL3_net", "http:sdl-net-source"],
+] as const;
+const sourceSignatures = [
+  ["SDL3", "http:sdl-source", "http:sdl-source-signature"],
+  ["SDL3_image", "http:sdl-image-source", "http:sdl-image-source-signature"],
+  ["SDL3_ttf", "http:sdl-ttf-source", "http:sdl-ttf-source-signature"],
+  ["SDL3_mixer", "http:sdl-mixer-source", "http:sdl-mixer-source-signature"],
+  ["SDL3_net", "http:sdl-net-source", "http:sdl-net-source-signature"],
+] as const;
+const trustedReleaseKeyFingerprints = [
+  "1528635D8053A57F77D1E08630A59377A7763BE6",
+  "0900104363B4C9D4223DE149D913FE7D4B61D39B",
 ] as const;
 const freetypeArtifact = "http:freetype-source";
 const controllerImageComponent = "ControllerImage";
@@ -41,6 +53,9 @@ const sourceArtifactNames = [
 if (Deno.args.length !== 1 || (action !== "update" && action !== "check")) {
   throw new Error("usage: sync-sources.ts update|check");
 }
+
+await assertDxcRuntimeDownloaderMatchesMise();
+await verifyPinnedSourceSignatures();
 
 if (await vendoredSourcesMatchManifest()) {
   await assertNoMiseMetadata(join(root, "vendor"));
@@ -265,11 +280,143 @@ if (action === "check") {
 }
 
 if (action === "update") {
+  await assertDxcRuntimeDownloaderMatchesMise();
   await Deno.writeTextFile(vendorManifest, `${await sourceManifestFingerprint()}\n`);
 }
 
 async function mise(...args: string[]): Promise<string> {
   return (await runCommand("mise", ["--quiet", "-E", "sdl", ...args], { cwd: root })).stdout;
+}
+
+async function assertDxcRuntimeDownloaderMatchesMise(): Promise<void> {
+  const downloaderPath = join(
+    root,
+    "vendor",
+    "SDL3_shadercross",
+    "build-scripts",
+    "download-prebuilt-DirectXShaderCompiler.cmake",
+  );
+  if (!(await exists(downloaderPath))) return;
+  const manifest = await Deno.readTextFile(join(root, "mise.sdl.toml"));
+  const downloader = await Deno.readTextFile(downloaderPath);
+  const pins = [
+    ["http:dxc-linux-runtime", "DXC_LINUX_X64_URL", "DXC_LINUX_X64_HASH"],
+    [
+      "http:dxc-windows-runtime",
+      "DXC_WINDOWS_X86_X64_ARM64_URL",
+      "DXC_WINDOWS_X86_X64_ARM64_HASH",
+    ],
+  ] as const;
+  for (const [tool, urlVariable, hashVariable] of pins) {
+    const section = `[tools."${tool}"]`;
+    const start = manifest.indexOf(section);
+    if (start < 0) throw new Error(`mise.sdl.toml is missing ${tool}`);
+    const end = manifest.indexOf("\n[", start + section.length);
+    const entry = manifest.slice(start, end < 0 ? manifest.length : end);
+    const url = entry.match(/^url\s*=\s*"([^"]+)"$/m)?.[1];
+    const checksum = entry.match(/^checksum\s*=\s*"sha256:([0-9a-f]+)"$/m)?.[1];
+    if (!url || !checksum) throw new Error(`${tool} is missing a URL or SHA-256 checksum`);
+    if (!downloader.includes(`set(${urlVariable} "${url}")`)) {
+      throw new Error(`${tool} URL does not match SDL_shadercross's downloader`);
+    }
+    if (!downloader.includes(`set(${hashVariable} "SHA256=${checksum}")`)) {
+      throw new Error(`${tool} checksum does not match SDL_shadercross's downloader`);
+    }
+  }
+}
+
+async function verifyPinnedSourceSignatures(): Promise<void> {
+  const manifest = await Deno.readTextFile(join(root, "mise.sdl.toml"));
+  for (const [, , signatureArtifact] of sourceSignatures) {
+    const section = manifestSection(manifest, signatureArtifact);
+    if (
+      !manifestValue(section, "version") ||
+      manifestValue(section, "format") !== "raw" ||
+      !manifestValue(section, "bin")
+    ) {
+      throw new Error(`${signatureArtifact} must pin a raw signature artifact and filename`);
+    }
+  }
+  const cache = join(root, ".zig-cache", "sdl-source-signature-cache");
+  await Deno.mkdir(cache, { recursive: true });
+  const keyringDirectory = await Deno.makeTempDir({ dir: cache, prefix: ".keyring-" });
+  const keyring = join(keyringDirectory, "libsdl-release-keys.gpg");
+  try {
+    await runCommand("gpg", [
+      "--batch",
+      "--no-options",
+      "--homedir",
+      keyringDirectory,
+      "--keyserver",
+      "hkps://keyserver.ubuntu.com",
+      "--recv-keys",
+      ...trustedReleaseKeyFingerprints,
+    ], { cwd: root });
+    await runCommand("gpg", [
+      "--batch",
+      "--no-options",
+      "--homedir",
+      keyringDirectory,
+      "--output",
+      keyring,
+      "--export",
+      ...trustedReleaseKeyFingerprints,
+    ], { cwd: root });
+    for (const [component, sourceArtifact, signatureArtifact] of sourceSignatures) {
+      const source = readArtifactPin(manifest, sourceArtifact);
+      const signature = readArtifactPin(manifest, signatureArtifact);
+      const sourcePath = join(cache, `${component}-${source.checksum}.tar.gz`);
+      const signaturePath = join(cache, `${component}-${signature.checksum}.tar.gz.sig`);
+      await downloadVerified(source.url, source.checksum, sourcePath);
+      await downloadVerified(signature.url, signature.checksum, signaturePath);
+      await verifyDetachedSignature(keyring, signaturePath, sourcePath);
+      console.log(`Verified ${component} source signature.`);
+    }
+  } finally {
+    await Deno.remove(keyringDirectory, { recursive: true });
+  }
+}
+
+function readArtifactPin(manifest: string, artifact: string): {
+  url: string;
+  checksum: string;
+} {
+  const section = manifestSection(manifest, artifact);
+  const url = manifestValue(section, "url");
+  const checksum = manifestValue(section, "checksum")?.replace(/^sha256:/, "");
+  if (!url?.startsWith("https://") || !checksum || !/^[a-f0-9]{64}$/.test(checksum)) {
+    throw new Error(`${artifact} must pin an HTTPS URL and SHA-256 checksum`);
+  }
+  return { url, checksum };
+}
+
+async function downloadVerified(url: string, checksum: string, destination: string): Promise<void> {
+  if (!(await isFile(destination))) {
+    await runCommand("curl", [
+      "--fail",
+      "--location",
+      "--silent",
+      "--show-error",
+      "--output",
+      destination,
+      url,
+    ], { cwd: root });
+  }
+  const bytes = await Deno.readFile(destination);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const actual = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  if (actual !== checksum) {
+    throw new Error(`SHA-256 mismatch for downloaded artifact ${url}: ${actual}`);
+  }
+}
+
+function manifestSection(manifest: string, artifact: string): string {
+  const header = `[tools."${artifact}"]`;
+  const start = manifest.indexOf(header);
+  const end = manifest.indexOf("\n[tools.", start + header.length);
+  if (start < 0) throw new Error(`mise.sdl.toml is missing source artifact ${artifact}`);
+  return manifest.slice(start + header.length, end < 0 ? undefined : end);
 }
 
 async function exists(path: string): Promise<boolean> {

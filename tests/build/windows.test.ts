@@ -1,5 +1,11 @@
 import { stageReleaseTree } from "../../scripts/package-release.ts";
 import {
+  prebuiltTargetsFor,
+  targetName,
+  windowsOptionalArchitectures,
+  type WindowsPrebuiltFamily,
+} from "../../scripts/distribution-policy.ts";
+import {
   buildDistributionConsumer,
   run,
   runWindowsExecutable,
@@ -46,6 +52,20 @@ Deno.test({
           await Deno.stat(`${cache}/sdl3-source/lib/SDL3_test.lib`);
           await Deno.stat(`${cache}/sdl3-source/bin/shadercross.exe`);
           await Deno.stat(`${cache}/sdl3-source-build/ControllerImage/controllerimage.lib`);
+          if (linkage === "shared") {
+            for (
+              const library of [
+                "SDL3",
+                "SDL3_shadercross",
+                "SDL3_image",
+                "SDL3_ttf",
+                "SDL3_mixer",
+                "SDL3_net",
+              ]
+            ) {
+              await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
+            }
+          }
           await run(
             `${cache}/sdl3-source-build/ControllerImage/make-controllerimage-data.exe`,
             ["${Deno.cwd()}\\vendor\\ControllerImage\\art"],
@@ -54,9 +74,6 @@ Deno.test({
           await runWindowsExecutable(
             `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
             `${temporary}/${linkage}`,
-            {
-              PATH: `${cache}/sdl3-source/bin`,
-            },
           );
         });
       }
@@ -68,7 +85,7 @@ Deno.test({
   name: "Windows MinGW prebuilt distributions link and install",
   ignore: Deno.build.os !== "windows",
   async fn(test) {
-    await buildWindowsDistribution(test, "gnu", ["x86-windows-gnu", "x86_64-windows-gnu"]);
+    await buildWindowsDistribution(test, "mingw");
   },
 });
 
@@ -76,32 +93,33 @@ Deno.test({
   name: "Windows MSVC prebuilt distributions link and install",
   ignore: Deno.build.os !== "windows",
   async fn(test) {
-    await buildWindowsDistribution(test, "msvc", [
-      "x86-windows-msvc",
-      "x86_64-windows-msvc",
-      "aarch64-windows-msvc",
-    ]);
+    await buildWindowsDistribution(test, "msvc");
   },
 });
 
 async function buildWindowsDistribution(
   test: Deno.TestContext,
-  abi: "gnu" | "msvc",
-  targets: string[],
+  abi: WindowsPrebuiltFamily,
+  targets = prebuiltTargetsFor(abi),
 ): Promise<void> {
   await withTempDirectory(`sdl-windows-${abi}-distribution-`, async (temporary) => {
     const packageRoot = await stageReleaseTree(`${temporary}/package`);
     const consumer = await stageDistributionConsumer(temporary, packageRoot);
 
     for (const target of targets) {
-      await test.step(`${target} prebuilts link and install`, async () => {
-        const optionalCodecs = !target.startsWith("aarch64-");
-        const output = `${temporary}/${target}`;
-        await buildDistributionConsumer(consumer, temporary, target, output, [
+      const targetString = targetName(target);
+      await test.step(`${targetString} prebuilts link and install`, async () => {
+        const optionalCodecs = windowsOptionalArchitectures[abi].includes(target.arch);
+        const output = `${temporary}/${targetString}`;
+        await buildDistributionConsumer(consumer, temporary, targetString, output, [
+          "-Ddistribution=prebuilt",
           ...companions.map((library) => `-D${library}=true`),
           `-Doptional_codecs=${optionalCodecs}`,
         ]);
-        if (target === `${Deno.build.arch}-windows-${abi}`) {
+        for (const library of ["SDL3", "SDL3_image", "SDL3_ttf", "SDL3_mixer", "SDL3_net"]) {
+          await Deno.stat(`${output}/bin/${library}.dll`);
+        }
+        if (targetString === `${Deno.build.arch}-windows-${target.abi}`) {
           await runWindowsExecutable(`${output}/bin/sdl-distribution-consumer.exe`, output);
         }
       });

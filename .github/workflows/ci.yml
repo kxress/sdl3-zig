@@ -42,3 +42,27 @@ jobs:
           cache: false
       - name: Validate native MinGW and MSVC distributions
         run: deno task test:windows-build
+
+  macos-distributions:
+    name: macOS source and universal distributions
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Report macOS SDK availability
+        shell: bash
+        run: |
+          sw_vers
+          if ! xcrun --sdk macosx --show-sdk-path; then
+            echo "::warning::The macOS SDK is unavailable; source and native-link tests may be skipped or fail."
+          fi
+      - name: Validate source and universal framework distributions
+        run: deno task test:macos-build
+      - name: Validate Apple mobile binding and XCFramework slices
+        run: deno task test:apple-mobile

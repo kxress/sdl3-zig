@@ -1,4 +1,4 @@
-import type { ApiModel, XmlAstNode } from "./analysis.ts";
+import type { ApiModel, FunctionMacro, XmlAstNode } from "./analysis.ts";
 import { appendDocumentationParagraph, renderDocComment } from "./documentation.ts";
 import {
   type BorrowedSliceInfo,
@@ -25,6 +25,8 @@ interface RenderContext {
   publicTypes: XmlAstNode[];
   publicFunctions: XmlAstNode[];
   publicVariables: XmlAstNode[];
+  functionMacros: FunctionMacro[];
+  functionMacrosByName: Map<string, FunctionMacro>;
   nodesByName: Map<string, XmlAstNode[]>;
   documentationByName: Map<string, ApiModel["documentation"]>;
   headerDocumentationByHeader: Map<string, ApiModel["headerDocumentation"][number]>;
@@ -35,7 +37,6 @@ interface RenderContext {
   renderedTypeIds: Set<string>;
   emittedNames: Map<string, string>;
   namespaceExports: Array<{ cName: string; publicName: string }>;
-  literalDocumentationReferences: Set<string>;
   namespaceNames: Set<string>;
   reservedPublicNames?: Set<string>;
   documentationMembers: Map<string, DocumentationMember>;
@@ -154,6 +155,8 @@ function createContext(
     ),
     publicFunctions: publicNodes.filter((node) => node.kind === "Function"),
     publicVariables: publicNodes.filter((node) => node.kind === "Variable"),
+    functionMacros: model.functionMacros ?? [],
+    functionMacrosByName: new Map((model.functionMacros ?? []).map((macro) => [macro.name, macro])),
     nodesByName: indexByName(model.nodes, (node) => node.attributes.name),
     documentationByName,
     headerDocumentationByHeader,
@@ -164,7 +167,6 @@ function createContext(
     renderedTypeIds: new Set(),
     emittedNames: new Map(),
     namespaceExports: [],
-    literalDocumentationReferences: new Set(),
     namespaceNames: new Set(),
     documentationMembers: new Map(),
     resources,
@@ -522,13 +524,24 @@ function collectFlagTypes(
     ) continue;
     const fixed = fixedIntegerType(node.attributes.type, byId);
     if (!fixed) continue;
-    const apiPrefix = model.apiPrefixes.find((prefix) => rawName.startsWith(prefix)) ??
-      model.apiPrefixes[0];
-    const withoutPrefix = rawName.startsWith(apiPrefix) ? rawName.slice(apiPrefix.length) : rawName;
-    const baseWords = naming.words(withoutPrefix.replace(/Flags$/, ""));
-    const prefix = `${apiPrefix}${baseWords.map((word) => word.toUpperCase()).join("_")}`;
+    const prefix = flagConstantPrefix(rawName, model, naming);
+    if (!prefix) continue;
+    const nestedPrefixes = new Set(
+      model.nodes
+        .filter((candidate) =>
+          candidate.id !== node.id && candidate.kind === "Typedef" &&
+          candidate.attributes.name?.endsWith("Flags")
+        )
+        .map((candidate) => flagConstantPrefix(candidate.attributes.name!, model, naming))
+        .filter((candidate): candidate is string =>
+          candidate !== undefined && candidate.startsWith(`${prefix}_`)
+        ),
+    );
     const constants = model.constants
-      .filter((constant) => constant.source === "macro" && constant.name.startsWith(`${prefix}_`))
+      .filter((constant) =>
+        constant.source === "macro" && constant.name.startsWith(`${prefix}_`) &&
+        ![...nestedPrefixes].some((nested) => constant.name.startsWith(`${nested}_`))
+      )
       .map((constant) => {
         try {
           return { name: constant.name, value: BigInt(normalizeInteger(constant.value)) };
@@ -549,6 +562,60 @@ function collectFlagTypes(
     }
   }
   return flags;
+}
+
+function flagConstantPrefix(
+  rawName: string,
+  model: ApiModel,
+  naming: ZigNaming,
+): string | undefined {
+  const apiPrefix = model.apiPrefixes.find((prefix) => rawName.startsWith(prefix)) ?? "";
+  const stem = rawName.slice(apiPrefix.length).replace(/Flags$/, "");
+  const normalizedStem = normalizeFlagEvidence(stem);
+  const candidates = new Map<string, number>();
+  const nonOneBitCounts = new Map<string, number>();
+  for (const constant of model.constants) {
+    if (constant.source !== "macro") continue;
+    const separators = [...constant.name.matchAll(/_/g)].map((match) => match.index ?? 0)
+      .filter((index) => index > 0);
+    try {
+      const value = BigInt(normalizeInteger(constant.value));
+      for (const separator of separators) {
+        const prefix = constant.name.slice(0, separator);
+        const candidate = prefix.startsWith(apiPrefix) ? prefix.slice(apiPrefix.length) : prefix;
+        const normalizedCandidate = normalizeFlagEvidence(candidate);
+        if (!normalizedCandidate) continue;
+        if (value > 0n && !isOneBit(value)) {
+          nonOneBitCounts.set(prefix, (nonOneBitCounts.get(prefix) ?? 0) + 1);
+        }
+        let score = 0;
+        if (normalizedCandidate === normalizedStem) score = 100;
+        else if (
+          normalizedStem.endsWith(normalizedCandidate) ||
+          normalizedCandidate.endsWith(normalizedStem)
+        ) score = 80;
+        else {
+          const stemWords = new Set(naming.words(stem).map(normalizeFlagEvidence));
+          const candidateWords = naming.words(candidate).map(normalizeFlagEvidence);
+          score = candidateWords.filter((word) => stemWords.has(word)).length * 10;
+        }
+        if (score > 0) candidates.set(prefix, Math.max(candidates.get(prefix) ?? 0, score));
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [...candidates.entries()]
+    .filter(([prefix, score]) =>
+      score >= 80 && (score === 100 || (nonOneBitCounts.get(prefix) ?? 0) <= 1)
+    )
+    .sort(([left, leftScore], [right, rightScore]) =>
+      rightScore - leftScore || right.length - left.length || left.localeCompare(right)
+    )[0]?.[0];
+}
+
+function normalizeFlagEvidence(value: string): string {
+  return value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 }
 
 function fixedIntegerType(
@@ -887,7 +954,7 @@ function renderPublicBindings(context: RenderContext): string {
   const lines = [
     'const std = @import("std");',
     'const builtin = @import("builtin");',
-    `const c = @import("${context.profile.abiImportName}");`,
+    `pub const c = @import("${context.profile.abiImportName}");`,
     ...(context.needsOwnedStringSupport ? ['const support = @import("sdl3_support");'] : []),
     ...context.profile.dependencies.map((dependency) =>
       `const ${dependency} = @import("${dependency}");`
@@ -898,21 +965,66 @@ function renderPublicBindings(context: RenderContext): string {
   renderError(context, lines);
   renderAllocator(context, lines);
   if (context.needsOwnedStringSupport) renderOwnedCollectionTypes(context, lines);
+  renderCVarargSupport(context, lines);
 
   for (const node of context.publicTypes) renderPublicTypeDeclaration(node, context, lines);
 
   const moduleNames = new Set(
-    [...context.publicTypeNames.entries()]
-      .filter(([id]) => !isPrimitiveTypedef(context.byId.get(id)))
-      .map(([, name]) => name),
+    [
+      ...allNamespaceNames(context),
+      ...[...context.publicTypeNames.entries()]
+        .filter(([id]) => !isPrimitiveTypedef(context.byId.get(id)))
+        .map(([, name]) => name),
+    ],
   );
   renderPublicConstants(context, lines, moduleNames);
+  renderPublicFunctionMacros(context, lines, moduleNames);
   renderPublicVariables(context, lines, moduleNames);
   renderPublicFunctions(context, lines, moduleNames);
   privatizeNamespacedDeclarations(context, lines);
   renderNamespaces(context, lines);
+  renderTargetReachability(context, lines);
 
   return resolveDocumentationReferences(finish(lines), context);
+}
+
+function renderTargetReachability(context: RenderContext, lines: string[]): void {
+  const entries = new Map<string, string[] | undefined>();
+  for (const [id, name] of context.publicTypeNames) {
+    if (isPrimitiveTypedef(context.byId.get(id)) || !context.publicIds.has(id)) continue;
+    const node = context.byId.get(id);
+    entries.set(name, node ? context.model.publicNodeTargets[node.id] : undefined);
+  }
+  for (const [cName, name] of context.emittedNames) {
+    entries.set(name, declarationTargets(cName, context));
+  }
+  const groups = new Map<string, string[]>();
+  for (const [name, targets] of entries) {
+    const platforms = targets === undefined
+      ? ["all"]
+      : [...new Set(targets.map(targetPlatform))].sort();
+    for (const platform of platforms) {
+      const names = groups.get(platform) ?? [];
+      names.push(name);
+      groups.set(platform, names);
+    }
+  }
+  if (groups.size === 0) return;
+  lines.push(
+    "// Force target-specific public declarations through Zig's lazy analysis.",
+    "comptime {",
+  );
+  for (
+    const [platform, names] of [...groups.entries()].sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  ) {
+    const condition = platform === "all" ? "true" : platformConditionForName(platform);
+    lines.push(`    if (${condition}) {`);
+    for (const name of [...new Set(names)].sort()) lines.push(`        _ = root.${name};`);
+    lines.push("    }");
+  }
+  lines.push("}", "");
 }
 
 function renderError(context: RenderContext, lines: string[]): void {
@@ -928,6 +1040,149 @@ function renderError(context: RenderContext, lines: string[]): void {
     "    /// The requested allocation could not be created.",
     "    OutOfMemory,",
     "};",
+    "",
+  );
+}
+
+function renderAllocatorBridge(
+  allocator: Extract<LibraryProfile["allocator"], { provider: "local" }>,
+  lines: string[],
+): void {
+  if (!allocator.getNumAllocations) {
+    throw new Error("Allocator bridge requires an allocation-count function");
+  }
+  lines.push(
+    "/// Installs a consumer std.mem.Allocator as SDL's process-wide allocator.",
+    "///",
+    "/// Call install before any other SDL call and keep the backing allocator's state alive for",
+    "/// the rest of the process. The bridge is intentionally global and cannot be replaced or",
+    "/// deinitialized; a second install returns error.AlreadyInstalled.",
+    "pub const AllocatorBridge = struct {",
+    "    /// Failures reported by the allocator bridge.",
+    "    pub const Error = error{ AlreadyInstalled, AllocationsAlreadyMade, SdlFailure };",
+    "",
+    "    /// Installs `backing` as SDL's process-wide allocator.",
+    "    ///",
+    "    /// The allocator value is copied, but its backing state is borrowed indefinitely. This",
+    "    /// function must run before any SDL allocation or initialization call.",
+    "    pub fn install(backing: std.mem.Allocator) @This().Error!void {",
+    "        if (allocator_bridge_installed) return error.AlreadyInstalled;",
+    `        if (c.${allocator.getNumAllocations}() > 0) return error.AllocationsAlreadyMade;`,
+    "        allocator_bridge_backing = backing;",
+    `        if (!c.${allocator.setMemoryFunctions}(`,
+    "            @ptrCast(&allocatorBridgeMalloc),",
+    "            @ptrCast(&allocatorBridgeCalloc),",
+    "            @ptrCast(&allocatorBridgeRealloc),",
+    "            @ptrCast(&allocatorBridgeFree),",
+    "        )) {",
+    "            allocator_bridge_backing = null;",
+    "            return error.SdlFailure;",
+    "        }",
+    "        allocator_bridge_installed = true;",
+    "    }",
+    "",
+    "    /// Returns whether this process has installed the bridge.",
+    "    pub fn isInstalled() bool {",
+    "        return allocator_bridge_installed;",
+    "    }",
+    "};",
+    "",
+    "const AllocatorBridgeHeader = struct {",
+    "    magic: usize,",
+    "    base: [*]u8,",
+    "    base_len: usize,",
+    "    requested_len: usize,",
+    "};",
+    "",
+    "const allocator_bridge_magic: usize = @bitCast(@as(isize, -0x53444c));",
+    "const allocator_bridge_alignment = std.mem.Alignment.of(std.c.max_align_t);",
+    "var allocator_bridge_backing: ?std.mem.Allocator = null;",
+    "var allocator_bridge_installed = false;",
+    "",
+    "fn allocatorBridgeMalloc(size: c_ulong) callconv(.c) ?*anyopaque {",
+    "    const length = std.math.cast(usize, size) orelse return null;",
+    "    return allocatorBridgeAllocate(length);",
+    "}",
+    "",
+    "fn allocatorBridgeCalloc(nmemb: c_ulong, size: c_ulong) callconv(.c) ?*anyopaque {",
+    "    const count = std.math.cast(usize, nmemb) orelse return null;",
+    "    const element_size = std.math.cast(usize, size) orelse return null;",
+    "    const length = std.math.mul(usize, count, element_size) catch return null;",
+    "    const pointer = allocatorBridgeAllocate(length) orelse return null;",
+    "    @memset(@as([*]u8, @ptrCast(pointer))[0..length], 0);",
+    "    return pointer;",
+    "}",
+    "",
+    "fn allocatorBridgeRealloc(memory: ?*anyopaque, size: c_ulong) callconv(.c) ?*anyopaque {",
+    "    const length = std.math.cast(usize, size) orelse return null;",
+    "    if (memory == null) return allocatorBridgeAllocate(length);",
+    "    const header = allocatorBridgeHeader(memory.?) orelse return null;",
+    "    const backing = allocator_bridge_backing orelse return null;",
+    "    const total = allocatorBridgeTotalLength(length) orelse return null;",
+    "    if (backing.rawResize(header.base[0..header.base_len], allocator_bridge_alignment, total, @returnAddress())) {",
+    "        header.base_len = total;",
+    "        header.requested_len = length;",
+    "        return memory;",
+    "    }",
+    "    const replacement = allocatorBridgeAllocate(length) orelse return null;",
+    "    const copy_len = @min(header.requested_len, length);",
+    "    @memcpy(",
+    "        @as([*]u8, @ptrCast(replacement))[0..copy_len],",
+    "        @as([*]const u8, @ptrCast(memory.?))[0..copy_len],",
+    "    );",
+    "    allocatorBridgeFree(memory.?);",
+    "    return replacement;",
+    "}",
+    "",
+    "fn allocatorBridgeFree(memory: ?*anyopaque) callconv(.c) void {",
+    "    const header = allocatorBridgeHeader(memory orelse return) orelse return;",
+    "    const backing = allocator_bridge_backing orelse return;",
+    "    const base = header.base;",
+    "    const base_len = header.base_len;",
+    "    header.magic = 0;",
+    "    backing.rawFree(base[0..base_len], allocator_bridge_alignment, @returnAddress());",
+    "}",
+    "",
+    "fn allocatorBridgeAllocate(length: usize) ?*anyopaque {",
+    "    const backing = allocator_bridge_backing orelse return null;",
+    "    const total = allocatorBridgeTotalLength(length) orelse return null;",
+    "    const base = backing.rawAlloc(total, allocator_bridge_alignment, @returnAddress()) orelse return null;",
+    "    const start = std.math.add(usize, @intFromPtr(base), @sizeOf(AllocatorBridgeHeader)) catch {",
+    "        backing.rawFree(base[0..total], allocator_bridge_alignment, @returnAddress());",
+    "        return null;",
+    "    };",
+    "    const user_address = allocator_bridge_alignment.forward(start);",
+    "    const end = std.math.add(usize, user_address, length) catch {",
+    "        backing.rawFree(base[0..total], allocator_bridge_alignment, @returnAddress());",
+    "        return null;",
+    "    };",
+    "    const allocation_end = std.math.add(usize, @intFromPtr(base), total) catch unreachable;",
+    "    if (end > allocation_end) {",
+    "        backing.rawFree(base[0..total], allocator_bridge_alignment, @returnAddress());",
+    "        return null;",
+    "    }",
+    "    const header: *AllocatorBridgeHeader = @ptrFromInt(user_address - @sizeOf(AllocatorBridgeHeader));",
+    "    header.* = .{",
+    "        .magic = allocator_bridge_magic,",
+    "        .base = base,",
+    "        .base_len = total,",
+    "        .requested_len = length,",
+    "    };",
+    "    return @ptrFromInt(user_address);",
+    "}",
+    "",
+    "fn allocatorBridgeTotalLength(length: usize) ?usize {",
+    "    const padding = allocator_bridge_alignment.toByteUnits() - 1;",
+    "    const header_and_padding = std.math.add(usize, @sizeOf(AllocatorBridgeHeader), padding) catch return null;",
+    "    return std.math.add(usize, length, header_and_padding) catch null;",
+    "}",
+    "",
+    "fn allocatorBridgeHeader(memory: *anyopaque) ?*AllocatorBridgeHeader {",
+    "    const address = @intFromPtr(memory);",
+    "    if (address < @sizeOf(AllocatorBridgeHeader)) return null;",
+    "    const header: *AllocatorBridgeHeader = @ptrFromInt(address - @sizeOf(AllocatorBridgeHeader));",
+    "    return if (header.magic == allocator_bridge_magic) header else null;",
+    "}",
     "",
   );
 }
@@ -984,6 +1239,334 @@ function renderAllocator(context: RenderContext, lines: string[]): void {
     "    else",
     `        c.${allocator.alignedFree}(allocation.ptr);`,
     "}",
+    "",
+  );
+  if (allocator.setMemoryFunctions) renderAllocatorBridge(allocator, lines);
+}
+
+function renderCVarargSupport(context: RenderContext, lines: string[]): void {
+  const needsSupport = context.publicFunctions.some((node) => {
+    const plan = functionPlan(node, context);
+    return plan.variadic && isConstCharPointerType(plan.arguments.at(-1)?.type ?? "", context);
+  });
+  if (!needsSupport) return;
+  lines.push(
+    ...`const CVarargKind = enum {
+    signed_int,
+    unsigned_int,
+    signed_long,
+    unsigned_long,
+    signed_long_long,
+    unsigned_long_long,
+    signed_size,
+    unsigned_size,
+    float,
+    pointer,
+    cstring,
+    scan_signed_int,
+    scan_unsigned_int,
+    scan_signed_long,
+    scan_unsigned_long,
+    scan_signed_long_long,
+    scan_unsigned_long_long,
+    scan_signed_size,
+    scan_unsigned_size,
+    scan_float,
+    scan_double,
+    scan_char,
+    scan_cstring,
+    scan_pointer,
+};
+
+fn cVarargKinds(
+    comptime format: [:0]const u8,
+    comptime argument_count: usize,
+    comptime scan: bool,
+) [argument_count]CVarargKind {
+    var kinds: [argument_count]CVarargKind = undefined;
+    var count: usize = 0;
+    var index: usize = 0;
+    while (index < format.len) {
+        if (format[index] != '%') {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        if (index >= format.len) @compileError("unterminated C format specifier");
+        if (format[index] == '%') {
+            index += 1;
+            continue;
+        }
+
+        var suppressed = false;
+        if (scan and format[index] == '*') {
+            suppressed = true;
+            index += 1;
+        }
+        while (index < format.len and
+            (format[index] == '-' or format[index] == '+' or format[index] == '#' or
+            format[index] == '0' or format[index] == ' ' or format[index] == '\\'')) index += 1;
+        if (!scan and index < format.len and format[index] == '*') {
+            if (count >= argument_count) @compileError("C format has too few arguments");
+            kinds[count] = .signed_int;
+            count += 1;
+            index += 1;
+        } else {
+            while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+        }
+        if (index < format.len and format[index] == '.') {
+            index += 1;
+            if (!scan and index < format.len and format[index] == '*') {
+                if (count >= argument_count) @compileError("C format has too few arguments");
+                kinds[count] = .signed_int;
+                count += 1;
+                index += 1;
+            } else {
+                while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+            }
+        }
+
+        var length: u8 = 0;
+        if (index < format.len and format[index] == 'h') {
+            length = 1;
+            index += 1;
+            if (index < format.len and format[index] == 'h') index += 1;
+        } else if (index < format.len and format[index] == 'l') {
+            length = 2;
+            index += 1;
+            if (index < format.len and format[index] == 'l') {
+                length = 3;
+                index += 1;
+            }
+        } else if (index < format.len and format[index] == 'j') {
+            length = 3;
+            index += 1;
+        } else if (index < format.len and format[index] == 'z') {
+            length = 4;
+            index += 1;
+        } else if (index < format.len and format[index] == 't') {
+            length = 5;
+            index += 1;
+        } else if (index < format.len and format[index] == 'L') {
+            length = 6;
+            index += 1;
+        }
+        if (index >= format.len) @compileError("unterminated C format specifier");
+        const specifier = format[index];
+        index += 1;
+        if (specifier == '[') {
+            while (index < format.len and format[index] != ']') index += 1;
+            if (index >= format.len) @compileError("unterminated C scanf character set");
+            index += 1;
+        }
+        if (suppressed) continue;
+        if (count >= argument_count) @compileError("C format has too few arguments");
+        kinds[count] = if (scan) switch (specifier) {
+            'd', 'i' => switch (length) {
+                0, 1 => .scan_signed_int,
+                2 => .scan_signed_long,
+                3 => .scan_signed_long_long,
+                4, 5 => .scan_signed_size,
+                else => @compileError("unsupported C scanf integer length"),
+            },
+            'o', 'u', 'x', 'X' => switch (length) {
+                0, 1 => .scan_unsigned_int,
+                2 => .scan_unsigned_long,
+                3 => .scan_unsigned_long_long,
+                4, 5 => .scan_unsigned_size,
+                else => @compileError("unsupported C scanf integer length"),
+            },
+            'f' => if (length == 0) .scan_float else if (length == 2) .scan_double
+                else @compileError("unsupported C scanf floating-point length"),
+            'e', 'E', 'g', 'G', 'a', 'A' => if (length == 2) .scan_double
+                else if (length == 0) .scan_float
+                else @compileError("unsupported C scanf floating-point length"),
+            'c' => .scan_char,
+            's', '[' => .scan_cstring,
+            'p' => .scan_pointer,
+            'n' => .scan_signed_int,
+            else => @compileError("unsupported C scanf conversion"),
+        } else switch (specifier) {
+            'd', 'i' => switch (length) {
+                0, 1 => .signed_int,
+                2 => .signed_long,
+                3 => .signed_long_long,
+                4, 5 => .signed_size,
+                else => @compileError("unsupported C printf integer length"),
+            },
+            'o', 'u', 'x', 'X' => switch (length) {
+                0, 1 => .unsigned_int,
+                2 => .unsigned_long,
+                3 => .unsigned_long_long,
+                4, 5 => .unsigned_size,
+                else => @compileError("unsupported C printf integer length"),
+            },
+            'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A' => if (length == 0) .float
+                else @compileError("unsupported C printf floating-point length"),
+            'c' => .signed_int,
+            's' => .cstring,
+            'p', 'n' => .pointer,
+            else => @compileError("unsupported C printf conversion"),
+        };
+        count += 1;
+    }
+    if (count != argument_count) @compileError("C format argument count does not match tuple");
+    return kinds;
+}`.trim().split("\n"),
+    "",
+  );
+  renderCVarargSupportTypes(lines);
+}
+
+function renderCVarargSupportTypes(lines: string[]): void {
+  lines.push(
+    ...`fn cVarargArgsType(comptime argument_type: type, comptime kinds: anytype) type {
+    const fields = @typeInfo(argument_type).@"struct".fields;
+    const types = comptime blk: {
+        var result: [kinds.len]type = undefined;
+        for (kinds, 0..) |kind, index| result[index] = switch (kind) {
+            .signed_int => c_int,
+            .unsigned_int => c_uint,
+            .signed_long => c_long,
+            .unsigned_long => c_ulong,
+            .signed_long_long => c_longlong,
+            .unsigned_long_long => c_ulonglong,
+            .signed_size => isize,
+            .unsigned_size => usize,
+            .float => f64,
+            else => fields[index].type,
+        };
+        break :blk result;
+    };
+    return std.meta.Tuple(&types);
+}
+
+fn cVarargIsPointer(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsPointer(info.child),
+        .pointer => true,
+        else => false,
+    };
+}
+
+fn cVarargIsCString(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsCString(info.child),
+        .pointer => |info| info.child == u8 and (info.sentinel != null or info.size == .c),
+        else => false,
+    };
+}
+
+fn cVarargIsWritableCString(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsWritableCString(info.child),
+        .pointer => |info| info.child == u8 and !info.is_const,
+        else => false,
+    };
+}
+
+fn cVarargIsPointerToPointer(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsPointerToPointer(info.child),
+        .pointer => |info| cVarargIsPointer(info.child),
+        else => false,
+    };
+}
+
+fn cVarargIsDefaultInt(comptime argument_type: type) bool {
+    return argument_type == bool or argument_type == i8 or argument_type == u8 or
+        argument_type == i16 or argument_type == u16 or argument_type == c_int or
+        argument_type == c_uint or argument_type == comptime_int;
+}
+
+fn cVarargPromoteInt(comptime target: type, value: anytype) target {
+    return if (@TypeOf(value) == bool) @as(target, @intFromBool(value)) else @as(target, value);
+}
+
+fn cVarargPromoteFloat(value: anytype) f64 {
+    return @floatCast(value);
+}
+
+fn cVarargValidate(comptime kind: CVarargKind, comptime argument_type: type) void {
+    switch (kind) {
+        .signed_int => if (!cVarargIsDefaultInt(argument_type))
+            @compileError("C printf integer arguments must be default-promoted to c_int"),
+        .unsigned_int => if (!cVarargIsDefaultInt(argument_type))
+            @compileError("C printf integer arguments must be default-promoted to c_uint"),
+        .signed_long => if (argument_type != c_long and argument_type != comptime_int)
+            @compileError("C printf %ld requires c_long"),
+        .unsigned_long => if (argument_type != c_ulong and argument_type != comptime_int)
+            @compileError("C printf %lu requires c_ulong"),
+        .signed_long_long => if (argument_type != c_longlong and argument_type != comptime_int)
+            @compileError("C printf %lld requires c_longlong"),
+        .unsigned_long_long => if (argument_type != c_ulonglong and argument_type != comptime_int)
+            @compileError("C printf %llu requires c_ulonglong"),
+        .signed_size => if (argument_type != isize and argument_type != comptime_int)
+            @compileError("C printf %zd requires isize"),
+        .unsigned_size => if (argument_type != usize and argument_type != comptime_int)
+            @compileError("C printf %zu requires usize"),
+        .float => if (argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
+            @compileError("C printf floating-point arguments must be default-promoted to f64"),
+        .pointer => if (!cVarargIsPointer(argument_type))
+            @compileError("C printf pointer arguments must be pointers"),
+        .cstring => if (!cVarargIsCString(argument_type))
+            @compileError("C printf %s arguments must be sentinel-terminated C strings"),
+        .scan_signed_int => if (argument_type != *c_int)
+            @compileError("C scanf %d requires *c_int"),
+        .scan_unsigned_int => if (argument_type != *c_uint)
+            @compileError("C scanf %u requires *c_uint"),
+        .scan_signed_long => if (argument_type != *c_long)
+            @compileError("C scanf %ld requires *c_long"),
+        .scan_unsigned_long => if (argument_type != *c_ulong)
+            @compileError("C scanf %lu requires *c_ulong"),
+        .scan_signed_long_long => if (argument_type != *c_longlong)
+            @compileError("C scanf %lld requires *c_longlong"),
+        .scan_unsigned_long_long => if (argument_type != *c_ulonglong)
+            @compileError("C scanf %llu requires *c_ulonglong"),
+        .scan_signed_size => if (argument_type != *isize)
+            @compileError("C scanf %zd requires *isize"),
+        .scan_unsigned_size => if (argument_type != *usize)
+            @compileError("C scanf %zu requires *usize"),
+        .scan_float => if (argument_type != *f32)
+            @compileError("C scanf %f requires *f32"),
+        .scan_double => if (argument_type != *f64)
+            @compileError("C scanf %lf requires *f64"),
+        .scan_char => if (argument_type != *u8)
+            @compileError("C scanf %c requires *u8"),
+        .scan_cstring => if (!cVarargIsWritableCString(argument_type))
+            @compileError("C scanf string arguments must be writable pointers"),
+        .scan_pointer => if (!cVarargIsPointerToPointer(argument_type))
+            @compileError("C scanf %p arguments must be pointer-to-pointer values"),
+    }
+}
+
+fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan: bool) cVarargArgsType(
+    @TypeOf(args),
+    cVarargKinds(format, @typeInfo(@TypeOf(args)).@"struct".fields.len, scan),
+) {
+    const info = @typeInfo(@TypeOf(args));
+    if (info != .@"struct" or !info.@"struct".is_tuple)
+        @compileError("C variadic arguments must be a tuple literal");
+    const kinds = cVarargKinds(format, args.len, scan);
+    const Result = cVarargArgsType(@TypeOf(args), kinds);
+    var result: Result = undefined;
+    inline for (args, 0..) |argument, index| {
+        cVarargValidate(kinds[index], @TypeOf(argument));
+        result[index] = switch (kinds[index]) {
+            .signed_int => cVarargPromoteInt(c_int, argument),
+            .unsigned_int => cVarargPromoteInt(c_uint, argument),
+            .signed_long => @as(c_long, argument),
+            .unsigned_long => @as(c_ulong, argument),
+            .signed_long_long => @as(c_longlong, argument),
+            .unsigned_long_long => @as(c_ulonglong, argument),
+            .signed_size => @as(isize, argument),
+            .unsigned_size => @as(usize, argument),
+            .float => cVarargPromoteFloat(argument),
+            else => argument,
+        };
+    }
+    return result;
+}`.trim().split("\n"),
     "",
   );
 }
@@ -1972,8 +2555,37 @@ function renderPublicRecord(
       lines.push(`    /// Field \`${sourceName}\`.`);
       lines.push(`    ${fieldName}: ${fieldType},`);
     }
+    if (isVersionedInterface(node, fields, context)) {
+      lines.push("");
+      lines.push(
+        "    /// Return a zero-initialized interface with its ABI version set for this build.",
+      );
+      lines.push("    pub inline fn init() @This() {");
+      lines.push("        var value: @This() = std.mem.zeroes(@This());");
+      lines.push("        value.version = @sizeOf(@This());");
+      lines.push("        return value;");
+      lines.push("    }");
+      lines.push("");
+      lines.push("    /// A zero-initialized interface with its ABI version set for this build.");
+      lines.push("    pub const default: @This() = @This().init();");
+    }
   }
   lines.push("};");
+}
+
+function isVersionedInterface(
+  node: XmlAstNode,
+  fields: readonly XmlAstNode[],
+  context: RenderContext,
+): boolean {
+  // SDL documents the SDL_INIT_INTERFACE contract on each extensible interface
+  // record. Requiring both that documentation and a leading version field keeps
+  // ordinary versioned data records from gaining an initialization policy.
+  return node.kind === "Struct" &&
+    fields[0]?.attributes.name === "version" &&
+    /\b[A-Z][A-Z0-9]*_INIT_INTERFACE\s*\(\s*\)/.test(
+      matchedDocumentation(node, context)?.comment ?? "",
+    );
 }
 
 function renderPublicEnumeration(
@@ -2033,7 +2645,13 @@ function renderPublicConstants(
   let emitted = false;
   for (const constant of context.model.constants) {
     if (constant.source === "enum") continue;
-    const baseName = context.naming.valueName(constant.name);
+    const family = constantFamilyFor(constant, context);
+    const familyMemberName = family
+      ? context.naming.fieldName(constant.name.slice(family.prefix.length))
+      : undefined;
+    const baseName = family
+      ? `${context.naming.fieldName(family.typeName)}_${familyMemberName}`
+      : context.naming.valueName(constant.name);
     const disambiguated = moduleNames.has(baseName)
       ? `${baseName}_${/[a-z]/.test(constant.name) ? "lowercase" : "uppercase"}`
       : baseName;
@@ -2048,6 +2666,446 @@ function renderPublicConstants(
     emitted = true;
   }
   if (emitted) lines.push("");
+}
+
+function constantFamilyFor(
+  constant: ApiModel["constants"][number],
+  context: RenderContext,
+): { prefix: string; typeName: string } | undefined {
+  for (const family of context.profile.constantFamilies ?? []) {
+    if (!constant.name.startsWith(family.prefix)) continue;
+    const typedef = context.nodesByName.get(family.typedef)?.find((node) =>
+      context.publicIds.has(node.id) && node.kind === "Typedef"
+    );
+    if (!typedef || !typedef.attributes.type) continue;
+    if (!isIntegerType(typedef.attributes.type, context)) continue;
+    const typeName = context.publicTypeNames.get(typedef.id);
+    if (typeName) return { prefix: family.prefix, typeName };
+  }
+  return undefined;
+}
+
+function renderPublicFunctionMacros(
+  context: RenderContext,
+  lines: string[],
+  moduleNames: Set<string>,
+): void {
+  for (const macro of context.functionMacros) {
+    const documentation = (context.documentationByName.get(macro.name) ?? []).find((item) =>
+      item.kind === "define" || item.kind === "function"
+    );
+    if (!documentation) continue;
+    const baseName = context.naming.functionName(macro.name);
+    const name = uniqueIdentifier(
+      moduleNames.has(baseName) ? baseName + "Macro" : baseName,
+      moduleNames,
+    );
+    let parameterTypes = macroParameterTypes(macro, context);
+    if (!parameterTypes) continue;
+    const parameterNames = uniqueMacroParameterNames(macro, context, moduleNames);
+    let expression = renderIntegerMacroExpression(
+      macro,
+      context,
+      new Map(macro.parameters.map((parameter, index) => [parameter, parameterNames[index]])),
+      parameterTypes,
+    );
+    let returnType = expression && macroExpressionReturnsBool(expression) ? "bool" : "c_uint";
+    if (!expression) {
+      const call = renderFunctionMacroCall(macro, context, parameterNames);
+      if (!call) continue;
+      parameterTypes = call.parameterTypes;
+      expression = call.expression;
+      returnType = call.returnType;
+    }
+    if (!expression) continue;
+    lines.push(...documentationLines(
+      macro.name,
+      context,
+      "SDL macro " + macro.name + ".",
+    ));
+    lines.push(
+      "pub inline fn " + name + "(" +
+        parameterNames.map((parameter, index) => parameter + ": " + parameterTypes[index]).join(
+          ", ",
+        ) +
+        ") " + returnType + " {",
+    );
+    lines.push("    return " + renderMacroReturnExpression(expression) + ";");
+    lines.push("}");
+    lines.push("");
+    registerPrimaryEmission(macro.name, name, context);
+  }
+}
+
+interface FunctionMacroCall {
+  parameterTypes: string[];
+  expression: string;
+  returnType: string;
+}
+
+function renderFunctionMacroCall(
+  macro: FunctionMacro,
+  context: RenderContext,
+  parameterNames: string[],
+): FunctionMacroCall | undefined {
+  let replacement = stripOuterParentheses(macro.replacement.trim());
+  let returnType = "";
+  const comparison = replacement.match(/^(.*)\s*==\s*(-?[0-9]+)$/);
+  if (comparison) {
+    replacement = stripOuterParentheses(comparison[1].trim());
+    returnType = "bool";
+  }
+  const callMatch = replacement.match(/^([A-Za-z_]\w*)\s*\((.*)\)$/);
+  if (!callMatch) return undefined;
+  const target = context.publicFunctions.find((node) => node.attributes.name === callMatch[1]);
+  if (!target || !target.attributes.returns) return undefined;
+  const argumentIds = target.members;
+  const arguments_ = argumentIds
+    .map((id) => context.byId.get(id))
+    .filter((node): node is XmlAstNode => node?.kind === "Argument");
+  const callArguments = splitMacroArguments(callMatch[2]);
+  if (callArguments === undefined || callArguments.length !== arguments_.length) return undefined;
+  const normalizedArguments = callArguments.map((argument) =>
+    stripOuterParentheses(argument.trim())
+  );
+  const runtimeHookCall = target.attributes.name?.endsWith("Runtime") === true &&
+    normalizedArguments.length > macro.parameters.length &&
+    normalizedArguments.slice(macro.parameters.length).every(isRuntimeHookArgument);
+  if (
+    !runtimeHookCall &&
+    normalizedArguments.some((argument) =>
+      !macro.parameters.includes(argument) && !/^-?[0-9]+$/.test(argument)
+    )
+  ) return undefined;
+  const parameterTypes = macro.parameters.map((parameter) => {
+    const index = normalizedArguments.findIndex((argument) => argument === parameter);
+    return index < 0 || !arguments_[index].attributes.type ? undefined : renderPublicParameterType(
+      target,
+      {
+        name: arguments_[index].attributes.name ?? `arg_${index}`,
+        type: arguments_[index].attributes.type,
+      },
+      context,
+    );
+  });
+  if (parameterTypes.some((type) => type === undefined)) return undefined;
+  const renderedArguments = runtimeHookCall
+    ? [
+      ...macro.parameters.map((_, index) => parameterNames[index]),
+      ...normalizedArguments.slice(macro.parameters.length).map((argument) => {
+        const hook = runtimeHookIdentifier(argument);
+        return hook ? `@ptrCast(c.${hook[1]})` : argument;
+      }),
+    ]
+    : normalizedArguments.map((argument) => {
+      const parameterIndex = macro.parameters.findIndex((parameter) => argument === parameter);
+      return parameterIndex >= 0 ? parameterNames[parameterIndex] : argument;
+    });
+  const functionName = context.naming.functionName(callMatch[1]);
+  if (returnType.length === 0) {
+    returnType = renderPublicReturnType(target, target.attributes.returns, context);
+  }
+  return {
+    parameterTypes: parameterTypes as string[],
+    expression: `${functionName}(${renderedArguments.join(", ")})${
+      comparison ? ` == ${comparison[2]}` : ""
+    }`,
+    returnType,
+  };
+}
+
+function macroExpressionReturnsBool(expression: string): boolean {
+  return /(?:^|[^=!<>])!(?!=)/.test(expression) ||
+    /(?:==|!=|<=|>=|&&|\|\||(?<![<>])[<>](?!<|>))/.test(
+      expression,
+    );
+}
+
+function renderMacroReturnExpression(expression: string): string {
+  if (!/^\s*!/.test(expression)) return expression;
+  const operand = expression.replace(/^\s*!\s*/, "").trim();
+  if (/(?:==|!=|<=|>=|&&|\|\||(?<![<>])[<>](?!<|>))/.test(operand)) return expression;
+  return "(" + operand + " == 0)";
+}
+
+function uniqueMacroParameterNames(
+  macro: FunctionMacro,
+  context: RenderContext,
+  usedNames: Set<string>,
+): string[] {
+  const names = new Set([...usedNames, ...reservedPublicIdentifiers(context)]);
+  return macro.parameters.map((parameter, index) =>
+    uniqueIdentifier(context.naming.parameterName(parameter || "arg_" + index), names)
+  );
+}
+
+function macroParameterTypes(
+  macro: FunctionMacro,
+  context: RenderContext,
+): string[] | undefined {
+  const types = macro.parameters.map((parameter) => {
+    const fields = [
+      ...macro.replacement.matchAll(
+        new RegExp(
+          "\\b" + escapeRegExp(parameter) + "\\s*\\)?\\s*->\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "g",
+        ),
+      ),
+    ].map((match) => match[1]);
+    if (fields.length === 0) return "c_uint";
+    if (new Set(fields).size !== 1 || !macro.header) return undefined;
+    const header = macro.header.replaceAll("\\", "/").split("/").at(-1);
+    const records = context.publicTypes.flatMap((node) => {
+      if (
+        (node.kind !== "Struct" && node.kind !== "Union") ||
+        sourceHeaderForNode(node, context) !== header ||
+        !recordFields(node, context).some((field) => field.attributes.name === fields[0])
+      ) return [];
+      const typedef = context.publicTypes.find((candidate) =>
+        candidate.kind === "Typedef" && candidate.attributes.type !== undefined &&
+        typeReferenceResolvesTo(candidate.attributes.type, node.id, context) &&
+        sourceHeaderForNode(candidate, context) === header
+      );
+      const typeName = context.publicTypeNames.get(typedef?.id ?? node.id);
+      return typeName ? [{ node, typeName }] : [];
+    });
+    if (records.length !== 1) return undefined;
+    const typeName = records[0].typeName;
+    return typeName ? `*const ${typeName}` : undefined;
+  });
+  return types.every((type): type is string => type !== undefined) ? types : undefined;
+}
+
+function typeReferenceResolvesTo(
+  typeId: string,
+  targetId: string,
+  context: RenderContext,
+): boolean {
+  let current = context.byId.get(typeId);
+  const visited = new Set<string>();
+  while (current && !visited.has(current.id)) {
+    if (current.id === targetId) return true;
+    visited.add(current.id);
+    if (
+      current.kind !== "Typedef" && current.kind !== "CvQualifiedType" &&
+      current.kind !== "ElaboratedType"
+    ) return false;
+    current = current.attributes.type ? context.byId.get(current.attributes.type) : undefined;
+  }
+  return current?.id === targetId;
+}
+
+function renderIntegerMacroExpression(
+  macro: FunctionMacro,
+  context: RenderContext,
+  publicParameterNames = new Map(
+    macro.parameters.map((parameter, index) => [
+      parameter,
+      context.naming.parameterName(parameter || "arg_" + index),
+    ]),
+  ),
+  parameterTypes = macro.parameters.map(() => "c_uint"),
+): string | undefined {
+  if (macro.parameters.length === 0) return undefined;
+  if (/[\\'\"]/.test(macro.replacement)) return undefined;
+  if (
+    macro.parameters.some((parameter) =>
+      new RegExp("\\(\\s*" + escapeRegExp(parameter) + "\\s*\\)\\s*\\(").test(
+        macro.replacement,
+      )
+    )
+  ) return undefined;
+  const parameterNames = new Set(publicParameterNames.values());
+  let expression = expandIntegerMacroExpression(
+    macro,
+    context,
+    publicParameterNames,
+    new Set(),
+  );
+  if (expression === undefined) return undefined;
+  const memberNames = new Set<string>();
+  for (const [index, parameter] of macro.parameters.entries()) {
+    const sourceMemberPattern = new RegExp(
+      "\\b" + escapeRegExp(parameter) + "\\s*->\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "g",
+    );
+    if (parameterTypes[index] === "c_uint" && sourceMemberPattern.test(macro.replacement)) {
+      return undefined;
+    }
+    const memberPattern = new RegExp(
+      "\\b" + escapeRegExp(publicParameterNames.get(parameter)!) +
+        "\\s*->\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "g",
+    );
+    expression = expression.replaceAll(memberPattern, (_match, field: string) => {
+      memberNames.add(field);
+      return `${publicParameterNames.get(parameter)!}.${field}`;
+    });
+  }
+  expression = stripOuterParentheses(expression);
+  expression = stripKnownIntegerCasts(expression, context);
+  expression = expression.replaceAll(
+    /\b(0[xX][0-9a-fA-F]+|[0-9]+)(?:[uUlL]+)\b/g,
+    "$1",
+  );
+  const identifiers = expression.match(/(?<![0-9A-Za-z_.])[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+  for (const identifier of identifiers) {
+    if (new RegExp("\\b" + escapeRegExp(identifier) + "\\s*\\(").test(expression)) {
+      return undefined;
+    }
+    if (parameterNames.has(identifier)) continue;
+    if (memberNames.has(identifier)) continue;
+    if (!context.constantsByName.has(identifier)) {
+      return undefined;
+    }
+    expression = expression.replaceAll(
+      new RegExp("(?<![A-Za-z0-9_.])" + escapeRegExp(identifier) + "\\b", "g"),
+      "c." + identifier,
+    );
+  }
+  if (!/^[A-Za-z0-9_().\s|&^+\-*/%<>=!~]+$/.test(expression)) {
+    return undefined;
+  }
+  return expression.replaceAll(/\s+/g, " ").trim();
+}
+
+function stripKnownIntegerCasts(expression: string, context: RenderContext): string {
+  return expression.replace(
+    /\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g,
+    (match, typeName: string) => isIntegerLikeTypeName(typeName, context) ? "" : match,
+  );
+}
+
+function isIntegerLikeTypeName(typeName: string, context: RenderContext): boolean {
+  return (context.nodesByName.get(typeName) ?? []).some((node) => {
+    if (node.kind === "Enumeration") return true;
+    return node.kind === "Typedef" && node.attributes.type !== undefined &&
+      isIntegerType(node.attributes.type, context);
+  });
+}
+
+function expandIntegerMacroExpression(
+  macro: FunctionMacro,
+  context: RenderContext,
+  substitutions: Map<string, string>,
+  stack: Set<string>,
+): string | undefined {
+  if (
+    (stack.has(macro.name) && !isIntegerCastMacro(macro)) ||
+    macro.replacement.includes("\\\\")
+  ) return undefined;
+  const parameterOccurrences = macro.parameters.map((parameter) =>
+    [...macro.replacement.matchAll(new RegExp("\\b" + escapeRegExp(parameter) + "\\b", "g"))].length
+  );
+  if (parameterOccurrences.some((count) => count !== 1)) return undefined;
+  let expression = macro.replacement.trim();
+  for (const [index, parameter] of macro.parameters.entries()) {
+    const replacement = substitutions.get(parameter);
+    if (replacement === undefined) return undefined;
+    const parenthesizedReplacement = isIntegerCastMacro(macro) && index === 0
+      ? `(${replacement})`
+      : replacement;
+    expression = expression.replaceAll(
+      new RegExp("(?<![A-Za-z0-9_])\\(\\s*" + escapeRegExp(parameter) + "\\s*\\)", "g"),
+      parenthesizedReplacement,
+    );
+    expression = expression.replaceAll(
+      new RegExp("\\b" + escapeRegExp(parameter) + "\\b", "g"),
+      replacement,
+    );
+  }
+  return expandNestedIntegerMacroCalls(expression, context, new Set([...stack, macro.name]));
+}
+
+function isIntegerCastMacro(macro: FunctionMacro): boolean {
+  return macro.parameters.length === 2 &&
+    new RegExp(
+      "^\\s*\\(\\s*\\(\\s*" + escapeRegExp(macro.parameters[0]) +
+        "\\s*\\)\\s*\\(\\s*" + escapeRegExp(macro.parameters[1]) + "\\s*\\)\\s*\\)\\s*$",
+    ).test(macro.replacement);
+}
+
+function expandNestedIntegerMacroCalls(
+  expression: string,
+  context: RenderContext,
+  stack: Set<string>,
+): string | undefined {
+  const callPattern = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = callPattern.exec(expression)) !== null) {
+    const nestedMacro = context.functionMacrosByName.get(match[1]);
+    if (!nestedMacro) continue;
+    const openIndex = expression.indexOf("(", match.index + match[1].length);
+    const closeIndex = matchingParenthesis(expression, openIndex);
+    if (closeIndex === undefined) return undefined;
+    const arguments_ = splitMacroArguments(expression.slice(openIndex + 1, closeIndex));
+    if (arguments_ === undefined || arguments_.length !== nestedMacro.parameters.length) {
+      return undefined;
+    }
+    const substitutions = new Map(
+      nestedMacro.parameters.map((parameter, index) => [parameter, arguments_[index]]),
+    );
+    const replacement = expandIntegerMacroExpression(nestedMacro, context, substitutions, stack);
+    if (replacement === undefined) return undefined;
+    expression = expression.slice(0, match.index) + "(" + replacement + ")" +
+      expression.slice(closeIndex + 1);
+    callPattern.lastIndex = 0;
+  }
+  return expression;
+}
+
+function matchingParenthesis(value: string, openIndex: number): number | undefined {
+  let depth = 0;
+  for (let index = openIndex; index < value.length; index++) {
+    if (value[index] === "(") depth++;
+    else if (value[index] === ")") {
+      depth--;
+      if (depth === 0) return index;
+    }
+  }
+  return undefined;
+}
+
+function splitMacroArguments(value: string): string[] | undefined {
+  if (value.trim().length === 0) return [];
+  const arguments_: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === "(") depth++;
+    else if (value[index] === ")") depth--;
+    else if (value[index] === "," && depth === 0) {
+      arguments_.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+    if (depth < 0) return undefined;
+  }
+  if (depth !== 0) return undefined;
+  arguments_.push(value.slice(start).trim());
+  return arguments_.some((argument) => argument.length === 0) ? undefined : arguments_;
+}
+
+function stripOuterParentheses(value: string): string {
+  let result = value.trim();
+  while (result.startsWith("(") && result.endsWith(")")) {
+    let depth = 0;
+    let enclosesAll = true;
+    for (const [index, character] of [...result].entries()) {
+      if (character === "(") depth++;
+      else if (character === ")") depth--;
+      if (depth === 0 && index < result.length - 1) {
+        enclosesAll = false;
+        break;
+      }
+    }
+    if (!enclosesAll) break;
+    result = result.slice(1, -1).trim();
+  }
+  return result;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\\]{}|]/g, "\\\\$&");
 }
 
 function renderPublicVariables(
@@ -2073,6 +3131,23 @@ function renderPublicVariables(
   }
 }
 
+function isRuntimeHookArgument(value: string): boolean {
+  return runtimeHookIdentifier(value) !== undefined;
+}
+
+function runtimeHookIdentifier(value: string): RegExpMatchArray | undefined {
+  return value.match(
+    /^\(\s*[A-Za-z_]\w*FunctionPointer\s*\)\s*\(\s*([A-Za-z_]\w*)\s*\)$/,
+  ) ?? undefined;
+}
+
+function isRuntimeHookFunction(cName: string, context: RenderContext): boolean {
+  return cName.endsWith("Runtime") &&
+    context.functionMacros.some((macro) =>
+      macro.name !== cName && macro.replacement.includes(`${cName}(`)
+    );
+}
+
 function renderPublicFunctions(
   context: RenderContext,
   lines: string[],
@@ -2083,11 +3158,15 @@ function renderPublicFunctions(
   for (const node of context.publicFunctions) {
     const cName = node.attributes.name;
     if (!cName || isResourceDestructor(cName, context)) continue;
+    const plan = functionPlan(node, context);
+    if (
+      plan.variadic &&
+      !isConstCharPointerType(plan.arguments.at(-1)?.type ?? "", context)
+    ) continue;
     const baseName = context.naming.functionName(cName);
     const disambiguated = moduleNames.has(baseName) ? `${baseName}Default` : baseName;
     const name = uniqueIdentifier(disambiguated, moduleNames);
-    registerPrimaryEmission(cName, name, context);
-    const plan = functionPlan(node, context);
+    if (!isRuntimeHookFunction(cName, context)) registerPrimaryEmission(cName, name, context);
     const documentation = documentationLines(cName, context, `SDL operation \`${cName}\`.`);
     if (plan.borrowedResourceResult) {
       appendDocumentationParagraph(
@@ -2313,7 +3392,9 @@ function renderFunctionParameters(
       continue;
     }
     declarations.push(`${name}: ${renderPublicParameterType(node, argument, context)}`);
-    callArguments[index] = toAbiParameterExpression(node, argument, name, context);
+    callArguments[index] = isVaListArgument(node, argument, context)
+      ? toAbiVaListExpression(name)
+      : toAbiParameterExpression(node, argument, name, context);
   }
 
   for (const relationship of relationships) {
@@ -2617,7 +3698,9 @@ function renderVariadicFunction(
   const tuple = fixedValues.length > 0
     ? `.{ ${fixedValues.join(", ")}, ${formatValue} }`
     : `.{${formatValue}}`;
-  const call = `@call(.auto, c.${node.attributes.name}, ${tuple} ++ args)`;
+  const scan = node.attributes.name.toLowerCase().includes("scanf");
+  const checkedArguments = `validateCVarargs(format, args, ${scan})`;
+  const call = `@call(.auto, c.${node.attributes.name}, ${tuple} ++ ${checkedArguments})`;
   if (!returnId || returnType === "void") {
     lines.push(`    ${call};`);
   } else if (conversionKind(returnId, context) === "direct") {
@@ -3584,7 +4667,9 @@ function renderOwnedVariadicStringFunction(
   lines.push(
     `    const length = @call(.auto, c.${node.attributes.name}, .{ @as(${
       abiParameterType(0)
-    }, @ptrCast(&result)), @as(${abiParameterType(1)}, format.ptr) } ++ args);`,
+    }, @ptrCast(&result)), @as(${
+      abiParameterType(1)
+    }, format.ptr) } ++ validateCVarargs(format, args, false));`,
   );
   lines.push("    if (length < 0) return error.SdlFailure;");
   lines.push("    const source = result orelse return error.SdlFailure;");
@@ -3636,8 +4721,14 @@ function renderNamespaces(context: RenderContext, lines: string[]): void {
   const namespaces = collectNamespaceMembers(context);
   for (const namespace of [...namespaces.keys()].sort()) {
     const categoryDocumentation = categoryDocumentationForNamespace(namespace, context);
+    const categoryComment = categoryDocumentation
+      ? resolveDocumentationReferences(
+        rewriteDocumentation(categoryDocumentation.comment, context),
+        context,
+      )
+      : undefined;
     lines.push(...renderDocComment(
-      categoryDocumentation?.comment ??
+      categoryComment ??
         `${context.profile.displayName} APIs for the ${namespace} subsystem.`,
     ));
     renderTargetSelectedNamespace(namespace, namespaces.get(namespace)!, context, lines);
@@ -3876,11 +4967,11 @@ function sourceHeaderForNode(node: XmlAstNode, context: RenderContext): string {
 }
 
 function namespaceFor(header: string, _cName: string, context: RenderContext): string {
+  if (context.profile.rootHeaders.includes(header)) return "";
   if (context.profile.namespaceStrategy.kind === "documented_category") {
     const category = context.headerDocumentationByHeader.get(header)?.category;
     return category ? categoryNamespaceName(category, context.naming) : "";
   }
-  if (context.profile.rootHeaders.includes(header)) return "";
   if (!header.endsWith(".h")) return "";
   const headerStem = header.slice(0, -".h".length);
   const prefix = context.profile.headerPrefixes.find((candidate) =>
@@ -3942,7 +5033,21 @@ function declarationTargets(cName: string, context: RenderContext): string[] | u
   const node = context.nodesByName.get(cName)?.find((candidate) =>
     context.publicIds.has(candidate.id)
   );
-  if (node) return context.model.publicNodeTargets[node.id];
+  if (node) {
+    const targets = context.model.publicNodeTargets[node.id];
+    if (
+      node.kind === "Function" && node.members.some((id) => {
+        const argument = context.byId.get(id);
+        return argument?.kind === "Argument" && isVaListArgument(node, {
+          name: argument.attributes.name ?? "",
+          type: argument.attributes.type ?? "",
+        }, context);
+      })
+    ) {
+      return targets.filter((target) => target.includes("linux"));
+    }
+    return targets;
+  }
   const constant = context.constantsByName.get(cName);
   return constant
     ? context.model.constantTargets[`${constant.source}:${constant.name}`]
@@ -3952,14 +5057,22 @@ function declarationTargets(cName: string, context: RenderContext): string[] | u
 function targetPlatform(target: string): string {
   const normalized = target.toLowerCase();
   if (normalized.includes("windows")) return "windows";
+  if (normalized.includes("tvos")) return "tvos";
+  if (normalized.includes("ios")) return "ios";
   if (normalized.includes("macos")) return "macos";
+  if (normalized.includes("emscripten")) return "emscripten";
+  if (normalized.includes("android")) return "android";
   if (normalized.includes("linux")) return "linux";
   throw new Error(`Unsupported platform analysis target: ${target}`);
 }
 
 function platformConditionForName(platformName: string): string {
   const platforms = platformName === "unix" ? ["linux", "macos"] : platformName.split("_or_");
-  return platforms.map((platform) => `builtin.os.tag == .${platform}`).join(" or ");
+  return platforms.map((platform) =>
+    platform === "android"
+      ? "builtin.abi == .android or builtin.abi == .androideabi"
+      : `builtin.os.tag == .${platform}`
+  ).join(" or ");
 }
 
 function namespaceMemberName(
@@ -4163,11 +5276,38 @@ function renderPublicParameterType(
   argument: { name: string; type: string },
   context: RenderContext,
 ): string {
+  if (isVaListArgument(node, argument, context)) return "std.builtin.VaList";
   return renderRequiredPointerType(
     argument.type,
     isRequiredPointerParameter(node, argument, context),
     context,
   );
+}
+
+function isVaListArgument(
+  node: XmlAstNode,
+  argument: { name: string; type: string },
+  context: RenderContext,
+): boolean {
+  const description = documentationParameterDescription(
+    matchedDocumentation(node, context)?.comment ?? "",
+    argument.name,
+  );
+  return /\bva[_ ]list\b/i.test(description) || typeContainsVaList(argument.type, context);
+}
+
+function typeContainsVaList(
+  id: string,
+  context: RenderContext,
+  visited = new Set<string>(),
+): boolean {
+  if (visited.has(id)) return false;
+  visited.add(id);
+  const node = context.byId.get(id);
+  if (!node) return false;
+  if (/va[_ ]list/i.test(node.attributes.name ?? "")) return true;
+  if (!node.attributes.type) return false;
+  return typeContainsVaList(node.attributes.type, context, visited);
 }
 
 function renderRequiredPointerType(
@@ -4326,11 +5466,20 @@ function renderPublicStorageType(id: string, context: RenderContext): string {
     const cv = context.byId.get(node.attributes.type);
     const isConst = cv?.kind === "CvQualifiedType" && cv.attributes.const === "1";
     const pointeeId = isConst && cv.attributes.type ? cv.attributes.type : node.attributes.type;
+    const pointee = unwrapTransparentType(pointeeId, context);
+    // A C callback field is itself a nullable pointer. Rendering its pointee as
+    // a function pointer and then adding another pointer produced ?**const fn.
+    if (pointee?.kind === "FunctionType") return `?${renderPublicFunctionType(pointee, context)}`;
+    // `void *` has no Zig value type. Keep it opaque in storage just as in API
+    // signatures, including when it is hidden behind transparent C qualifiers.
+    if (pointee?.kind === "FundamentalType" && pointee.attributes.name === "void") {
+      return isConst ? "?*const anyopaque" : "?*anyopaque";
+    }
     if (resourceTypeName(pointeeId, context)) {
       return isConst ? "?*const anyopaque" : "?*anyopaque";
     }
-    const pointee = renderPublicStorageType(pointeeId, context);
-    return isConst ? `?*const ${pointee}` : `?*${pointee}`;
+    const storageType = renderPublicStorageType(pointeeId, context);
+    return isConst ? `?*const ${storageType}` : `?*${storageType}`;
   }
   if (node.kind === "ArrayType" && node.attributes.type) {
     return `[${arrayLength(node)}]${renderPublicStorageType(node.attributes.type, context)}`;
@@ -4377,6 +5526,10 @@ function toAbiExpression(id: string, name: string, context: RenderContext): stri
     case "direct":
       return name;
   }
+}
+
+function toAbiVaListExpression(name: string): string {
+  return `if (@typeInfo(std.builtin.VaList) == .pointer) @ptrCast(${name}) else @ptrCast(&${name})`;
 }
 
 function fromAbiExpression(
@@ -4746,6 +5899,9 @@ function reservedPublicIdentifiers(context: RenderContext): Set<string> {
   if (context.reservedPublicNames) return context.reservedPublicNames;
   context.reservedPublicNames = new Set([
     "c",
+    // Names emitted by the shared module support prelude are unavailable to
+    // function parameters at module scope.
+    "allocator",
     ...allNamespaceNames(context),
     ...context.publicTypeNames.values(),
     ...context.model.constants.map((constant) => context.naming.valueName(constant.name)),
@@ -4967,7 +6123,6 @@ function documentationLines(
     .replace(/\*\*Parameters:\*\*\s*$/g, "")
     .trim();
   let rewritten = rewriteDocumentation(source, context);
-  if (!declaration) collectLiteralDocumentationReferences(rewritten, context);
   const functionNode = context.nodesByName.get(cName)?.find((node) =>
     context.publicIds.has(node.id) && node.kind === "Function"
   );
@@ -4980,23 +6135,6 @@ function documentationLines(
     }
   }
   return renderDocComment(rewritten);
-}
-
-function collectLiteralDocumentationReferences(source: string, context: RenderContext): void {
-  for (const match of source.matchAll(/__CODEGEN_DOC_REF_([A-Za-z_][A-Za-z0-9_]*)__/g)) {
-    const cName = match[1];
-    if (hasDocumentedPublicReference(cName, context)) continue;
-    if (documentationApiPrefixes(context).some((prefix) => cName.startsWith(prefix))) {
-      context.literalDocumentationReferences.add(cName);
-    }
-  }
-}
-
-function hasDocumentedPublicReference(cName: string, context: RenderContext): boolean {
-  return context.emittedNames.has(cName) ||
-    context.documentationMembers.has(cName) ||
-    context.nodesByName.has(cName) ||
-    context.documentationByName.has(cName);
 }
 
 function mentionsReleaseFunction(comment: string, context: RenderContext): boolean {
@@ -5109,7 +6247,10 @@ function apiIdentifierSource(context: RenderContext): string {
   const prefixes = documentationApiPrefixes(context)
     .map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .sort((left, right) => right.length - left.length);
-  return `(?:${prefixes.join("|")})[A-Za-z0-9_]+`;
+  const categories = [...new Set(context.model.headerDocumentation.map((item) => item.category))]
+    .map((category) => category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const apiNames = prefixes.length > 0 ? `(?:${prefixes.join("|")})[A-Za-z0-9_]+` : "";
+  return `(?:${[apiNames, ...categories].filter(Boolean).join("|")})`;
 }
 
 function documentationApiPrefixes(context: RenderContext): string[] {
@@ -5123,42 +6264,6 @@ function documentationApiPrefixes(context: RenderContext): string[] {
   ];
 }
 
-const documentationReferenceAliases = new Map([
-  // SDL_image 3.4.4 still refers to the SDL2 surface destructor name.
-  ["SDL_FreeSurface", "SDL_DestroySurface"],
-  // SDL_ttf 3.2.2 retains this stale name after the DPI getter was renamed.
-  ["TTF_GetFontSizeDPI", "TTF_GetFontDPI"],
-  // SDL_mixer 3.2.4 uses this pre-release SDL3 name in explanatory prose.
-  ["SDL_CreateIOFromConstMem", "SDL_IOFromConstMem"],
-  // SDL_net 3.2.0 accidentally uses the core prefix for its socket destructor.
-  ["SDL_DestroyDatagramSocket", "NET_DestroyDatagramSocket"],
-  // SDL 3.4.12 retains this stale \sa name after the API changed Set to Send.
-  ["SDL_SetJoystickVirtualSensorData", "SDL_SendJoystickVirtualSensorData"],
-  // SDL 3.4.12 documents these string properties as NUMBER instead of POINTER.
-  [
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_UV_NUMBER",
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_UV_POINTER",
-  ],
-  [
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_U_NUMBER",
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_U_POINTER",
-  ],
-  [
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_V_NUMBER",
-    "SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_V_POINTER",
-  ],
-]);
-
-const documentationLiteralReferences = new Set([
-  // Public headers use this annotation in declarations, but it is not part of
-  // the generated callable API.
-  "SDL_DECLSPEC",
-  // SDL_image 3.4.4 retains this SDL2 flag in example prose.
-  "SDL_RLEACCEL",
-  // Applications implement these optional main callbacks; they are not linkable SDL exports.
-  "SDL_AppEvent",
-]);
-
 function resolveDocumentationReferences(source: string, context: RenderContext): string {
   const namespaces = collectNamespaceMembers(context);
   const pathCache = new Map<string, string>();
@@ -5171,14 +6276,8 @@ function resolveDocumentationReferences(source: string, context: RenderContext):
     return path;
   };
   const resolveReference = (cName: string, repairMalformed: boolean): string => {
-    if (
-      documentationLiteralReferences.has(cName) ||
-      context.literalDocumentationReferences.has(cName)
-    ) {
-      return `${cName} (C macro outside this module)`;
-    }
-    const alias = documentationReferenceAliases.get(cName);
-    if (alias) return resolveReference(alias, false);
+    const category = context.model.headerDocumentation.find((item) => item.category === cName);
+    if (category) return categoryNamespaceName(category.category, context.naming);
     const member = context.documentationMembers.get(cName);
     if (member) {
       return `${publicPath(member.ownerCName, member.ownerPublicName)}.${member.memberName}`;
@@ -5190,7 +6289,9 @@ function resolveDocumentationReferences(source: string, context: RenderContext):
       return `${dependencySymbol.dependency}.${dependencySymbol.symbol.path}`;
     }
     const dependencyReference = context.dependencyReferences.get(cName);
-    if (dependencyReference?.kind === "define") return `${cName} (C macro)`;
+    if (dependencyReference?.kind === "define") {
+      return `${cName} (C macro outside this module)`;
+    }
     if (dependencyReference) return `${cName} (C API outside this module)`;
     const callbackType = context.nodesByName.get(`${cName}_func`)?.find((node) =>
       context.publicIds.has(node.id) && node.attributes.name === `${cName}_func`
@@ -5199,8 +6300,17 @@ function resolveDocumentationReferences(source: string, context: RenderContext):
     if (callbackName) {
       return publicPath(`${cName}_func`, callbackName);
     }
+    // A declaration may be present in an upstream header but absent from this
+    // configured analysis matrix. Keep references to that target-gated API
+    // readable without inventing an unconditional Zig symbol.
+    if (context.nodesByName.has(cName)) return `${cName} (C API outside this module)`;
+    if (/(?:^|_)(?:GDK|Android|iOS|TVOS|Emscripten|PSP|PS2)/i.test(cName)) {
+      return `${cName} (C API outside this module)`;
+    }
     const documentedDeclaration = context.documentationByName.get(cName)?.[0];
-    if (documentedDeclaration?.kind === "define") return `${cName} (C macro)`;
+    if (documentedDeclaration?.kind === "define") {
+      return `${cName} (C macro outside this module)`;
+    }
     if (documentedDeclaration) return `${cName} (C API outside this module)`;
     if (
       documentationApiPrefixes(context).some((prefix) =>
@@ -5213,6 +6323,15 @@ function resolveDocumentationReferences(source: string, context: RenderContext):
         item.kind === "define" && item.name.startsWith(cName)
       )
     ) return cName;
+    // Documentation also names configuration macros that applications define
+    // before including SDL headers. They are not declarations in the generated
+    // module, but retaining the literal macro reference is more faithful than
+    // treating it as an unresolved API link. The generic prefixed fallback below
+    // likewise keeps target-gated or stale upstream API names readable without a
+    // release-specific alias table.
+    if (/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(cName)) {
+      return `${cName} (C macro outside this module)`;
+    }
     const prefix = documentationApiPrefixes(context).find((candidate) =>
       cName.startsWith(candidate)
     );
@@ -5265,6 +6384,11 @@ function resolveDocumentationReferences(source: string, context: RenderContext):
       ) {
         return resolveReference(singular, false);
       }
+    }
+    if (prefix) {
+      return /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(cName)
+        ? `${cName} (C macro outside this module)`
+        : `${cName} (C API outside this module)`;
     }
     throw new Error(`Unresolved documentation reference: ${cName}`);
   };

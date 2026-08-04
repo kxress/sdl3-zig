@@ -8,6 +8,8 @@
         "build.zig",
         "build.zig.zon",
         "sdl_metadata.zig",
+        "api_coverage.json",
+        "api_coverage_overrides.json",
         "src",
         "examples",
         "prebuilt",
@@ -19,6 +21,7 @@
         "vendor/SDL3_mixer",
         "vendor/SDL3_net",
         "LICENSE",
+        "THIRD_PARTY_NOTICES",
         "README.md",
     },
 }

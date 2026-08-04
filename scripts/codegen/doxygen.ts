@@ -18,6 +18,10 @@ export interface HeaderDocumentation {
   comment: string;
 }
 
+interface RecoveredDocumentation extends Documentation {
+  sourceComment: string;
+}
+
 interface DoxygenOptions {
   inputDirectory: string;
   outputDirectory: string;
@@ -85,10 +89,159 @@ export async function collectDoxygenDocumentation(
     left.signature.localeCompare(right.signature)
   );
 
+  const recovered = await collectSourceDeclarationDocumentation(
+    options.inputDirectory,
+    options.apiPrefixes,
+  );
+  const recoveredByName = new Map(recovered.map((item) => [item.name, item]));
+  const merged = documentation.map((item) => {
+    const replacement = recoveredByName.get(item.name);
+    return replacement && hasMalformedDocumentation(item.comment) ? replacement : item;
+  });
+  const existingNames = new Set(merged.map((item) => item.name));
+  for (const item of recovered) {
+    if (!existingNames.has(item.name)) merged.push(item);
+  }
+  merged.sort((left, right) =>
+    left.name.localeCompare(right.name) ||
+    left.kind.localeCompare(right.kind) ||
+    left.header.localeCompare(right.header) ||
+    (left.line ?? 0) - (right.line ?? 0) ||
+    left.signature.localeCompare(right.signature)
+  );
+
   return {
-    documentation,
+    documentation: merged,
     headerDocumentation: await collectHeaderDocumentation(options.inputDirectory),
   };
+}
+
+/** Convert the Doxygen comment syntax used by SDL headers into generator Markdown. */
+export function parseDoxygenComment(sourceComment: string): {
+  comment: string;
+  parameters: string[];
+} {
+  const lines = sourceComment
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*\* ?/, "").trimEnd());
+  while (lines[0] === "") lines.shift();
+  while (lines.at(-1) === "") lines.pop();
+
+  const prose: string[] = [];
+  const fields: string[] = [];
+  let activeField: { kind: string; name?: string; lines: string[] } | undefined;
+  const flush = (): void => {
+    if (!activeField) return;
+    const value = activeField.lines.join(" ").replace(/\s+/g, " ").trim();
+    if (value) {
+      fields.push(
+        activeField.kind === "param"
+          ? `- \`${activeField.name}\`: ${value}`
+          : `**${doxygenFieldLabel(activeField.kind)}:** ${value}`,
+      );
+    }
+    activeField = undefined;
+  };
+  for (const line of lines) {
+    const command = line.match(/^\\(param|returns?|since|sa|see|threadsafety)\b\s*(.*)$/i);
+    if (command) {
+      flush();
+      const kind = command[1].toLowerCase();
+      const value = command[2].trim();
+      if (kind === "param") {
+        const parameter = value.match(/^(\w+)\s*(.*)$/);
+        activeField = {
+          kind,
+          name: parameter?.[1] ?? "",
+          lines: parameter?.[2] ? [parameter[2]] : [],
+        };
+      } else {
+        activeField = { kind, lines: value ? [value] : [] };
+      }
+    } else if (activeField && line === "") {
+      flush();
+      prose.push("");
+    } else if (activeField) {
+      activeField.lines.push(line);
+    } else {
+      prose.push(line);
+    }
+  }
+  flush();
+
+  const parameters = fields
+    .filter((field) => field.startsWith("- `"))
+    .map((field) => field.match(/^- `([^`]+)`/)?.[1] ?? "")
+    .filter(Boolean);
+  const sections = [prose.join("\n").replace(/\n{3,}/g, "\n\n").trim()];
+  const parameterFields = fields.filter((field) => field.startsWith("- `"));
+  const nonParameters = fields.filter((field) => !field.startsWith("- `"));
+  if (nonParameters.length > 0) sections.push(nonParameters.join("\n\n"));
+  if (parameterFields.length > 0) sections.push(`**Parameters:**\n${parameterFields.join("\n")}`);
+  return { comment: sections.filter(Boolean).join("\n\n"), parameters };
+}
+
+async function collectSourceDeclarationDocumentation(
+  inputDirectory: string,
+  apiPrefixes: string[],
+): Promise<RecoveredDocumentation[]> {
+  const prefix = apiPrefixes.map(escapeRegExp).join("|");
+  if (!prefix) return [];
+  const result: RecoveredDocumentation[] = [];
+  for await (const header of walkHeaders(inputDirectory)) {
+    const source = await Deno.readTextFile(header);
+    const comments = /\/\*\*([\s\S]*?)\*\//g;
+    let match: RegExpExecArray | null;
+    while ((match = comments.exec(source)) !== null) {
+      const nextComment = source.indexOf("/**", comments.lastIndex);
+      const declaration = source.slice(
+        comments.lastIndex,
+        nextComment < 0 ? source.length : nextComment,
+      );
+      const nameMatch = declaration.match(new RegExp(`\\b(${prefix})[A-Za-z0-9_]*\\s*\\(`));
+      if (!nameMatch) continue;
+      const name = nameMatch[0].match(new RegExp(`(${prefix})[A-Za-z0-9_]*`))?.[0];
+      if (!name || !/;/.test(declaration.slice(nameMatch.index ?? 0))) continue;
+      const parsed = parseDoxygenComment(match[1]);
+      result.push({
+        name,
+        kind: "function",
+        header,
+        line: source.slice(0, match.index).split("\n").length,
+        signature: name,
+        comment: parsed.comment,
+        parameters: parsed.parameters,
+        sourceComment: match[1],
+      });
+    }
+  }
+  return result;
+}
+
+function hasMalformedDocumentation(comment: string): boolean {
+  return /\*\/\s+(?:extern|typedef|static|SDL_DECLSPEC)\b|\/\*\*/.test(comment);
+}
+
+function doxygenFieldLabel(kind: string): string {
+  switch (kind) {
+    case "return":
+    case "returns":
+      return "Returns";
+    case "since":
+      return "Since";
+    case "sa":
+    case "see":
+      return "See also";
+    case "threadsafety":
+      return "Thread safety";
+    default:
+      return kind;
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function collectHeaderDocumentation(inputDirectory: string): Promise<HeaderDocumentation[]> {

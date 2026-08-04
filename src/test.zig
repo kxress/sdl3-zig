@@ -2,9 +2,316 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_test_c");
+pub const c = @import("sdl3_test_c");
 const sdl = @import("sdl");
 const root = @This();
+
+const CVarargKind = enum {
+    signed_int,
+    unsigned_int,
+    signed_long,
+    unsigned_long,
+    signed_long_long,
+    unsigned_long_long,
+    signed_size,
+    unsigned_size,
+    float,
+    pointer,
+    cstring,
+    scan_signed_int,
+    scan_unsigned_int,
+    scan_signed_long,
+    scan_unsigned_long,
+    scan_signed_long_long,
+    scan_unsigned_long_long,
+    scan_signed_size,
+    scan_unsigned_size,
+    scan_float,
+    scan_double,
+    scan_char,
+    scan_cstring,
+    scan_pointer,
+};
+
+fn cVarargKinds(
+    comptime format: [:0]const u8,
+    comptime argument_count: usize,
+    comptime scan: bool,
+) [argument_count]CVarargKind {
+    var kinds: [argument_count]CVarargKind = undefined;
+    var count: usize = 0;
+    var index: usize = 0;
+    while (index < format.len) {
+        if (format[index] != '%') {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        if (index >= format.len) @compileError("unterminated C format specifier");
+        if (format[index] == '%') {
+            index += 1;
+            continue;
+        }
+
+        var suppressed = false;
+        if (scan and format[index] == '*') {
+            suppressed = true;
+            index += 1;
+        }
+        while (index < format.len and
+            (format[index] == '-' or format[index] == '+' or format[index] == '#' or
+                format[index] == '0' or format[index] == ' ' or format[index] == '\'')) index += 1;
+        if (!scan and index < format.len and format[index] == '*') {
+            if (count >= argument_count) @compileError("C format has too few arguments");
+            kinds[count] = .signed_int;
+            count += 1;
+            index += 1;
+        } else {
+            while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+        }
+        if (index < format.len and format[index] == '.') {
+            index += 1;
+            if (!scan and index < format.len and format[index] == '*') {
+                if (count >= argument_count) @compileError("C format has too few arguments");
+                kinds[count] = .signed_int;
+                count += 1;
+                index += 1;
+            } else {
+                while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+            }
+        }
+
+        var length: u8 = 0;
+        if (index < format.len and format[index] == 'h') {
+            length = 1;
+            index += 1;
+            if (index < format.len and format[index] == 'h') index += 1;
+        } else if (index < format.len and format[index] == 'l') {
+            length = 2;
+            index += 1;
+            if (index < format.len and format[index] == 'l') {
+                length = 3;
+                index += 1;
+            }
+        } else if (index < format.len and format[index] == 'j') {
+            length = 3;
+            index += 1;
+        } else if (index < format.len and format[index] == 'z') {
+            length = 4;
+            index += 1;
+        } else if (index < format.len and format[index] == 't') {
+            length = 5;
+            index += 1;
+        } else if (index < format.len and format[index] == 'L') {
+            length = 6;
+            index += 1;
+        }
+        if (index >= format.len) @compileError("unterminated C format specifier");
+        const specifier = format[index];
+        index += 1;
+        if (specifier == '[') {
+            while (index < format.len and format[index] != ']') index += 1;
+            if (index >= format.len) @compileError("unterminated C scanf character set");
+            index += 1;
+        }
+        if (suppressed) continue;
+        if (count >= argument_count) @compileError("C format has too few arguments");
+        kinds[count] = if (scan) switch (specifier) {
+            'd', 'i' => switch (length) {
+                0, 1 => .scan_signed_int,
+                2 => .scan_signed_long,
+                3 => .scan_signed_long_long,
+                4, 5 => .scan_signed_size,
+                else => @compileError("unsupported C scanf integer length"),
+            },
+            'o', 'u', 'x', 'X' => switch (length) {
+                0, 1 => .scan_unsigned_int,
+                2 => .scan_unsigned_long,
+                3 => .scan_unsigned_long_long,
+                4, 5 => .scan_unsigned_size,
+                else => @compileError("unsupported C scanf integer length"),
+            },
+            'f' => if (length == 0) .scan_float else if (length == 2) .scan_double else @compileError("unsupported C scanf floating-point length"),
+            'e', 'E', 'g', 'G', 'a', 'A' => if (length == 2) .scan_double else if (length == 0) .scan_float else @compileError("unsupported C scanf floating-point length"),
+            'c' => .scan_char,
+            's', '[' => .scan_cstring,
+            'p' => .scan_pointer,
+            'n' => .scan_signed_int,
+            else => @compileError("unsupported C scanf conversion"),
+        } else switch (specifier) {
+            'd', 'i' => switch (length) {
+                0, 1 => .signed_int,
+                2 => .signed_long,
+                3 => .signed_long_long,
+                4, 5 => .signed_size,
+                else => @compileError("unsupported C printf integer length"),
+            },
+            'o', 'u', 'x', 'X' => switch (length) {
+                0, 1 => .unsigned_int,
+                2 => .unsigned_long,
+                3 => .unsigned_long_long,
+                4, 5 => .unsigned_size,
+                else => @compileError("unsupported C printf integer length"),
+            },
+            'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A' => if (length == 0) .float else @compileError("unsupported C printf floating-point length"),
+            'c' => .signed_int,
+            's' => .cstring,
+            'p', 'n' => .pointer,
+            else => @compileError("unsupported C printf conversion"),
+        };
+        count += 1;
+    }
+    if (count != argument_count) @compileError("C format argument count does not match tuple");
+    return kinds;
+}
+
+fn cVarargArgsType(comptime argument_type: type, comptime kinds: anytype) type {
+    const fields = @typeInfo(argument_type).@"struct".fields;
+    const types = comptime blk: {
+        var result: [kinds.len]type = undefined;
+        for (kinds, 0..) |kind, index| result[index] = switch (kind) {
+            .signed_int => c_int,
+            .unsigned_int => c_uint,
+            .signed_long => c_long,
+            .unsigned_long => c_ulong,
+            .signed_long_long => c_longlong,
+            .unsigned_long_long => c_ulonglong,
+            .signed_size => isize,
+            .unsigned_size => usize,
+            .float => f64,
+            else => fields[index].type,
+        };
+        break :blk result;
+    };
+    return std.meta.Tuple(&types);
+}
+
+fn cVarargIsPointer(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsPointer(info.child),
+        .pointer => true,
+        else => false,
+    };
+}
+
+fn cVarargIsCString(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsCString(info.child),
+        .pointer => |info| info.child == u8 and (info.sentinel != null or info.size == .c),
+        else => false,
+    };
+}
+
+fn cVarargIsWritableCString(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsWritableCString(info.child),
+        .pointer => |info| info.child == u8 and !info.is_const,
+        else => false,
+    };
+}
+
+fn cVarargIsPointerToPointer(comptime argument_type: type) bool {
+    return switch (@typeInfo(argument_type)) {
+        .optional => |info| cVarargIsPointerToPointer(info.child),
+        .pointer => |info| cVarargIsPointer(info.child),
+        else => false,
+    };
+}
+
+fn cVarargIsDefaultInt(comptime argument_type: type) bool {
+    return argument_type == bool or argument_type == i8 or argument_type == u8 or
+        argument_type == i16 or argument_type == u16 or argument_type == c_int or
+        argument_type == c_uint or argument_type == comptime_int;
+}
+
+fn cVarargPromoteInt(comptime target: type, value: anytype) target {
+    return if (@TypeOf(value) == bool) @as(target, @intFromBool(value)) else @as(target, value);
+}
+
+fn cVarargPromoteFloat(value: anytype) f64 {
+    return @floatCast(value);
+}
+
+fn cVarargValidate(comptime kind: CVarargKind, comptime argument_type: type) void {
+    switch (kind) {
+        .signed_int => if (!cVarargIsDefaultInt(argument_type))
+            @compileError("C printf integer arguments must be default-promoted to c_int"),
+        .unsigned_int => if (!cVarargIsDefaultInt(argument_type))
+            @compileError("C printf integer arguments must be default-promoted to c_uint"),
+        .signed_long => if (argument_type != c_long and argument_type != comptime_int)
+            @compileError("C printf %ld requires c_long"),
+        .unsigned_long => if (argument_type != c_ulong and argument_type != comptime_int)
+            @compileError("C printf %lu requires c_ulong"),
+        .signed_long_long => if (argument_type != c_longlong and argument_type != comptime_int)
+            @compileError("C printf %lld requires c_longlong"),
+        .unsigned_long_long => if (argument_type != c_ulonglong and argument_type != comptime_int)
+            @compileError("C printf %llu requires c_ulonglong"),
+        .signed_size => if (argument_type != isize and argument_type != comptime_int)
+            @compileError("C printf %zd requires isize"),
+        .unsigned_size => if (argument_type != usize and argument_type != comptime_int)
+            @compileError("C printf %zu requires usize"),
+        .float => if (argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
+            @compileError("C printf floating-point arguments must be default-promoted to f64"),
+        .pointer => if (!cVarargIsPointer(argument_type))
+            @compileError("C printf pointer arguments must be pointers"),
+        .cstring => if (!cVarargIsCString(argument_type))
+            @compileError("C printf %s arguments must be sentinel-terminated C strings"),
+        .scan_signed_int => if (argument_type != *c_int)
+            @compileError("C scanf %d requires *c_int"),
+        .scan_unsigned_int => if (argument_type != *c_uint)
+            @compileError("C scanf %u requires *c_uint"),
+        .scan_signed_long => if (argument_type != *c_long)
+            @compileError("C scanf %ld requires *c_long"),
+        .scan_unsigned_long => if (argument_type != *c_ulong)
+            @compileError("C scanf %lu requires *c_ulong"),
+        .scan_signed_long_long => if (argument_type != *c_longlong)
+            @compileError("C scanf %lld requires *c_longlong"),
+        .scan_unsigned_long_long => if (argument_type != *c_ulonglong)
+            @compileError("C scanf %llu requires *c_ulonglong"),
+        .scan_signed_size => if (argument_type != *isize)
+            @compileError("C scanf %zd requires *isize"),
+        .scan_unsigned_size => if (argument_type != *usize)
+            @compileError("C scanf %zu requires *usize"),
+        .scan_float => if (argument_type != *f32)
+            @compileError("C scanf %f requires *f32"),
+        .scan_double => if (argument_type != *f64)
+            @compileError("C scanf %lf requires *f64"),
+        .scan_char => if (argument_type != *u8)
+            @compileError("C scanf %c requires *u8"),
+        .scan_cstring => if (!cVarargIsWritableCString(argument_type))
+            @compileError("C scanf string arguments must be writable pointers"),
+        .scan_pointer => if (!cVarargIsPointerToPointer(argument_type))
+            @compileError("C scanf %p arguments must be pointer-to-pointer values"),
+    }
+}
+
+fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan: bool) cVarargArgsType(
+    @TypeOf(args),
+    cVarargKinds(format, @typeInfo(@TypeOf(args)).@"struct".fields.len, scan),
+) {
+    const info = @typeInfo(@TypeOf(args));
+    if (info != .@"struct" or !info.@"struct".is_tuple)
+        @compileError("C variadic arguments must be a tuple literal");
+    const kinds = cVarargKinds(format, args.len, scan);
+    const Result = cVarargArgsType(@TypeOf(args), kinds);
+    var result: Result = undefined;
+    inline for (args, 0..) |argument, index| {
+        cVarargValidate(kinds[index], @TypeOf(argument));
+        result[index] = switch (kinds[index]) {
+            .signed_int => cVarargPromoteInt(c_int, argument),
+            .unsigned_int => cVarargPromoteInt(c_uint, argument),
+            .signed_long => @as(c_long, argument),
+            .unsigned_long => @as(c_ulong, argument),
+            .signed_long_long => @as(c_longlong, argument),
+            .unsigned_long_long => @as(c_ulonglong, argument),
+            .signed_size => @as(isize, argument),
+            .unsigned_size => @as(usize, argument),
+            .float => cVarargPromoteFloat(argument),
+            else => argument,
+        };
+    }
+    return result;
+}
 
 /// SDL record `ArgumentParser`.
 pub const ArgumentParser = extern struct {
@@ -15,7 +322,7 @@ pub const ArgumentParser = extern struct {
     /// Field `usage`.
     usage: ?*?*const u8,
     /// Field `data`.
-    data: ?*void,
+    data: ?*anyopaque,
     /// Field `next`.
     next: ?*ArgumentParser,
 };
@@ -144,7 +451,7 @@ comptime {
 pub const Md5Uint4 = u32;
 
 /// SDL type `CommonState`.
-pub const CommonState = extern struct { argv: ?*?*u8, flags: sdl.InitFlags, verbose: VerboseFlags, videodriver: ?*const u8, display_index: c_int, display_id: sdl.video.DisplayId, window_title: ?*const u8, window_icon: ?*const u8, window_flags: sdl.video.WindowFlags, flash_on_focus_loss: bool, window_x: c_int, window_y: c_int, window_w: c_int, window_h: c_int, window_min_w: c_int, window_min_h: c_int, window_max_w: c_int, window_max_h: c_int, window_min_aspect: f32, window_max_aspect: f32, logical_w: c_int, logical_h: c_int, auto_scale_content: bool, logical_presentation: sdl.render.RendererLogicalPresentation, scale: f32, depth: c_int, refresh_rate: f32, fill_usable_bounds: bool, fullscreen_exclusive: bool, fullscreen_mode: sdl.video.DisplayMode, num_windows: c_int, windows: ?*?*sdl.video.Window, gpudriver: ?*const u8, renderdriver: ?*const u8, render_vsync: c_int, skip_renderer: bool, renderers: ?*?*sdl.render.Renderer, targets: ?*?*sdl.render.Texture, audiodriver: ?*const u8, audio_format: sdl.audio.Format, audio_channels: c_int, audio_freq: c_int, audio_id: sdl.audio.DeviceId, gl_red_size: c_int, gl_green_size: c_int, gl_blue_size: c_int, gl_alpha_size: c_int, gl_buffer_size: c_int, gl_depth_size: c_int, gl_stencil_size: c_int, gl_double_buffer: c_int, gl_accum_red_size: c_int, gl_accum_green_size: c_int, gl_accum_blue_size: c_int, gl_accum_alpha_size: c_int, gl_stereo: c_int, gl_release_behavior: c_int, gl_multisamplebuffers: c_int, gl_multisamplesamples: c_int, gl_retained_backing: c_int, gl_accelerated: c_int, gl_major_version: c_int, gl_minor_version: c_int, gl_debug: c_int, gl_profile_mask: c_int, confine: sdl.rect.Rect, hide_cursor: bool, quit_after_ms_interval: c_int, quit_after_ms_timer: sdl.timer.Id, common_argparser: ArgumentParser, video_argparser: ArgumentParser, audio_argparser: ArgumentParser, argparser: ?*ArgumentParser };
+pub const CommonState = extern struct { argv: ?*?*u8, flags: sdl.init.Flags, verbose: VerboseFlags, videodriver: ?*const u8, display_index: c_int, display_id: sdl.video.DisplayId, window_title: ?*const u8, window_icon: ?*const u8, window_flags: sdl.video.WindowFlags, flash_on_focus_loss: bool, window_x: c_int, window_y: c_int, window_w: c_int, window_h: c_int, window_min_w: c_int, window_min_h: c_int, window_max_w: c_int, window_max_h: c_int, window_min_aspect: f32, window_max_aspect: f32, logical_w: c_int, logical_h: c_int, auto_scale_content: bool, logical_presentation: sdl.render.RendererLogicalPresentation, scale: f32, depth: c_int, refresh_rate: f32, fill_usable_bounds: bool, fullscreen_exclusive: bool, fullscreen_mode: sdl.video.DisplayMode, num_windows: c_int, windows: ?*?*sdl.video.Window, gpudriver: ?*const u8, renderdriver: ?*const u8, render_vsync: c_int, skip_renderer: bool, renderers: ?*?*sdl.render.Renderer, targets: ?*?*sdl.render.Texture, audiodriver: ?*const u8, audio_format: sdl.audio.Format, audio_channels: c_int, audio_freq: c_int, audio_id: sdl.audio.DeviceId, gl_red_size: c_int, gl_green_size: c_int, gl_blue_size: c_int, gl_alpha_size: c_int, gl_buffer_size: c_int, gl_depth_size: c_int, gl_stencil_size: c_int, gl_double_buffer: c_int, gl_accum_red_size: c_int, gl_accum_green_size: c_int, gl_accum_blue_size: c_int, gl_accum_alpha_size: c_int, gl_stereo: c_int, gl_release_behavior: c_int, gl_multisamplebuffers: c_int, gl_multisamplesamples: c_int, gl_retained_backing: c_int, gl_accelerated: c_int, gl_major_version: c_int, gl_minor_version: c_int, gl_debug: c_int, gl_profile_mask: c_int, confine: sdl.rect.Rect, hide_cursor: bool, quit_after_ms_interval: c_int, quit_after_ms_timer: sdl.timer.Id, common_argparser: ArgumentParser, video_argparser: ArgumentParser, audio_argparser: ArgumentParser, argparser: ?*ArgumentParser };
 
 /// SDL type `FinalizeArgumentParserFp`.
 pub const FinalizeArgumentParserFp = ?*const fn (arg0: ?*anyopaque) callconv(.c) void;
@@ -162,7 +469,45 @@ pub const TestCaseSetUpFp = ?*const fn (arg0: ?*?*anyopaque) callconv(.c) void;
 pub const TestCaseTearDownFp = ?*const fn (arg0: ?*anyopaque) callconv(.c) void;
 
 /// SDL type `Uint32`.
-pub const VerboseFlags = u32;
+pub const VerboseFlags = packed struct(u32) {
+    /// Flag bit `VERBOSE_VIDEO`.
+    video: bool = false,
+    /// Flag bit `VERBOSE_MODES`.
+    modes: bool = false,
+    /// Flag bit `VERBOSE_RENDER`.
+    render: bool = false,
+    /// Flag bit `VERBOSE_EVENT`.
+    event: bool = false,
+    /// Flag bit `VERBOSE_AUDIO`.
+    audio: bool = false,
+    /// Flag bit `VERBOSE_MOTION`.
+    motion: bool = false,
+    /// Unknown or currently unused bits preserved during integer round trips.
+    reserved_0: u26 = 0,
+
+    /// Preserve every known and unknown flag bit.
+    pub inline fn fromInt(value: u32) @This() {
+        return @bitCast(value);
+    }
+
+    /// Convert this flag set to its integer representation.
+    pub inline fn toInt(self: @This()) u32 {
+        return @bitCast(self);
+    }
+};
+
+/// SDL constant `VERBOSE_AUDIO`.
+pub const verbose_flags_audio = c.VERBOSE_AUDIO;
+/// SDL constant `VERBOSE_EVENT`.
+pub const verbose_flags_event = c.VERBOSE_EVENT;
+/// SDL constant `VERBOSE_MODES`.
+pub const verbose_flags_modes = c.VERBOSE_MODES;
+/// SDL constant `VERBOSE_MOTION`.
+pub const verbose_flags_motion = c.VERBOSE_MOTION;
+/// SDL constant `VERBOSE_RENDER`.
+pub const verbose_flags_render = c.VERBOSE_RENDER;
+/// SDL constant `VERBOSE_VIDEO`.
+pub const verbose_flags_video = c.VERBOSE_VIDEO;
 
 /// Access SDL variable `FONT_CHARACTER_SIZE`.
 pub inline fn fontCharacterSizePtr() *c_int {
@@ -171,17 +516,17 @@ pub inline fn fontCharacterSizePtr() *c_int {
 
 /// SDL operation `assert`.
 pub inline fn assert(assert_condition: c_int, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_Assert, .{ @as(@typeInfo(@TypeOf(c.SDLTest_Assert)).@"fn".params[0].type.?, assert_condition), @as(@typeInfo(@TypeOf(c.SDLTest_Assert)).@"fn".params[1].type.?, format.ptr) } ++ args);
+    @call(.auto, c.SDLTest_Assert, .{ @as(@typeInfo(@TypeOf(c.SDLTest_Assert)).@"fn".params[0].type.?, assert_condition), @as(@typeInfo(@TypeOf(c.SDLTest_Assert)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
 /// SDL operation `assertCheck`.
 pub inline fn assertCheck(assert_condition: c_int, comptime format: [:0]const u8, args: anytype) c_int {
-    return @call(.auto, c.SDLTest_AssertCheck, .{ @as(@typeInfo(@TypeOf(c.SDLTest_AssertCheck)).@"fn".params[0].type.?, assert_condition), @as(@typeInfo(@TypeOf(c.SDLTest_AssertCheck)).@"fn".params[1].type.?, format.ptr) } ++ args);
+    return @call(.auto, c.SDLTest_AssertCheck, .{ @as(@typeInfo(@TypeOf(c.SDLTest_AssertCheck)).@"fn".params[0].type.?, assert_condition), @as(@typeInfo(@TypeOf(c.SDLTest_AssertCheck)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
 /// SDL operation `assertPass`.
 pub inline fn assertPass(comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_AssertPass, .{@as(@typeInfo(@TypeOf(c.SDLTest_AssertPass)).@"fn".params[0].type.?, format.ptr)} ++ args);
+    @call(.auto, c.SDLTest_AssertPass, .{@as(@typeInfo(@TypeOf(c.SDLTest_AssertPass)).@"fn".params[0].type.?, format.ptr)} ++ validateCVarargs(format, args, false));
 }
 
 /// SDL operation `assertSummaryToTestResult`.
@@ -213,10 +558,10 @@ pub inline fn commonArg(state: ?*CommonState, index: c_int) sdl.Error!c_int {
 ///
 /// - **Parameters:**
 ///   - `argv`: Array of command line parameters
-///   - `flags`: Flags indicating which subsystem to initialize (i.e. sdl.InitFlags.video | sdl.InitFlags.audio)
+///   - `flags`: Flags indicating which subsystem to initialize (i.e. sdl.init.Flags.video | sdl.init.Flags.audio)
 ///
 /// - **Returns:** a newly allocated common state object.
-pub inline fn commonCreateState(argv: ?*?[*]u8, flags: sdl.InitFlags) ?*CommonState {
+pub inline fn commonCreateState(argv: ?*?[*]u8, flags: sdl.init.Flags) ?*CommonState {
     const result = c.SDLTest_CommonCreateState(@ptrCast(argv), flags);
     return if (result == null) null else @ptrCast(result);
 }
@@ -225,8 +570,8 @@ pub inline fn commonCreateState(argv: ?*?[*]u8, flags: sdl.InitFlags) ?*CommonSt
 ///
 /// - **Parameters:**
 ///   - `state`: The common state describing the test window to create.
-///   - `argc`: argc, as supplied to SDL_main (C API outside this module)
-///   - `argv`: argv, as supplied to SDL_main (C API outside this module)
+///   - `argc`: argc, as supplied to sdl.main
+///   - `argv`: argv, as supplied to sdl.main
 ///
 /// - **Returns:** false if app should quit, true otherwise.
 pub inline fn commonDefaultArgs(state: ?*CommonState, argc: c_int, argv: ?*?[*]u8) bool {
@@ -235,7 +580,7 @@ pub inline fn commonDefaultArgs(state: ?*CommonState, argc: c_int, argv: ?*?[*]u
 
 /// Free the common state object.
 ///
-/// You should call sdl.quit() before calling this function.
+/// You should call sdl.init.quit() before calling this function.
 ///
 /// - **Parameters:**
 ///   - `state`: The common state object to destroy
@@ -253,7 +598,7 @@ pub inline fn commonDrawWindowInfo(renderer: ?*sdl.render.Renderer, window: ?*sd
     c.SDLTest_CommonDrawWindowInfo(@ptrCast(renderer), @ptrCast(window), @ptrCast(used_height));
 }
 
-/// Common event handler for test windows if you use a standard SDL_main (C API outside this module).
+/// Common event handler for test windows if you use a standard sdl.main.
 ///
 /// - **Parameters:**
 ///   - `state`: The common state used to create test window.
@@ -263,7 +608,7 @@ pub inline fn commonEvent(state: ?*CommonState, event: ?*sdl.events.Event, done:
     c.SDLTest_CommonEvent(@ptrCast(state), @ptrCast(event), @ptrCast(done));
 }
 
-/// Common event handler for test windows if you use SDL_AppEvent (C macro outside this module).
+/// Common event handler for test windows if you use SDL_AppEvent (C API outside this module).
 ///
 /// This does *not* free anything in `event`.
 ///
@@ -271,8 +616,8 @@ pub inline fn commonEvent(state: ?*CommonState, event: ?*sdl.events.Event, done:
 ///   - `state`: The common state used to create test window.
 ///   - `event`: The event to handle.
 ///
-/// - **Returns:** Value suitable for returning from SDL_AppEvent (C macro outside this module)().
-pub inline fn commonEventMainCallbacks(state: ?*CommonState, event: ?*const sdl.events.Event) sdl.AppResult {
+/// - **Returns:** Value suitable for returning from SDL_AppEvent (C API outside this module)().
+pub inline fn commonEventMainCallbacks(state: ?*CommonState, event: ?*const sdl.events.Event) sdl.init.AppResult {
     const result = c.SDLTest_CommonEventMainCallbacks(@ptrCast(state), @ptrCast(event));
     return @enumFromInt(result);
 }
@@ -289,11 +634,11 @@ pub inline fn commonInit(state: ?*CommonState) bool {
 
 /// Logs command line usage info.
 ///
-/// This logs the appropriate command line options for the subsystems in use plus other common options, and then any application-specific options. This uses the sdl.logDefault() function and splits up output to be friendly to 80-character-wide terminals.
+/// This logs the appropriate command line options for the subsystems in use plus other common options, and then any application-specific options. This uses the sdl.log.default2() function and splits up output to be friendly to 80-character-wide terminals.
 ///
 /// - **Parameters:**
 ///   - `state`: The common state describing the test window for the app.
-///   - `argv0`: argv[0], as passed to main/SDL_main (C API outside this module).
+///   - `argv0`: argv[0], as passed to main/sdl.main.
 ///   - `options`: an array of strings for application specific options. The last element of the array should be NULL.
 pub inline fn commonLogUsage(state: ?*CommonState, argv0: ?[:0]const u8, options: ?*?[*:0]const u8) void {
     c.SDLTest_CommonLogUsage(@ptrCast(state), if (argv0 != null) @ptrCast(argv0.?.ptr) else null, @ptrCast(options));
@@ -419,12 +764,12 @@ pub inline fn getFuzzerInvocationCount() c_int {
 /// - **Parameters:**
 ///   - `fmt`: Message to be logged
 pub inline fn log(comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_Log, .{@as(@typeInfo(@TypeOf(c.SDLTest_Log)).@"fn".params[0].type.?, format.ptr)} ++ args);
+    @call(.auto, c.SDLTest_Log, .{@as(@typeInfo(@TypeOf(c.SDLTest_Log)).@"fn".params[0].type.?, format.ptr)} ++ validateCVarargs(format, args, false));
 }
 
 /// Print a log of any outstanding allocations
 ///
-/// > **Note:** This can be called after sdl.quit()
+/// > **Note:** This can be called after sdl.init.quit()
 pub inline fn logAllocations() void {
     c.SDLTest_LogAllocations();
 }
@@ -439,7 +784,7 @@ pub inline fn logAssertSummary() void {
 /// - **Parameters:**
 ///   - `fmt`: Message to be logged
 pub inline fn logError(comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_LogError, .{@as(@typeInfo(@TypeOf(c.SDLTest_LogError)).@"fn".params[0].type.?, format.ptr)} ++ args);
+    @call(.auto, c.SDLTest_LogError, .{@as(@typeInfo(@TypeOf(c.SDLTest_LogError)).@"fn".params[0].type.?, format.ptr)} ++ validateCVarargs(format, args, false));
 }
 
 /// Prints given prefix and buffer. Non-printible characters in the raw data are substituted by printible alternatives.
@@ -458,8 +803,8 @@ pub inline fn logEscapedString(prefix: ?[:0]const u8, buffer: []const u8) void {
 /// - **Parameters:**
 ///   - `priority`: Priority of the message
 ///   - `fmt`: Message to be logged
-pub inline fn logMessage(priority: sdl.LogPriority, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_LogMessage, .{ @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[0].type.?, @intCast(@intFromEnum(priority))), @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[1].type.?, format.ptr) } ++ args);
+pub inline fn logMessage(priority: sdl.log.Priority, comptime format: [:0]const u8, args: anytype) void {
+    @call(.auto, c.SDLTest_LogMessage, .{ @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[0].type.?, @intCast(@intFromEnum(priority))), @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
 /// complete digest computation
@@ -753,7 +1098,7 @@ pub inline fn resetAssertSummary() void {
 
 /// SDL operation `textWindowAddText`.
 pub inline fn textWindowAddText(textwin: ?*TextWindow, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_TextWindowAddText, .{ @as(@typeInfo(@TypeOf(c.SDLTest_TextWindowAddText)).@"fn".params[0].type.?, @ptrCast(textwin)), @as(@typeInfo(@TypeOf(c.SDLTest_TextWindowAddText)).@"fn".params[1].type.?, format.ptr) } ++ args);
+    @call(.auto, c.SDLTest_TextWindowAddText, .{ @as(@typeInfo(@TypeOf(c.SDLTest_TextWindowAddText)).@"fn".params[0].type.?, @ptrCast(textwin)), @as(@typeInfo(@TypeOf(c.SDLTest_TextWindowAddText)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
 /// SDL operation `textWindowAddTextWithLength`.
@@ -789,4 +1134,694 @@ pub inline fn textWindowDisplay(textwin: ?*TextWindow, renderer: ?*sdl.render.Re
 /// > **Note:** This should be called before any other SDL functions for complete tracking coverage
 pub inline fn trackAllocations() void {
     c.SDLTest_TrackAllocations();
+}
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.ArgumentParser;
+        _ = root.CommonState;
+        _ = root.Crc32Context;
+        _ = root.FinalizeArgumentParserFp;
+        _ = root.Md5Context;
+        _ = root.Md5Uint4;
+        _ = root.ParseArgumentsFp;
+        _ = root.TestCaseFp;
+        _ = root.TestCaseReference;
+        _ = root.TestCaseSetUpFp;
+        _ = root.TestCaseTearDownFp;
+        _ = root.TestSuiteReference;
+        _ = root.TestSuiteRunner;
+        _ = root.TextWindow;
+        _ = root.VerboseFlags;
+        _ = root.assert;
+        _ = root.assertCheck;
+        _ = root.assertPass;
+        _ = root.assertSummaryToTestResult;
+        _ = root.cleanupTextDrawing;
+        _ = root.commonArg;
+        _ = root.commonCreateState;
+        _ = root.commonDefaultArgs;
+        _ = root.commonDestroyState;
+        _ = root.commonDrawWindowInfo;
+        _ = root.commonEvent;
+        _ = root.commonEventMainCallbacks;
+        _ = root.commonInit;
+        _ = root.commonLogUsage;
+        _ = root.commonQuit;
+        _ = root.compareMemory;
+        _ = root.compareSurfaces;
+        _ = root.compareSurfacesIgnoreTransparentPixels;
+        _ = root.crc32Calc;
+        _ = root.crc32CalcBuffer;
+        _ = root.crc32CalcEnd;
+        _ = root.crc32CalcStart;
+        _ = root.crc32Done;
+        _ = root.crc32Init;
+        _ = root.createTestSuiteRunner;
+        _ = root.drawCharacter;
+        _ = root.drawString;
+        _ = root.executeTestSuiteRunner;
+        _ = root.fontCharacterSizePtr;
+        _ = root.fuzzerInit;
+        _ = root.generateRunSeed;
+        _ = root.getFuzzerInvocationCount;
+        _ = root.log;
+        _ = root.logAllocations;
+        _ = root.logAssertSummary;
+        _ = root.logError;
+        _ = root.logEscapedString;
+        _ = root.logMessage;
+        _ = root.md5Final;
+        _ = root.md5Init;
+        _ = root.md5Update;
+        _ = root.printEvent;
+        _ = root.randFillAllocations;
+        _ = root.randomAsciiString;
+        _ = root.randomAsciiStringOfSize;
+        _ = root.randomAsciiStringWithMaximumLength;
+        _ = root.randomDouble;
+        _ = root.randomFloat;
+        _ = root.randomIntegerInRange;
+        _ = root.randomSint16;
+        _ = root.randomSint16BoundaryValue;
+        _ = root.randomSint32;
+        _ = root.randomSint32BoundaryValue;
+        _ = root.randomSint64;
+        _ = root.randomSint64BoundaryValue;
+        _ = root.randomSint8;
+        _ = root.randomSint8BoundaryValue;
+        _ = root.randomUint16;
+        _ = root.randomUint16BoundaryValue;
+        _ = root.randomUint32;
+        _ = root.randomUint32BoundaryValue;
+        _ = root.randomUint64;
+        _ = root.randomUint64BoundaryValue;
+        _ = root.randomUint8;
+        _ = root.randomUint8BoundaryValue;
+        _ = root.randomUnitDouble;
+        _ = root.randomUnitFloat;
+        _ = root.resetAssertSummary;
+        _ = root.textWindowAddText;
+        _ = root.textWindowAddTextWithLength;
+        _ = root.textWindowClear;
+        _ = root.textWindowCreate;
+        _ = root.textWindowDestroy;
+        _ = root.textWindowDisplay;
+        _ = root.trackAllocations;
+        _ = root.verbose_flags_audio;
+        _ = root.verbose_flags_event;
+        _ = root.verbose_flags_modes;
+        _ = root.verbose_flags_motion;
+        _ = root.verbose_flags_render;
+        _ = root.verbose_flags_video;
+    }
 }

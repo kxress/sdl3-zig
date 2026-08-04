@@ -1,5 +1,7 @@
 import { copy } from "@std/fs/copy";
 import { dirname, resolve } from "@std/path";
+import { assertRepositoryBindingsCurrent } from "./check-generated-bindings.ts";
+import { collectNoticePathsUnder, writeThirdPartyNotices } from "./third-party-notices.ts";
 import { runCommand } from "./utils/command.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 import {
@@ -11,8 +13,12 @@ import {
   releaseVersion,
   type SdlComponent,
   type SdlRelease,
-  windowsOptionalArchitectures,
 } from "./sdl-release.ts";
+import {
+  type PrebuiltTarget,
+  prebuiltTargetsFor,
+  windowsOptionalArchitectures,
+} from "./distribution-policy.ts";
 
 const localBuildRoots = new Set([
   ".zig-cache",
@@ -26,10 +32,14 @@ export async function stageReleaseTree(
 ): Promise<string> {
   const release = await loadSdlRelease();
   await ensureVendoredSources();
+  await assertRepositoryBindingsCurrent();
   const packageRoot = `${destination}/sdl3-${releaseVersion(release)}`;
   await Deno.mkdir(packageRoot, { recursive: true });
-  await copyPackageSources(release, packageRoot);
-  await stagePrebuilts(release, packageRoot, destination);
+  const expectedNotices = await copyPackageSources(release, packageRoot);
+  for (const notice of await stagePrebuilts(release, packageRoot, destination)) {
+    expectedNotices.add(notice);
+  }
+  await writeThirdPartyNotices(packageRoot, [...expectedNotices]);
   await validateReleaseTree(packageRoot);
   return packageRoot;
 }
@@ -39,7 +49,7 @@ async function ensureVendoredSources(): Promise<void> {
     "run",
     "--allow-read",
     "--allow-write",
-    "--allow-run=mise",
+    "--allow-run=curl,gpg,gpgv,mise",
     "scripts/sync-sources.ts",
     "update",
   ], { cwd: repositoryRoot });
@@ -81,6 +91,11 @@ export async function packageRelease(
       ],
       { cwd: repositoryRoot },
     );
+    await validateReleaseArchive(
+      archive,
+      packageName,
+      await releaseTreeMembers(packageRoot, packageName),
+    );
     const sha256 = (await runCommand("sha256sum", [archive], { cwd: repositoryRoot })).stdout
       .split(/\s+/, 1)[0];
     if (!/^[0-9a-f]{64}$/.test(sha256)) {
@@ -111,10 +126,84 @@ export async function packageRelease(
   }
 }
 
-async function copyPackageSources(release: SdlRelease, destination: string): Promise<void> {
+export async function validateReleaseArchive(
+  archive: string,
+  packageName: string,
+  expectedMembers?: readonly string[],
+): Promise<void> {
+  const listing = await runCommand("tar", ["--list", "--file", archive], {
+    cwd: repositoryRoot,
+  });
+  const members = listing.stdout.split("\n").filter((member) => member.length !== 0);
+  validateReleaseArchiveMembers(members, packageName, expectedMembers);
+}
+
+export function validateReleaseArchiveMembers(
+  members: readonly string[],
+  packageName: string,
+  expectedMembers?: readonly string[],
+): void {
+  const normalized = members.map((member) => member.replace(/\/+$/, ""));
+  const seen = new Set<string>();
+  for (const member of normalized) {
+    if (!member || member.startsWith("/") || member.split("/").includes("..")) {
+      throw new Error(`Unsafe release archive member: ${member}`);
+    }
+    if (member !== packageName && !member.startsWith(`${packageName}/`)) {
+      throw new Error(`Release archive member escapes package root: ${member}`);
+    }
+    if (!seen.add(member)) throw new Error(`Duplicate release archive member: ${member}`);
+  }
+  if (expectedMembers) {
+    const actual = [...normalized].sort();
+    const expected = [...expectedMembers].map((member) => member.replace(/\/+$/, "")).sort();
+    if (
+      expected.length !== actual.length ||
+      expected.some((member, index) => member !== actual[index])
+    ) {
+      throw new Error("Release archive members do not match the staged release tree");
+    }
+  }
+}
+
+async function releaseTreeMembers(root: string, packageName: string): Promise<string[]> {
+  const members = [packageName];
+  async function visit(relative: string): Promise<void> {
+    const directory = relative ? `${root}/${relative}` : root;
+    for await (const entry of Deno.readDir(directory)) {
+      const child = relative ? `${relative}/${entry.name}` : entry.name;
+      const member = `${packageName}/${child}`;
+      members.push(member);
+      if (entry.isDirectory) await visit(child);
+    }
+  }
+  await visit("");
+  return members.sort();
+}
+
+async function copyPackageSources(release: SdlRelease, destination: string): Promise<Set<string>> {
+  const notices = new Set(["LICENSE"]);
   for (const path of packagePaths(release)) {
-    if (path === "prebuilt") continue;
-    await copyTo(`${repositoryRoot}/${path}`, `${destination}/${path}`);
+    if (path === "prebuilt" || path === "THIRD_PARTY_NOTICES") continue;
+    await copyPackagePath(`${repositoryRoot}/${path}`, `${destination}/${path}`);
+    if (path.startsWith("vendor/")) {
+      const input = `${repositoryRoot}/${path}`;
+      for (const notice of await collectNoticePathsUnder(input, path)) notices.add(notice);
+    }
+  }
+  return notices;
+}
+
+async function copyPackagePath(source: string, destination: string): Promise<void> {
+  const stat = await Deno.lstat(source);
+  if (!stat.isDirectory) {
+    await copyTo(source, destination);
+    return;
+  }
+  await Deno.mkdir(destination, { recursive: true });
+  for await (const entry of Deno.readDir(source)) {
+    if (localBuildRoots.has(entry.name)) continue;
+    await copyPackagePath(`${source}/${entry.name}`, `${destination}/${entry.name}`);
   }
 }
 
@@ -122,7 +211,8 @@ async function stagePrebuilts(
   release: SdlRelease,
   packageRoot: string,
   temporary: string,
-): Promise<void> {
+): Promise<Set<string>> {
+  const notices = new Set<string>();
   const prebuiltComponents = release.components.filter((component) => component.prebuilt);
   const names = prebuiltComponents.flatMap(binaryArtifactNames);
   const installations = await installArtifacts(names);
@@ -144,11 +234,12 @@ async function stagePrebuilts(
         requireInstallation(installations, artifactName(component, "macos"))
       }/${upstreamDirectory}.dmg`,
     ], { cwd: repositoryRoot });
-    await stageMinGW(component, mingw, packageRoot, installations);
-    await stageMSVC(component, msvc, packageRoot);
-    await stageMacOS(component, macos, packageRoot);
+    await stageMinGW(component, mingw, packageRoot, installations, notices);
+    await stageMSVC(component, msvc, packageRoot, notices);
+    await stageMacOS(component, macos, packageRoot, notices);
     console.log(`Staged ${component.id} ${component.version} prebuilts.`);
   }
+  return notices;
 }
 
 async function stageMinGW(
@@ -156,34 +247,31 @@ async function stageMinGW(
   extracted: string,
   packageRoot: string,
   installations: Map<string, string>,
+  notices: Set<string>,
 ): Promise<void> {
-  for (
-    const [arch, prefix] of [
-      ["x86", "i686-w64-mingw32"],
-      ["x86_64", "x86_64-w64-mingw32"],
-    ] as const
-  ) {
-    const destination = `${packageRoot}/prebuilt/${component.key}/windows-gnu/${arch}`;
+  for (const target of prebuiltTargetsFor("mingw")) {
+    const destination = prebuiltDestination(component, packageRoot, target);
     await copyTo(
-      `${extracted}/${prefix}/lib/lib${component.id}.dll.a`,
+      `${extracted}/${target.upstreamArch}/lib/lib${component.id}.dll.a`,
       `${destination}/lib/lib${component.id}.dll.a`,
     );
     await copyTo(
-      `${extracted}/${prefix}/bin/${component.id}.dll`,
+      `${extracted}/${target.upstreamArch}/bin/${component.id}.dll`,
       `${destination}/bin/${component.id}.dll`,
     );
 
     const optional = component.windowsOptionalRuntime;
-    if (!optional || !windowsOptionalArchitectures.mingw.includes(arch)) continue;
+    if (!optional || !windowsOptionalArchitectures.mingw.includes(target.arch)) continue;
     const optionalRoot = requireInstallation(
       installations,
-      artifactName(component, `mingw-${arch}-runtime`),
+      artifactName(component, `mingw-${target.arch}-runtime`),
     );
     await stageOptionalWindows(
       `${optionalRoot}/optional`,
       optional,
       `${destination}/optional`,
     );
+    await addMappedNoticePaths(`${optionalRoot}/optional`, `${destination}/optional`, notices);
   }
 }
 
@@ -191,29 +279,29 @@ async function stageMSVC(
   component: SdlComponent,
   extracted: string,
   packageRoot: string,
+  notices: Set<string>,
 ): Promise<void> {
-  for (
-    const [arch, upstreamArch] of [
-      ["x86", "x86"],
-      ["x86_64", "x64"],
-      ["aarch64", "arm64"],
-    ] as const
-  ) {
-    const destination = `${packageRoot}/prebuilt/${component.key}/windows-msvc/${arch}`;
+  for (const target of prebuiltTargetsFor("msvc")) {
+    const destination = prebuiltDestination(component, packageRoot, target);
     await copyTo(
-      `${extracted}/lib/${upstreamArch}/${component.id}.lib`,
+      `${extracted}/lib/${target.upstreamArch}/${component.id}.lib`,
       `${destination}/lib/${component.id}.lib`,
     );
     await copyTo(
-      `${extracted}/lib/${upstreamArch}/${component.id}.dll`,
+      `${extracted}/lib/${target.upstreamArch}/${component.id}.dll`,
       `${destination}/bin/${component.id}.dll`,
     );
     const optional = component.windowsOptionalRuntime;
-    if (optional && windowsOptionalArchitectures.msvc.includes(arch)) {
+    if (optional && windowsOptionalArchitectures.msvc.includes(target.arch)) {
       await stageOptionalWindows(
-        `${extracted}/lib/${upstreamArch}/optional`,
+        `${extracted}/lib/${target.upstreamArch}/optional`,
         optional,
         `${destination}/optional`,
+      );
+      await addMappedNoticePaths(
+        `${extracted}/lib/${target.upstreamArch}/optional`,
+        `${destination}/optional`,
+        notices,
       );
     }
   }
@@ -233,6 +321,7 @@ async function stageMacOS(
   component: SdlComponent,
   extracted: string,
   packageRoot: string,
+  notices: Set<string>,
 ): Promise<void> {
   const destination = `${packageRoot}/prebuilt/${component.key}/macos`;
   const source = `${extracted}/${component.id}`;
@@ -242,10 +331,24 @@ async function stageMacOS(
     framework,
     `${destination}/frameworks/${component.id}.framework`,
   );
+  await addMappedNoticePaths(
+    framework,
+    `${destination}/frameworks/${component.id}.framework`,
+    notices,
+  );
   for (const name of component.macosOptionalFrameworks ?? []) {
     const optional = `${source}/optional/${name}.xcframework/macos-arm64_x86_64/${name}.framework`;
     await copyTo(optional, `${destination}/optional/${name}.framework`);
+    await addMappedNoticePaths(optional, `${destination}/optional/${name}.framework`, notices);
   }
+}
+
+function prebuiltDestination(
+  component: SdlComponent,
+  packageRoot: string,
+  target: PrebuiltTarget,
+): string {
+  return `${packageRoot}/prebuilt/${component.key}/${target.packageFamily}/${target.arch}`;
 }
 
 function requireInstallation(installations: Map<string, string>, artifact: string): string {
@@ -266,11 +369,22 @@ async function copyTo(source: string, destination: string): Promise<void> {
   }
 }
 
+async function addMappedNoticePaths(
+  source: string,
+  destination: string,
+  output: Set<string>,
+): Promise<void> {
+  const sourceNotices = await collectNoticePathsUnder(source);
+  for (const notice of sourceNotices) {
+    output.add(`${destination.slice(destination.indexOf("/prebuilt/") + 1)}/${notice}`);
+  }
+}
+
 export async function validateReleaseTree(root: string, relative = ""): Promise<void> {
   const directory = relative ? `${root}/${relative}` : root;
   for await (const entry of Deno.readDir(directory)) {
     const child = relative ? `${relative}/${entry.name}` : entry.name;
-    if (!relative && localBuildRoots.has(entry.name)) {
+    if (localBuildRoots.has(entry.name)) {
       throw new Error(`Release tree contains a local build root: ${entry.name}`);
     }
     if (entry.isDirectory) {

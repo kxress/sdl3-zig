@@ -22,16 +22,29 @@
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
-    "typecheck": "deno check --frozen scripts tests",
-    "fetch": "deno run --allow-read --allow-write --allow-run=mise scripts/sync-sources.ts update",
+    "typecheck": "deno check --frozen scripts/*.ts scripts/codegen/*.ts tests/*.ts tests/build/*.ts tests/codegen/*.ts",
+    "fetch": "deno run --allow-read --allow-write --allow-run=curl,gpg,gpgv,mise scripts/sync-sources.ts update",
     "generate:bindings": "deno run --allow-run=castxml,clang,doxygen,zig --allow-read --allow-write scripts/generate-bindings.ts",
+    "generate:coverage": "deno run --allow-run=clang,doxygen --allow-read --allow-write scripts/api-coverage.ts write",
     "generate:metadata": "deno run --allow-read=build.zig.zon,sdl_metadata.zig --allow-write=build.zig.zon,sdl_metadata.zig --allow-run=mise scripts/sync-package-metadata.ts write",
-    "package:release": "deno run --allow-read --allow-write --allow-run=deno,mise,7zz,tar,sha256sum,zig scripts/package-release.ts",
+    "package:release": "deno run --allow-read --allow-write --allow-run=castxml,clang,deno,doxygen,mise,7zz,tar,sha256sum,zig scripts/package-release.ts",
+    "build:shaders": "deno run --allow-env=GLSLANG_VALIDATOR,SDL_SHADERCROSS --allow-read --allow-write --allow-run scripts/build-shaders.ts",
+    "test:release-archive": "deno run --allow-read --allow-write --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,tar,sha256sum,zig scripts/release-repro.ts",
     "docs": "zig build docs",
+    "package:docs": "deno run --allow-read --allow-write scripts/package-documentation.ts package",
+    "validate:docs": "deno run --allow-read scripts/package-documentation.ts validate",
     "test:metadata": "deno run --allow-read=build.zig.zon,sdl_metadata.zig --allow-run=mise scripts/sync-package-metadata.ts check",
-    "test:sources": "deno run --allow-read --allow-run=mise,diff,cmp scripts/sync-sources.ts check",
-    "test:bindings": "deno test --frozen tests/codegen",
-    "test:build": "deno test --frozen --allow-read --allow-write --allow-run=cmake,deno,mise,7zz,zig tests/package-release.test.ts tests/build/linux.test.ts tests/build/macos.test.ts",
+    "test:sources": "deno test --frozen --allow-read --allow-write --allow-run=gpg,gpgv tests/source-signatures.test.ts && deno run --allow-read --allow-write --allow-run=cmp,curl,diff,gpg,gpgv,mise scripts/sync-sources.ts check",
+    "test:bindings": "deno test --frozen --allow-read --allow-write --allow-run=castxml,clang,doxygen,zig tests/codegen",
+    "test:shaders": "deno test --frozen --allow-env=GLSLANG_VALIDATOR,SDL_SHADERCROSS,SDL_SHADER_DEVICE_LOADER,SDL_SHADER_OUTPUT_DIR --allow-read --allow-write --allow-run tests/shader-build.test.ts",
+    "test:coverage": "deno test --frozen tests/api-coverage.test.ts && deno run --allow-run=clang,doxygen --allow-read --allow-write scripts/api-coverage.ts check",
+    "test:docs": "deno test --frozen --allow-read --allow-write tests/documentation-publication.test.ts",
+    "test:zig-version": "deno test --frozen --allow-read --allow-run=zig tests/zig-version-contract.test.ts",
+    "test:build": "deno test --frozen --allow-read --allow-write --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig tests/package-release.test.ts tests/third-party-notices.test.ts tests/build/allocator_bridge.test.ts tests/build/linux.test.ts tests/build/macos.test.ts",
+    "test:emscripten": "deno test --frozen --allow-env --allow-read --allow-write --allow-run=emcc,node,zig tests/build/emscripten.test.ts",
+    "test:android": "deno test --frozen --allow-env --allow-read --allow-write --allow-run tests/build/android.test.ts",
+    "test:apple-mobile": "deno test --frozen --allow-env --allow-read --allow-write --allow-run=7zz,codesign,mise,xcrun,zig tests/build/apple-mobile.test.ts",
+    "test:macos-build": "deno test --frozen --allow-read --allow-write --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig tests/package-release.test.ts tests/third-party-notices.test.ts tests/build/macos.test.ts",
     "test:windows-build": "deno test --frozen --allow-read --allow-write --allow-run=cmake,mise,7zz,zig,cmd tests/build/windows.test.ts",
     "generate": {
       "dependencies": ["generate:metadata", "generate:bindings"]
@@ -44,11 +57,14 @@
         "test:metadata",
         "test:sources",
         "test:bindings",
+        "test:coverage",
+        "test:docs",
+        "test:zig-version",
         "test:build"
       ]
     },
     "release-check": {
-      "dependencies": ["check", "docs"]
+      "dependencies": ["check", "docs", "test:release-archive"]
     }
   }
 }

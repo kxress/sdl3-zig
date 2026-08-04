@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "shaders": [
+    {
+      "name": "glsl_vertex",
+      "input": "glsl_vertex.glsl",
+      "language": "glsl",
+      "stage": "vertex"
+    },
+    {
+      "name": "hlsl_vertex",
+      "input": "hlsl_vertex.hlsl",
+      "language": "hlsl",
+      "stage": "vertex"
+    },
+    {
+      "name": "zig_vertex",
+      "input": "zig_vertex.zig",
+      "language": "zig",
+      "source_language": "hlsl",
+      "stage": "vertex"
+    },
+    {
+      "name": "glsl_compute",
+      "input": "glsl_compute.glsl",
+      "language": "glsl",
+      "stage": "compute"
+    },
+    {
+      "name": "hlsl_compute",
+      "input": "hlsl_compute.hlsl",
+      "language": "hlsl",
+      "stage": "compute"
+    },
+    {
+      "name": "zig_compute",
+      "input": "zig_compute.zig",
+      "language": "zig",
+      "source_language": "hlsl",
+      "stage": "compute"
+    }
+  ]
+}

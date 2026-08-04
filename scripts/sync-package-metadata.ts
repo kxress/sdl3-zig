@@ -12,6 +12,7 @@ import {
   type SdlRelease,
   windowsOptionalArchitectures,
 } from "./sdl-release.ts";
+import { distributionPolicy, prebuiltTargets } from "./distribution-policy.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 
 const root = repositoryRoot;
@@ -68,6 +69,8 @@ function renderSdlMetadata(
     `        .dependencies = ${renderStrings(binding.profile.dependencies)},`,
     `        .library_name = ${quote(component.libraryName ?? component.id)},`,
     `        .framework_name = ${quote(component.id)},`,
+    `        .pkg_config_name = ${quote(component.pkgConfigName)},`,
+    `        .minimum_version = ${quote(component.version)},`,
     `        .prebuilt = ${component.prebuilt},`,
     `        .source_build_directory = ${quote(component.sourceBuildDirectory ?? "")},`,
     `        .macos_optional_frameworks = ${
@@ -84,6 +87,27 @@ function renderSdlMetadata(
     "",
     "pub const translation_defines: []const []const u8 = " +
     renderStrings(bindings.defines) + ";",
+    "",
+    `pub const prebuilt_linkage: []const u8 = ${quote(distributionPolicy.prebuilt.linkage)};`,
+    "",
+    "pub const PrebuiltTarget = struct {",
+    "    os: []const u8,",
+    "    abi: []const u8,",
+    "    arch: []const u8,",
+    "    family: []const u8,",
+    "    package_family: []const u8,",
+    "    upstream_arch: []const u8,",
+    "};",
+    "",
+    "pub const prebuilt_targets = [_]PrebuiltTarget{",
+    ...prebuiltTargets.map((target) =>
+      `    .{ .os = ${quote(target.os)}, .abi = ${quote(target.abi ?? "")}, .arch = ${
+        quote(target.arch)
+      }, .family = ${quote(target.family)}, .package_family = ${
+        quote(target.packageFamily)
+      }, .upstream_arch = ${quote(target.upstreamArch)} },`
+    ),
+    "};",
     "",
     "pub const WindowsOptionalRuntime = struct {",
     "    mingw_architectures: []const []const u8,",
@@ -104,6 +128,8 @@ function renderSdlMetadata(
     "    dependencies: []const []const u8,",
     "    library_name: []const u8,",
     "    framework_name: []const u8,",
+    "    pkg_config_name: []const u8,",
+    "    minimum_version: []const u8,",
     "    prebuilt: bool,",
     "    source_build_directory: []const u8,",
     "    macos_optional_frameworks: []const []const u8,",

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_net_c");
+pub const c = @import("sdl3_net_c");
 const sdl = @import("sdl");
 const root = @This();
 
@@ -82,7 +82,7 @@ pub const DatagramSocket = struct {
     /// On a successful call to this function, it returns true, even if no new packets are available, so you should check for a successful return and a non-NULL value in `*dgram` to decide if a new packet is available.
     /// You must pass received packets to destroyDatagram when you are done with them. If you want to save the sender's address past this time, it is safe to call refAddress() on the address and hold onto the pointer, so long as you call unrefAddress() on it when you are done with it.
     /// Since datagrams can arrive from any address or port on the network without prior warning, this information is available in the Datagram object that is provided by this function, and this is the only way to know who to reply to. Even if you aren't acting as a "server," packets can still arrive at your socket if someone sends one.
-    /// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with DatagramSocket.deinit().
+    /// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with SDL_DestroyDatagramSocket (C API outside this module)().
     ///
     /// - **Parameters:**
     ///   - `dgram`: a pointer to the datagram packet pointer.
@@ -103,7 +103,7 @@ pub const DatagramSocket = struct {
     /// You can send to any address and port on the network, but there has to be a datagram socket waiting for the data on the other side for the packet not to be lost.
     /// General wisdom is that you shouldn't send a packet larger than 1500 bytes over the Internet, as bad routers might fragment or lose larger ones, but this limit is not hardcoded into SDL_net and in good conditions you might be able to send significantly more.
     /// This call never blocks; if it can't send the data immediately, the library will queue it for later transmission. There is no query to see what is still queued, as datagram transmission is unreliable, so you should never assume anything about queued data.
-    /// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with DatagramSocket.deinit().
+    /// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with SDL_DestroyDatagramSocket (C API outside this module)().
     /// Sending to a NULL address is treated as a request to broadcast a packet. Note that this will report failure immediately if the socket was not created with broadcast permission. Broadcast packets are (more or less) sent to every machine on the LAN, unconditionally.
     /// **WARNING**: It is possible to build a game where everyone is playing on the same LAN, and every player is simply broadcasting packets. This is absolutely the wrong thing to do, however. Broadcast packets go to every device on the LAN, whether they want them or not. The game DOOM, in its heyday, was capable of [bringing entire networks to their knees](https://doomwiki.org/wiki/Doom_in_workplaces) , as many players on the same network would all be broadcasting relentlessly.
     /// In practice, broadcasting sparingly can be useful for certain functionality: a LAN-only client broadcasting a few packets to ask for available servers, and running servers replying directly to that client without broadcasting at all, is reasonable and safe. Once clients and servers have found each other, they can communicate directly without any broadcasting at all. For peer-to-peer games, once connection is established, it's better to either send unique packets to each known player, or use a multicasting (which works like broadcast, but only routes packets to devices that are explicitly listening for it).
@@ -735,7 +735,7 @@ pub inline fn readFromStreamSocket(sock: ?StreamSocket, buf: []u8) sdl.Error!c_i
 /// On a successful call to this function, it returns true, even if no new packets are available, so you should check for a successful return and a non-NULL value in `*dgram` to decide if a new packet is available.
 /// You must pass received packets to destroyDatagram when you are done with them. If you want to save the sender's address past this time, it is safe to call refAddress() on the address and hold onto the pointer, so long as you call unrefAddress() on it when you are done with it.
 /// Since datagrams can arrive from any address or port on the network without prior warning, this information is available in the Datagram object that is provided by this function, and this is the only way to know who to reply to. Even if you aren't acting as a "server," packets can still arrive at your socket if someone sends one.
-/// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with DatagramSocket.deinit().
+/// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with SDL_DestroyDatagramSocket (C API outside this module)().
 ///
 /// - **Parameters:**
 ///   - `sock`: the datagram socket to send data through.
@@ -802,7 +802,7 @@ pub inline fn resolveHostname(host: ?[:0]const u8) ?*Address {
 /// You can send to any address and port on the network, but there has to be a datagram socket waiting for the data on the other side for the packet not to be lost.
 /// General wisdom is that you shouldn't send a packet larger than 1500 bytes over the Internet, as bad routers might fragment or lose larger ones, but this limit is not hardcoded into SDL_net and in good conditions you might be able to send significantly more.
 /// This call never blocks; if it can't send the data immediately, the library will queue it for later transmission. There is no query to see what is still queued, as datagram transmission is unreliable, so you should never assume anything about queued data.
-/// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with DatagramSocket.deinit().
+/// If there's a fatal error, this function will return false. Datagram sockets generally won't report failures, because there is no state like a "connection" to fail at this level, but may report failure for unrecoverable system-level conditions; once a datagram socket fails, you should assume it is no longer usable and should destroy it with SDL_DestroyDatagramSocket (C API outside this module)().
 /// Sending to a NULL address is treated as a request to broadcast a packet. Note that this will report failure immediately if the socket was not created with broadcast permission. Broadcast packets are (more or less) sent to every machine on the LAN, unconditionally.
 /// **WARNING**: It is possible to build a game where everyone is playing on the same LAN, and every player is simply broadcasting packets. This is absolutely the wrong thing to do, however. Broadcast packets go to every device on the LAN, whether they want them or not. The game DOOM, in its heyday, was capable of [bringing entire networks to their knees](https://doomwiki.org/wiki/Doom_in_workplaces) , as many players on the same network would all be broadcasting relentlessly.
 /// In practice, broadcasting sparingly can be useful for certain functionality: a LAN-only client broadcasting a few packets to ask for available servers, and running servers replying directly to that client without broadcasting at all, is reasonable and safe. Once clients and servers have found each other, they can communicate directly without any broadcasting at all. For peer-to-peer games, once connection is established, it's better to either send unique packets to each known player, or use a multicasting (which works like broadcast, but only routes packets to devices that are explicitly listening for it).
@@ -1017,4 +1017,302 @@ pub inline fn waitUntilStreamSocketDrained(sock: ?StreamSocket, timeout: i32) sd
 /// - **See also:** StreamSocket.readFrom
 pub inline fn writeToStreamSocket(sock: ?StreamSocket, buf: []const u8) bool {
     return c.NET_WriteToStreamSocket(if (sock) |resource| @ptrCast(resource.value) else null, @ptrCast(buf.ptr), @intCast(buf.len));
+}
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.Address;
+        _ = root.Datagram;
+        _ = root.DatagramSocket;
+        _ = root.Server;
+        _ = root.Status;
+        _ = root.StreamSocket;
+        _ = root.acceptClient;
+        _ = root.compareAddresses;
+        _ = root.createClient;
+        _ = root.createDatagramSocket;
+        _ = root.createServer;
+        _ = root.destroyDatagram;
+        _ = root.freeLocalAddresses;
+        _ = root.getAddressBytes;
+        _ = root.getAddressStatus;
+        _ = root.getAddressString;
+        _ = root.getConnectionStatus;
+        _ = root.getLocalAddresses;
+        _ = root.getStreamSocketAddress;
+        _ = root.getStreamSocketPendingWrites;
+        _ = root.init;
+        _ = root.prop_datagram_socket_allow_broadcast_boolean;
+        _ = root.prop_datagram_socket_reuseaddr_boolean;
+        _ = root.prop_server_reuseaddr_boolean;
+        _ = root.quit;
+        _ = root.readFromStreamSocket;
+        _ = root.receiveDatagram;
+        _ = root.refAddress;
+        _ = root.resolveHostname;
+        _ = root.sendDatagram;
+        _ = root.simulateAddressResolutionLoss;
+        _ = root.simulateDatagramPacketLoss;
+        _ = root.simulateStreamPacketLoss;
+        _ = root.unrefAddress;
+        _ = root.version;
+        _ = root.waitUntilConnected;
+        _ = root.waitUntilInputAvailable;
+        _ = root.waitUntilResolved;
+        _ = root.waitUntilStreamSocketDrained;
+        _ = root.writeToStreamSocket;
+    }
 }

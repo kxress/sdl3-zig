@@ -52,3 +52,27 @@ Deno.test("function plans prioritize structured output results over lower-level 
   });
   assertEquals(plan.hiddenParameterIndexes, [2, 1]);
 });
+
+Deno.test("function plans preserve ownership before applying slice ergonomics", () => {
+  const plan = createFunctionPlan(facts({
+    arguments: [{ name: "count", type: "usize" }],
+    ownedArray: {
+      kind: "resources",
+      countIndex: 0,
+      elementId: "handle",
+      resourceName: "Handle",
+    },
+    borrowedSlice: { countIndex: 0, elementType: "Handle" },
+  }));
+
+  assertEquals(plan.transformation, {
+    kind: "owned_slice",
+    info: {
+      kind: "resources",
+      countIndex: 0,
+      elementId: "handle",
+      resourceName: "Handle",
+    },
+  });
+  assertEquals(plan.hiddenParameterIndexes, [0]);
+});

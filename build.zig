@@ -1,10 +1,21 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const sdl_metadata = @import("sdl_metadata.zig");
 const example_build = @import("examples/build.zig");
 
+const supported_zig_version = .{ .major = 0, .minor = 16, .patch = 0 };
+
+fn requireSupportedZigVersion() void {
+    const version = builtin.zig_version;
+    if (version.major != supported_zig_version.major or
+        version.minor != supported_zig_version.minor or
+        version.patch != supported_zig_version.patch)
+    {
+        @panic("SDL3 requires exactly Zig 0.16.0; newer Zig versions are unsupported");
+    }
+}
+
 pub const Distribution = enum {
-    /// Select package-local prebuilts on Windows/macOS and system SDL elsewhere.
-    auto,
     /// Import bindings without selecting or linking an SDL implementation.
     none,
     /// Link SDL libraries supplied by the system or consumer.
@@ -20,11 +31,78 @@ pub const Linkage = enum { static, shared };
 /// Selects how a source SDL_shadercross build enables its optional DXC support.
 pub const ShadercrossDxc = enum { disabled, bundled, external, source };
 
+/// Selects the baseline for SDL's optional core subsystems in a source build.
+///
+/// `headless` keeps source builds independent of host audio and display SDKs. `desktop` enables
+/// SDL's audio, video, GPU, renderer, and camera subsystems; platform-specific CMake checks still
+/// decide which concrete drivers are available.
+pub const SourceFeatureProfile = enum { headless, desktop };
+
+/// A shared runtime emitted by a source distribution.
+pub const SourceRuntime = enum {
+    sdl,
+    shadercross,
+    image,
+    ttf,
+    mixer,
+    net,
+    shadercross_dxc_dxcompiler,
+    shadercross_dxc_dxil,
+};
+
+/// Returns the exact staged runtime artifact for a selected shared source component.
+///
+/// The artifact is available after the source dependency's install step. This is useful when a
+/// consumer owns a custom packaging step instead of using `install_runtime`.
+pub fn sourceRuntimeArtifact(
+    b: *std.Build,
+    dependency: *std.Build.Dependency,
+    runtime: SourceRuntime,
+) std.Build.LazyPath {
+    return dependency.namedLazyPath(b.fmt("source-runtime-{s}", .{@tagName(runtime)}));
+}
+
+/// Returns the generated standard ControllerImage database for a source distribution.
+pub fn sourceControllerImageDataArtifact(
+    b: *std.Build,
+    dependency: *std.Build.Dependency,
+) std.Build.LazyPath {
+    _ = b;
+    return dependency.namedLazyPath("source-controller-image-data");
+}
+
+pub const SourceFeatureOptions = struct {
+    profile: SourceFeatureProfile = .headless,
+    audio: ?bool = null,
+    video: ?bool = null,
+    gpu: ?bool = null,
+    renderer: ?bool = null,
+    camera: ?bool = null,
+
+    fn enabled(self: @This(), feature: Feature) bool {
+        const override = switch (feature) {
+            .audio => self.audio,
+            .video => self.video,
+            .gpu => self.gpu,
+            .renderer => self.renderer,
+            .camera => self.camera,
+        };
+        return override orelse switch (self.profile) {
+            .headless => false,
+            .desktop => true,
+        };
+    }
+
+    const Feature = enum { audio, video, gpu, renderer, camera };
+};
+
 pub const AddOptions = struct {
-    distribution: Distribution = .auto,
+    /// Select the native library distribution explicitly for this consumer.
+    distribution: Distribution,
     linkage: Linkage = .shared,
     sdl3_test: bool = false,
     controller_image: bool = false,
+    install_controller_image_data: bool = false,
     shadercross: bool = false,
     image: bool = false,
     ttf: bool = false,
@@ -32,8 +110,17 @@ pub const AddOptions = struct {
     net: bool = false,
     optional_codecs: bool = false,
     install_runtime: bool = true,
+    /// Component=version entries used when pkg-config cannot discover a system version.
+    system_version_overrides: []const []const u8 = &.{},
+    /// Permit caller-supplied system libraries without discoverable pkg-config metadata.
+    allow_unknown_system_versions: bool = false,
     source_cmake_generator: ?[]const u8 = null,
     source_cmake_toolchain: ?[]const u8 = null,
+    /// Emscripten sysroot containing the C headers required by Zig translate-c.
+    emscripten_sysroot: ?[]const u8 = null,
+    /// Android NDK root containing the sysroot required by Zig translate-c.
+    android_ndk_root: ?[]const u8 = null,
+    source_features: SourceFeatureOptions = .{},
     source_cmake_options: []const []const u8 = &.{},
     /// Additional arguments passed only to the SDL3_mixer source CMake configure step.
     source_mixer_cmake_options: []const []const u8 = &.{},
@@ -72,16 +159,40 @@ pub fn addTo(
         .link_mixer = options.mixer,
         .link_net = options.net,
         .optional_codecs = options.optional_codecs,
+        .system_version_overrides = options.system_version_overrides,
+        .allow_unknown_system_versions = options.allow_unknown_system_versions,
         .source_cmake_generator = options.source_cmake_generator,
         .source_cmake_toolchain = options.source_cmake_toolchain,
+        .emscripten_sysroot = options.emscripten_sysroot,
+        .android_ndk_root = options.android_ndk_root,
+        .source_feature_profile = options.source_features.profile,
+        .source_audio = options.source_features.audio,
+        .source_video = options.source_features.video,
+        .source_gpu = options.source_features.gpu,
+        .source_renderer = options.source_features.renderer,
+        .source_camera = options.source_features.camera,
         .source_cmake_options = options.source_cmake_options,
         .source_mixer_cmake_options = options.source_mixer_cmake_options,
         .shadercross_dxc = options.shadercross_dxc,
         .shadercross_dxc_root = options.shadercross_dxc_root,
     });
 
-    if (resolveDistribution(options.distribution, target) == .source) {
+    if (options.distribution == .source) {
         artifact.step.dependOn(dependency.builder.getInstallStep());
+        const install_source_runtime = options.install_runtime and
+            (options.linkage == .shared or
+                (options.shadercross and options.shadercross_dxc != .disabled));
+        if (install_source_runtime) {
+            if (target.result.os.tag == .linux) {
+                artifact.root_module.addRPathSpecial("$ORIGIN/../lib");
+            } else if (target.result.os.tag == .macos) {
+                artifact.root_module.addRPathSpecial("@executable_path/../lib");
+            }
+            installSourceRuntime(b, dependency, target);
+        }
+        if (options.controller_image and options.install_controller_image_data) {
+            installSourceControllerImageData(b, dependency);
+        }
     }
 
     artifact.root_module.addImport("sdl", dependency.module("sdl"));
@@ -94,7 +205,7 @@ pub fn addTo(
     if (options.mixer) artifact.root_module.addImport("mixer", dependency.module("mixer"));
     if (options.net) artifact.root_module.addImport("net", dependency.module("net"));
 
-    if (resolveDistribution(options.distribution, target) == .prebuilt) {
+    if (options.distribution == .prebuilt) {
         if (target.result.os.tag == .macos) {
             artifact.root_module.addRPathSpecial("@executable_path/../lib");
         }
@@ -117,6 +228,8 @@ const LinkOptions = struct {
     ttf: bool = false,
     mixer: bool = false,
     net: bool = false,
+    system_version_overrides: []const []const u8 = &.{},
+    allow_unknown_system_versions: bool = false,
 };
 
 const SourceBuild = struct {
@@ -145,6 +258,87 @@ fn linkOptionEnabled(configuration: sdl_metadata.Library, options: LinkOptions) 
     std.debug.panic("library configuration has unsupported module '{s}'", .{configuration.module_name});
 }
 
+fn verifySystemVersion(
+    b: *std.Build,
+    configuration: sdl_metadata.Library,
+    options: LinkOptions,
+) void {
+    const override = findSystemVersionOverride(configuration, options.system_version_overrides);
+    const discovered = if (override == null)
+        discoverPkgConfigVersion(b, configuration.pkg_config_name)
+    else
+        null;
+    const actual = override orelse discovered orelse {
+        if (options.allow_unknown_system_versions) return;
+        std.debug.panic(
+            "system SDL library {s} has no discoverable pkg-config version; pass {s}=<version> or -Dallow_unknown_system_versions=true",
+            .{
+                configuration.id,
+                configuration.module_name,
+            },
+        );
+    };
+    if (!versionAtLeast(actual, configuration.minimum_version)) {
+        std.debug.panic(
+            "system SDL library {s} version {s} is older than the required {s}",
+            .{ configuration.id, actual, configuration.minimum_version },
+        );
+    }
+}
+
+fn findSystemVersionOverride(
+    configuration: sdl_metadata.Library,
+    overrides: []const []const u8,
+) ?[]const u8 {
+    for (overrides) |entry| {
+        const separator = std.mem.indexOfScalar(u8, entry, '=') orelse continue;
+        const name = entry[0..separator];
+        if (std.mem.eql(u8, name, configuration.key) or
+            std.mem.eql(u8, name, configuration.id) or
+            std.mem.eql(u8, name, configuration.module_name))
+        {
+            return entry[separator + 1 ..];
+        }
+    }
+    return null;
+}
+
+fn discoverPkgConfigVersion(
+    b: *std.Build,
+    name: []const u8,
+) ?[]const u8 {
+    const result = std.process.run(b.allocator, b.graph.io, .{
+        .argv = &.{ "pkg-config", "--modversion", name },
+    }) catch return null;
+    const exit_code = switch (result.term) {
+        .exited => |code| code,
+        else => return null,
+    };
+    if (exit_code != 0) return null;
+    return std.mem.trim(u8, result.stdout, " \t\r\n");
+}
+
+fn versionAtLeast(actual: []const u8, minimum: []const u8) bool {
+    const actualParts = versionParts(actual) orelse return false;
+    const minimumParts = versionParts(minimum) orelse return false;
+    for (actualParts, minimumParts) |actualPart, minimumPart| {
+        if (actualPart > minimumPart) return true;
+        if (actualPart < minimumPart) return false;
+    }
+    return true;
+}
+
+fn versionParts(value: []const u8) ?[3]u32 {
+    var parts: [3]u32 = undefined;
+    var iterator = std.mem.splitScalar(u8, value, '.');
+    for (&parts) |*part| {
+        const text = iterator.next() orelse return null;
+        const end = std.mem.indexOfScalar(u8, text, '-') orelse text.len;
+        part.* = std.fmt.parseUnsigned(u32, text[0..end], 10) catch return null;
+    }
+    return parts;
+}
+
 fn addLibraryModules(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -153,6 +347,8 @@ fn addLibraryModules(
     distribution: Distribution,
     link_options: LinkOptions,
     linkage: Linkage,
+    emscripten_sysroot: ?[]const u8,
+    android_ndk_root: ?[]const u8,
     configurations: []const sdl_metadata.Library,
     source_build: ?SourceBuild,
 ) []BuiltLibrary {
@@ -163,15 +359,26 @@ fn addLibraryModules(
             b.fmt("{s}.h", .{configuration.module_name}),
             configuration.translation_unit,
         );
+        const translation_target = if (isAndroidTarget(target))
+            b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu })
+        else
+            target;
         const translate_c = b.addTranslateC(.{
             .root_source_file = translation_unit,
-            .target = target,
+            .target = translation_target,
             .optimize = optimize,
         });
         for (sdl_metadata.translation_defines) |definition| {
             translate_c.defineCMacroRaw(definition);
         }
         addTranslateCTargetDefines(translate_c, target);
+        if (target.result.os.tag == .emscripten) {
+            const sysroot = emscripten_sysroot orelse
+                @panic("wasm32-emscripten requires -Demscripten_sysroot=<emsdk sysroot>");
+            translate_c.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sysroot, "include" }) });
+        }
+        if (isAndroidTarget(target) and android_ndk_root == null)
+            @panic("Android targets require -Dandroid_ndk_root=<NDK root>");
         for (configuration.include_directories) |include_directory| {
             translate_c.addIncludePath(b.path(include_directory));
         }
@@ -187,7 +394,18 @@ fn addLibraryModules(
             .optimize = optimize,
             .imports = imports.items,
         });
+        if (target.result.os.tag == .emscripten) {
+            const sysroot = emscripten_sysroot orelse
+                @panic("wasm32-emscripten requires -Demscripten_sysroot=<emsdk sysroot>");
+            module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{
+                sysroot,
+                "lib",
+                "wasm32-emscripten",
+            }) });
+            module.linkSystemLibrary("dlmalloc", .{});
+        }
         if (distribution == .system and linkOptionEnabled(configuration.*, link_options)) {
+            verifySystemVersion(b, configuration.*, link_options);
             module.linkSystemLibrary(configuration.library_name, .{
                 .preferred_link_mode = switch (linkage) {
                     .static => .static,
@@ -224,7 +442,7 @@ fn addLibraryModules(
                             "SDL3_shadercross-source",
                             "external",
                             "DirectXShaderCompiler-binaries",
-                            if (target.result.os.tag == .windows) "windows/lib/x64" else "linux/lib",
+                            dxcLibrarySubdirectory(target, source.shadercross_dxc),
                         },
                     ) catch @panic("OOM");
                     module.addLibraryPath(.{ .cwd_relative = dxc_library_path });
@@ -240,6 +458,7 @@ fn addLibraryModules(
 }
 
 pub fn build(b: *std.Build) void {
+    requireSupportedZigVersion();
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const link_sdl = b.option(
@@ -282,16 +501,22 @@ pub fn build(b: *std.Build) void {
         "link_net",
         "Propagate a system SDL3_net link dependency through the net module",
     ) orelse false;
+    const system_version_overrides = b.option(
+        []const []const u8,
+        "system_version_overrides",
+        "Component=version overrides for system SDL libraries",
+    ) orelse &.{};
+    const allow_unknown_system_versions = b.option(
+        bool,
+        "allow_unknown_system_versions",
+        "Allow system SDL libraries without discoverable pkg-config versions",
+    ) orelse false;
     const effective_link_sdl = link_sdl or link_test or link_controller_image or link_shadercross or link_image or link_ttf or link_mixer or link_net;
-    const requested_distribution: Distribution = b.option(
+    const distribution = b.option(
         Distribution,
         "distribution",
-        "SDL library distribution: auto, none, system, prebuilt, or source",
-    ) orelse if (effective_link_sdl or link_image or link_ttf or link_mixer or link_net)
-        .system
-    else
-        .none;
-    const distribution = resolveDistribution(requested_distribution, target);
+        "SDL library distribution: none, system, prebuilt, or source",
+    ) orelse .none;
     const optional_codecs = b.option(
         bool,
         "optional_codecs",
@@ -300,6 +525,26 @@ pub fn build(b: *std.Build) void {
     const linkage = b.option(Linkage, "linkage", "SDL library linkage") orelse .shared;
     const source_cmake_generator = b.option([]const u8, "source_cmake_generator", "CMake generator") orelse null;
     const source_cmake_toolchain = b.option([]const u8, "source_cmake_toolchain", "CMake toolchain file") orelse null;
+    const emscripten_sysroot = b.option(
+        []const u8,
+        "emscripten_sysroot",
+        "Emscripten sysroot containing libc headers for wasm32-emscripten",
+    ) orelse null;
+    const android_ndk_root = b.option(
+        []const u8,
+        "android_ndk_root",
+        "Android NDK root containing the sysroot for Android targets",
+    ) orelse null;
+    const source_feature_profile = b.option(
+        SourceFeatureProfile,
+        "source_feature_profile",
+        "Source SDL core feature profile: headless or desktop",
+    ) orelse .headless;
+    const source_audio = b.option(bool, "source_audio", "Enable SDL audio in source builds");
+    const source_video = b.option(bool, "source_video", "Enable SDL video in source builds");
+    const source_gpu = b.option(bool, "source_gpu", "Enable SDL GPU in source builds");
+    const source_renderer = b.option(bool, "source_renderer", "Enable SDL renderer in source builds");
+    const source_camera = b.option(bool, "source_camera", "Enable SDL camera in source builds");
     const source_cmake_options = b.option(
         []const []const u8,
         "source_cmake_options",
@@ -370,6 +615,8 @@ pub fn build(b: *std.Build) void {
         .ttf = link_ttf,
         .mixer = link_mixer,
         .net = link_net,
+        .system_version_overrides = system_version_overrides,
+        .allow_unknown_system_versions = allow_unknown_system_versions,
     };
     const source_build = if (distribution == .source)
         addCmakeSourceBuild(
@@ -379,6 +626,14 @@ pub fn build(b: *std.Build) void {
             linkage,
             source_cmake_generator,
             source_cmake_toolchain,
+            .{
+                .profile = source_feature_profile,
+                .audio = source_audio,
+                .video = source_video,
+                .gpu = source_gpu,
+                .renderer = source_renderer,
+                .camera = source_camera,
+            },
             source_cmake_options,
             source_mixer_cmake_options,
             shadercross_dxc,
@@ -394,6 +649,8 @@ pub fn build(b: *std.Build) void {
         distribution,
         link_options,
         linkage,
+        emscripten_sysroot,
+        android_ndk_root,
         &sdl_metadata.libraries,
         source_build,
     );
@@ -512,6 +769,7 @@ fn addCmakeSourceBuild(
     linkage: Linkage,
     generator: ?[]const u8,
     toolchain: ?[]const u8,
+    source_features: SourceFeatureOptions,
     extra_options: []const []const u8,
     mixer_options: []const []const u8,
     shadercross_dxc: ShadercrossDxc,
@@ -520,9 +778,35 @@ fn addCmakeSourceBuild(
     const shared = linkage == .shared;
     const shared_value = if (shared) "ON" else "OFF";
     const static_value = if (shared) "OFF" else "ON";
+    const shadercross_uses_external_dxc = shadercross_dxc == .bundled or shadercross_dxc == .external;
+    const dxc_runtime_selected = link_options.shadercross and shadercross_uses_external_dxc;
+    if (dxc_runtime_selected) validateShadercrossDxcTarget(target);
     const package_root = b.build_root.path orelse ".";
     const prefix = b.cache_root.join(b.allocator, &.{"sdl3-source"}) catch @panic("OOM");
-    const shadercross_uses_external_dxc = shadercross_dxc == .bundled or shadercross_dxc == .external;
+    if (linkage == .shared or dxc_runtime_selected) {
+        const runtime_directory = b.cache_root.join(
+            b.allocator,
+            &.{"sdl3-source-runtimes"},
+        ) catch @panic("OOM");
+        b.addNamedLazyPath(
+            "source-runtime-directory",
+            .{ .cwd_relative = runtime_directory },
+        );
+    }
+    if (link_options.controller_image) {
+        const data_directory = b.cache_root.join(
+            b.allocator,
+            &.{"sdl3-source-controllerimage-data"},
+        ) catch @panic("OOM");
+        b.addNamedLazyPath(
+            "source-controller-image-data-directory",
+            .{ .cwd_relative = data_directory },
+        );
+        b.addNamedLazyPath(
+            "source-controller-image-data",
+            .{ .cwd_relative = b.fmt("{s}/controllerimage-standard.bin", .{data_directory}) },
+        );
+    }
     var previous: ?*std.Build.Step = null;
     for ([_][]const u8{ "SDL3", "ControllerImage", "SDL3_shadercross", "SDL3_image", "SDL3_ttf", "SDL3_mixer", "SDL3_net" }) |component| {
         const selected = if (std.mem.eql(u8, component, "SDL3")) link_options.sdl else if (std.mem.eql(u8, component, "ControllerImage")) link_options.controller_image else if (std.mem.eql(u8, component, "SDL3_shadercross")) link_options.shadercross else if (std.mem.eql(u8, component, "SDL3_image")) link_options.image else if (std.mem.eql(u8, component, "SDL3_ttf")) link_options.ttf else if (std.mem.eql(u8, component, "SDL3_mixer")) link_options.mixer else link_options.net;
@@ -538,6 +822,10 @@ fn addCmakeSourceBuild(
         ) catch @panic("OOM");
         var source_path = std.fs.path.join(b.allocator, &.{ package_root, "vendor", component }) catch @panic("OOM");
         var shadercross_runtime: ?*std.Build.Step = null;
+        var source_runtime_stage: ?struct {
+            source: []const u8,
+            destination: []const u8,
+        } = null;
         if (std.mem.eql(u8, component, "SDL3_shadercross") and shadercross_uses_external_dxc) {
             const staged_source = b.cache_root.join(
                 b.allocator,
@@ -574,6 +862,35 @@ fn addCmakeSourceBuild(
                 shadercross_runtime = &stage_runtime.step;
             }
         }
+        if (linkage == .shared and sourceRuntimeSelected(component, link_options)) {
+            const library_name = sourceRuntimeLibraryName(component);
+            const runtime_directory = if (target.result.os.tag == .windows) "bin" else "lib";
+            const source_runtime_filename = if (target.result.os.tag == .windows)
+                b.fmt("{s}.dll", .{library_name})
+            else if (target.result.os.tag == .macos)
+                b.fmt("lib{s}.dylib", .{library_name})
+            else
+                b.fmt("lib{s}.so", .{library_name});
+            const runtime_filename = if (target.result.os.tag == .windows)
+                source_runtime_filename
+            else if (target.result.os.tag == .macos)
+                b.fmt("lib{s}.dylib", .{library_name})
+            else
+                b.fmt("lib{s}.so.0", .{library_name});
+            const source_runtime_path = b.fmt("{s}/{s}/{s}", .{ prefix, runtime_directory, source_runtime_filename });
+            const staged_runtime_path = b.cache_root.join(
+                b.allocator,
+                &.{ "sdl3-source-runtimes", runtime_filename },
+            ) catch @panic("OOM");
+            source_runtime_stage = .{
+                .source = source_runtime_path,
+                .destination = staged_runtime_path,
+            };
+            b.addNamedLazyPath(
+                b.fmt("source-runtime-{s}", .{sourceRuntimeKey(component)}),
+                .{ .cwd_relative = staged_runtime_path },
+            );
+        }
         if (std.mem.eql(u8, component, "SDL3_shadercross") and shadercross_uses_external_dxc) {
             const spirv_cross_source = std.fs.path.join(
                 b.allocator,
@@ -600,6 +917,7 @@ fn addCmakeSourceBuild(
             if (toolchain) |value| configure_spirv_cross.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
             configure_spirv_cross.addArgs(extra_options);
             if (previous) |step| configure_spirv_cross.step.dependOn(step);
+            if (shadercross_runtime) |step| configure_spirv_cross.step.dependOn(step);
             const install_spirv_cross = b.addSystemCommand(
                 &.{ "cmake", "--build", spirv_cross_build, "--target", "install" },
             );
@@ -619,6 +937,7 @@ fn addCmakeSourceBuild(
             link_options.test_,
             target,
             shadercross_dxc,
+            source_features,
         );
         if (generator) |value| configure.addArgs(&.{ "-G", value });
         if (toolchain) |value| configure.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
@@ -631,7 +950,78 @@ fn addCmakeSourceBuild(
         else
             &.{ "cmake", "--build", component_build, "--target", "install" });
         install.step.dependOn(&configure.step);
-        previous = &install.step;
+        var component_last_step: ?*std.Build.Step = null;
+        if (source_runtime_stage) |stage| {
+            const runtime_directory = std.fs.path.dirname(stage.destination) orelse @panic("source runtime has no parent directory");
+            const make_runtime_directory = b.addSystemCommand(&.{ "cmake", "-E", "make_directory", runtime_directory });
+            const stage_runtime = b.addSystemCommand(&.{ "cmake", "-E", "copy", stage.source, stage.destination });
+            stage_runtime.step.dependOn(&install.step);
+            stage_runtime.step.dependOn(&make_runtime_directory.step);
+            component_last_step = &stage_runtime.step;
+        }
+        if (dxc_runtime_selected and std.mem.eql(u8, component, "SDL3_shadercross")) {
+            const runtime_directory = b.cache_root.join(
+                b.allocator,
+                &.{"sdl3-source-runtimes"},
+            ) catch @panic("OOM");
+            const make_runtime_directory = b.addSystemCommand(&.{ "cmake", "-E", "make_directory", runtime_directory });
+            const dxc_root = b.pathJoin(&.{ source_path, "external", "DirectXShaderCompiler-binaries" });
+            const dxc_files = [_]struct {
+                name: []const u8,
+                source_subpath: []const u8,
+                artifact_key: []const u8,
+            }{
+                .{ .name = dxcRuntimeName(target, .dxcompiler), .source_subpath = dxcRuntimeSourceSubpath(target, .dxcompiler, shadercross_dxc), .artifact_key = "dxc_dxcompiler" },
+                .{ .name = dxcRuntimeName(target, .dxil), .source_subpath = dxcRuntimeSourceSubpath(target, .dxil, shadercross_dxc), .artifact_key = "dxc_dxil" },
+            };
+            for (dxc_files) |file| {
+                const source = b.pathJoin(&.{ dxc_root, file.source_subpath });
+                const destination = b.pathJoin(&.{ runtime_directory, file.name });
+                const stage_runtime = b.addSystemCommand(&.{ "cmake", "-E", "copy", source, destination });
+                stage_runtime.step.dependOn(&install.step);
+                if (shadercross_runtime) |step| stage_runtime.step.dependOn(step);
+                stage_runtime.step.dependOn(&make_runtime_directory.step);
+                if (component_last_step) |step| stage_runtime.step.dependOn(step);
+                component_last_step = &stage_runtime.step;
+                b.addNamedLazyPath(
+                    b.fmt("source-runtime-{s}", .{file.artifact_key}),
+                    .{ .cwd_relative = destination },
+                );
+            }
+        }
+        if (component_last_step) |step| {
+            previous = step;
+        } else if (std.mem.eql(u8, component, "ControllerImage")) {
+            const data_directory = b.cache_root.join(
+                b.allocator,
+                &.{"sdl3-source-controllerimage-data"},
+            ) catch @panic("OOM");
+            const make_data_directory = b.addSystemCommand(&.{ "cmake", "-E", "make_directory", data_directory });
+            const generator_name = if (target.result.os.tag == .windows) "make-controllerimage-data.exe" else "make-controllerimage-data";
+            const command_cwd = std.Io.Dir.cwd().realPathFileAlloc(b.graph.io, ".", b.allocator) catch
+                @panic("unable to resolve source build working directory");
+            const generator_path = if (std.fs.path.isAbsolute(component_build))
+                b.pathJoin(&.{ component_build, generator_name })
+            else
+                std.fs.path.join(b.allocator, &.{ command_cwd, component_build, generator_name }) catch @panic("OOM");
+            const absolute_data_directory = if (std.fs.path.isAbsolute(data_directory))
+                data_directory
+            else
+                std.fs.path.join(b.allocator, &.{ command_cwd, data_directory }) catch @panic("OOM");
+            const generate_data = b.addSystemCommand(&.{
+                "cmake",
+                "-E",
+                "chdir",
+                absolute_data_directory,
+                generator_path,
+            });
+            generate_data.addDirectoryArg(b.path("vendor/ControllerImage/art"));
+            generate_data.step.dependOn(&install.step);
+            generate_data.step.dependOn(&make_data_directory.step);
+            previous = &generate_data.step;
+        } else {
+            previous = &install.step;
+        }
     }
     return .{
         .prefix = prefix,
@@ -639,6 +1029,126 @@ fn addCmakeSourceBuild(
         .linkage = linkage,
         .shadercross_dxc = shadercross_dxc,
     };
+}
+
+const DxcRuntime = enum { dxcompiler, dxil };
+
+fn validateShadercrossDxcTarget(target: std.Build.ResolvedTarget) void {
+    switch (target.result.os.tag) {
+        .linux => if (target.result.cpu.arch != .x86_64) {
+            @panic("bundled or external shadercross DXC supports only x86_64 Linux targets");
+        },
+        .windows => switch (target.result.cpu.arch) {
+            .x86, .x86_64, .aarch64 => {},
+            else => @panic("bundled or external shadercross DXC supports only x86, x86_64, or aarch64 Windows targets"),
+        },
+        else => @panic("bundled or external shadercross DXC supports only Linux and Windows targets"),
+    }
+}
+
+fn dxcLibrarySubdirectory(target: std.Build.ResolvedTarget, mode: ShadercrossDxc) []const u8 {
+    return switch (target.result.os.tag) {
+        .linux => if (mode == .bundled) "linux/lib" else "lib",
+        .windows => switch (target.result.cpu.arch) {
+            .x86 => if (mode == .bundled) "windows/lib/x86" else "lib/x86",
+            .x86_64 => if (mode == .bundled) "windows/lib/x64" else "lib/x64",
+            .aarch64 => if (mode == .bundled) "windows/lib/arm64" else "lib/arm64",
+            else => @panic("shadercross DXC has no Windows runtime for this architecture"),
+        },
+        else => @panic("shadercross DXC has no runtime library directory for this target"),
+    };
+}
+
+fn dxcRuntimeName(target: std.Build.ResolvedTarget, runtime: DxcRuntime) []const u8 {
+    return switch (runtime) {
+        .dxcompiler => if (target.result.os.tag == .windows) "dxcompiler.dll" else "libdxcompiler.so",
+        .dxil => if (target.result.os.tag == .windows) "dxil.dll" else "libdxil.so",
+    };
+}
+
+fn dxcRuntimeSourceSubpath(
+    target: std.Build.ResolvedTarget,
+    runtime: DxcRuntime,
+    mode: ShadercrossDxc,
+) []const u8 {
+    if (target.result.os.tag == .linux) {
+        return switch (runtime) {
+            .dxcompiler => if (mode == .bundled) "linux/lib/libdxcompiler.so" else "lib/libdxcompiler.so",
+            .dxil => if (mode == .bundled) "linux/lib/libdxil.so" else "lib/libdxil.so",
+        };
+    }
+    return switch (target.result.cpu.arch) {
+        .x86 => switch (runtime) {
+            .dxcompiler => if (mode == .bundled) "windows/bin/x86/dxcompiler.dll" else "bin/x86/dxcompiler.dll",
+            .dxil => if (mode == .bundled) "windows/bin/x86/dxil.dll" else "bin/x86/dxil.dll",
+        },
+        .x86_64 => switch (runtime) {
+            .dxcompiler => if (mode == .bundled) "windows/bin/x64/dxcompiler.dll" else "bin/x64/dxcompiler.dll",
+            .dxil => if (mode == .bundled) "windows/bin/x64/dxil.dll" else "bin/x64/dxil.dll",
+        },
+        .aarch64 => switch (runtime) {
+            .dxcompiler => if (mode == .bundled) "windows/bin/arm64/dxcompiler.dll" else "bin/arm64/dxcompiler.dll",
+            .dxil => if (mode == .bundled) "windows/bin/arm64/dxil.dll" else "bin/arm64/dxil.dll",
+        },
+        else => @panic("shadercross DXC has no Windows runtime for this architecture"),
+    };
+}
+
+fn sourceRuntimeKey(component: []const u8) []const u8 {
+    if (std.mem.eql(u8, component, "SDL3")) return "sdl";
+    if (std.mem.eql(u8, component, "SDL3_shadercross")) return "shadercross";
+    if (std.mem.eql(u8, component, "SDL3_image")) return "image";
+    if (std.mem.eql(u8, component, "SDL3_ttf")) return "ttf";
+    if (std.mem.eql(u8, component, "SDL3_mixer")) return "mixer";
+    if (std.mem.eql(u8, component, "SDL3_net")) return "net";
+    std.debug.panic("unsupported SDL source runtime component '{s}'", .{component});
+}
+
+fn sourceRuntimeLibraryName(component: []const u8) []const u8 {
+    if (std.mem.eql(u8, component, "SDL3")) return "SDL3";
+    if (std.mem.eql(u8, component, "SDL3_shadercross")) return "SDL3_shadercross";
+    if (std.mem.eql(u8, component, "SDL3_image")) return "SDL3_image";
+    if (std.mem.eql(u8, component, "SDL3_ttf")) return "SDL3_ttf";
+    if (std.mem.eql(u8, component, "SDL3_mixer")) return "SDL3_mixer";
+    if (std.mem.eql(u8, component, "SDL3_net")) return "SDL3_net";
+    std.debug.panic("unsupported SDL source runtime component '{s}'", .{component});
+}
+
+fn sourceRuntimeSelected(component: []const u8, link_options: LinkOptions) bool {
+    if (std.mem.eql(u8, component, "SDL3")) return link_options.sdl;
+    if (std.mem.eql(u8, component, "SDL3_shadercross")) return link_options.shadercross;
+    if (std.mem.eql(u8, component, "SDL3_image")) return link_options.image;
+    if (std.mem.eql(u8, component, "SDL3_ttf")) return link_options.ttf;
+    if (std.mem.eql(u8, component, "SDL3_mixer")) return link_options.mixer;
+    if (std.mem.eql(u8, component, "SDL3_net")) return link_options.net;
+    return false;
+}
+
+fn installSourceRuntime(
+    b: *std.Build,
+    dependency: *std.Build.Dependency,
+    target: std.Build.ResolvedTarget,
+) void {
+    const install = b.addInstallDirectory(.{
+        .source_dir = dependency.namedLazyPath("source-runtime-directory"),
+        .install_dir = .prefix,
+        .install_subdir = if (target.result.os.tag == .windows) "bin" else "lib",
+    });
+    install.step.dependOn(dependency.builder.getInstallStep());
+    b.getInstallStep().dependOn(&install.step);
+}
+
+fn installSourceControllerImageData(
+    b: *std.Build,
+    dependency: *std.Build.Dependency,
+) void {
+    const install = b.addInstallDirectory(.{
+        .source_dir = dependency.namedLazyPath("source-controller-image-data-directory"),
+        .install_dir = .prefix,
+        .install_subdir = "share/ControllerImage",
+    });
+    install.step.dependOn(dependency.builder.getInstallStep());
+    b.getInstallStep().dependOn(&install.step);
 }
 
 fn sourceLibraryName(
@@ -665,15 +1175,18 @@ fn addCmakeComponentOptions(
     build_test: bool,
     target: std.Build.ResolvedTarget,
     shadercross_dxc: ShadercrossDxc,
+    source_features: SourceFeatureOptions,
 ) void {
     if (std.mem.eql(u8, component, "SDL3")) {
         configure.addArg("-DSDL_TESTS=OFF");
         configure.addArg("-DSDL_EXAMPLES=OFF");
-        configure.addArg("-DSDL_AUDIO=OFF");
-        configure.addArg("-DSDL_VIDEO=OFF");
-        configure.addArg("-DSDL_GPU=OFF");
-        configure.addArg("-DSDL_RENDER=OFF");
-        configure.addArg("-DSDL_CAMERA=OFF");
+        configure.addArgs(&.{
+            b.fmt("-DSDL_AUDIO={s}", .{if (source_features.enabled(.audio)) "ON" else "OFF"}),
+            b.fmt("-DSDL_VIDEO={s}", .{if (source_features.enabled(.video)) "ON" else "OFF"}),
+            b.fmt("-DSDL_GPU={s}", .{if (source_features.enabled(.gpu)) "ON" else "OFF"}),
+            b.fmt("-DSDL_RENDER={s}", .{if (source_features.enabled(.renderer)) "ON" else "OFF"}),
+            b.fmt("-DSDL_CAMERA={s}", .{if (source_features.enabled(.camera)) "ON" else "OFF"}),
+        });
         configure.addArg("-DSDL_UNIX_CONSOLE_BUILD=ON");
         configure.addArg(b.fmt("-DSDL_TEST_LIBRARY={s}", .{if (build_test) "ON" else "OFF"}));
         configure.addArg(b.fmt("-DSDL_SHARED={s}", .{shared_value}));
@@ -730,6 +1243,7 @@ fn addCmakeComponentOptions(
             "-DSDLMIXER_GME=OFF",
             "-DSDLMIXER_MOD=OFF",
             "-DSDLMIXER_MP3=OFF",
+            "-DSDLMIXER_MP3_MPG123=OFF",
             "-DSDLMIXER_MIDI=OFF",
             "-DSDLMIXER_OPUS=OFF",
             "-DSDLMIXER_VORBIS_STB=OFF",
@@ -755,14 +1269,20 @@ fn addTranslateCTargetDefines(
     if (target.result.os.tag == .windows and target.result.cpu.arch == .x86) {
         translate_c.defineCMacro("_X86_", null);
     }
+    if (isAndroidTarget(target)) {
+        // Translate SDL's public declarations with the host LP64 headers while retaining the
+        // Android-only SDL_PLATFORM namespace. The actual target ABI is compiled by Zig/NDK;
+        // this avoids Android NDK nullability constructs that Zig 0.16 translate-c cannot parse.
+        translate_c.defineCMacro("SDL_PLATFORM_ANDROID", "1");
+        // SDL_dlopennote.h disables these ELF annotation macros on Android, while the generated
+        // root module keeps their numeric/string constants for the cross-platform API surface.
+        translate_c.defineCMacro("SDL_ELF_NOTE_DLOPEN_TYPE", "0x407c0c0aU");
+        translate_c.defineCMacro("SDL_ELF_NOTE_DLOPEN_VENDOR", "\"FDO\"");
+    }
 }
 
-fn resolveDistribution(distribution: Distribution, target: std.Build.ResolvedTarget) Distribution {
-    if (distribution != .auto) return distribution;
-    return switch (target.result.os.tag) {
-        .windows, .macos => .prebuilt,
-        else => .system,
-    };
+fn isAndroidTarget(target: std.Build.ResolvedTarget) bool {
+    return target.result.abi == .android or target.result.abi == .androideabi;
 }
 
 const PrebuiltModules = struct {
@@ -789,48 +1309,35 @@ fn configurePrebuilt(
     linkage: Linkage,
     modules: PrebuiltModules,
 ) void {
-    if (linkage != .shared) {
+    if (!std.mem.eql(u8, @tagName(linkage), sdl_metadata.prebuilt_linkage)) {
         std.debug.panic(
             "package-local SDL prebuilts provide shared libraries only; use linkage=.shared or distribution=.system/.source",
             .{},
         );
     }
-    const family: PrebuiltFamily = switch (target.result.os.tag) {
-        .windows => switch (target.result.abi) {
-            .gnu => if (target.result.cpu.arch == .x86 or target.result.cpu.arch == .x86_64)
-                .mingw
-            else
-                std.debug.panic(
-                    "official SDL prebuilts do not support {s}-windows-gnu",
-                    .{@tagName(target.result.cpu.arch)},
-                ),
-            .msvc => if (target.result.cpu.arch == .x86 or
-                target.result.cpu.arch == .x86_64 or
-                target.result.cpu.arch == .aarch64)
-                .msvc
-            else
-                std.debug.panic(
-                    "official SDL prebuilts do not support {s}-windows-msvc",
-                    .{@tagName(target.result.cpu.arch)},
-                ),
-            else => std.debug.panic(
-                "official SDL prebuilts do not support the Windows {s} ABI",
-                .{@tagName(target.result.abi)},
-            ),
-        },
-        .macos => if (target.result.cpu.arch == .x86_64 or target.result.cpu.arch == .aarch64)
-            .macos
-        else
-            std.debug.panic(
-                "official SDL prebuilts do not support {s}-macos",
-                .{@tagName(target.result.cpu.arch)},
-            ),
+    const policy = findPrebuiltTarget(target) orelse switch (target.result.os.tag) {
+        .windows => std.debug.panic(
+            "official SDL prebuilts do not support {s}-windows-{s}",
+            .{ @tagName(target.result.cpu.arch), @tagName(target.result.abi) },
+        ),
+        .macos => std.debug.panic(
+            "official SDL prebuilts do not support {s}-macos",
+            .{@tagName(target.result.cpu.arch)},
+        ),
         .linux => std.debug.panic("package-local SDL prebuilts do not support Linux", .{}),
         else => std.debug.panic(
             "package-local SDL prebuilts are not available for {s}; use distribution=.system or .none",
             .{@tagName(target.result.os.tag)},
         ),
     };
+    const family: PrebuiltFamily = if (std.mem.eql(u8, policy.family, "mingw"))
+        .mingw
+    else if (std.mem.eql(u8, policy.family, "msvc"))
+        .msvc
+    else if (std.mem.eql(u8, policy.family, "macos"))
+        .macos
+    else
+        std.debug.panic("unknown prebuilt family in distribution policy: {s}", .{policy.family});
 
     const sdl_library = sdl_metadata.byKey("sdl");
     const test_library = sdl_metadata.byKey("test");
@@ -863,58 +1370,58 @@ fn configurePrebuilt(
         }
         switch (family) {
             .mingw => {
-                const root = b.fmt(
-                    "prebuilt/{s}/windows-gnu/{s}",
-                    .{ selection.library.key, @tagName(target.result.cpu.arch) },
+                const library_root = b.fmt(
+                    "prebuilt/{s}/{s}/{s}",
+                    .{ selection.library.key, policy.package_family, policy.arch },
                 );
                 module.addObjectFile(
                     b.path(b.fmt(
                         "{s}/lib/lib{s}.dll.a",
-                        .{ root, selection.library.library_name },
+                        .{ library_root, selection.library.library_name },
                     )),
                 );
                 b.addNamedLazyPath(
                     b.fmt("runtime-{s}", .{selection.library.key}),
                     b.path(b.fmt(
                         "{s}/bin/{s}.dll",
-                        .{ root, selection.library.library_name },
+                        .{ library_root, selection.library.library_name },
                     )),
                 );
             },
             .msvc => {
-                const root = b.fmt(
-                    "prebuilt/{s}/windows-msvc/{s}",
-                    .{ selection.library.key, @tagName(target.result.cpu.arch) },
+                const library_root = b.fmt(
+                    "prebuilt/{s}/{s}/{s}",
+                    .{ selection.library.key, policy.package_family, policy.arch },
                 );
                 module.addObjectFile(
                     b.path(b.fmt(
                         "{s}/lib/{s}.lib",
-                        .{ root, selection.library.library_name },
+                        .{ library_root, selection.library.library_name },
                     )),
                 );
                 b.addNamedLazyPath(
                     b.fmt("runtime-{s}", .{selection.library.key}),
                     b.path(b.fmt(
                         "{s}/bin/{s}.dll",
-                        .{ root, selection.library.library_name },
+                        .{ library_root, selection.library.library_name },
                     )),
                 );
             },
             .macos => {
-                const root = b.fmt("prebuilt/{s}/macos", .{selection.library.key});
-                module.addFrameworkPath(b.path(b.fmt("{s}/frameworks", .{root})));
+                const library_root = b.fmt("prebuilt/{s}/macos", .{selection.library.key});
+                module.addFrameworkPath(b.path(b.fmt("{s}/frameworks", .{library_root})));
                 module.linkFramework(selection.library.framework_name, .{});
                 b.addNamedLazyPath(
                     b.fmt("runtime-{s}", .{selection.library.key}),
                     b.path(b.fmt(
                         "{s}/frameworks/{s}.framework",
-                        .{ root, selection.library.framework_name },
+                        .{ library_root, selection.library.framework_name },
                     )),
                 );
                 if (modules.optional_codecs and
                     selection.library.macos_optional_frameworks.len != 0)
                 {
-                    module.addFrameworkPath(b.path(b.fmt("{s}/optional", .{root})));
+                    module.addFrameworkPath(b.path(b.fmt("{s}/optional", .{library_root})));
                 }
             },
         }
@@ -941,12 +1448,11 @@ fn configurePrebuilt(
                     },
                 );
             }
-            const family_name = if (family == .mingw) "windows-gnu" else "windows-msvc";
             b.addNamedLazyPath(
                 b.fmt("optional-{s}", .{selection.library.key}),
                 b.path(b.fmt(
                     "prebuilt/{s}/{s}/{s}/optional",
-                    .{ selection.library.key, family_name, @tagName(target.result.cpu.arch) },
+                    .{ selection.library.key, policy.package_family, policy.arch },
                 )),
             );
         } else if (modules.optional_codecs and family == .macos and
@@ -965,6 +1471,23 @@ fn containsString(values: []const []const u8, expected: []const u8) bool {
         if (std.mem.eql(u8, value, expected)) return true;
     }
     return false;
+}
+
+fn findPrebuiltTarget(
+    target: std.Build.ResolvedTarget,
+) ?*const sdl_metadata.PrebuiltTarget {
+    const os = @tagName(target.result.os.tag);
+    const abi = if (target.result.os.tag == .windows) @tagName(target.result.abi) else "";
+    const arch = @tagName(target.result.cpu.arch);
+    for (&sdl_metadata.prebuilt_targets) |*candidate| {
+        if (std.mem.eql(u8, candidate.os, os) and
+            std.mem.eql(u8, candidate.abi, abi) and
+            std.mem.eql(u8, candidate.arch, arch))
+        {
+            return candidate;
+        }
+    }
+    return null;
 }
 
 fn installRuntime(

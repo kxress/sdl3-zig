@@ -1,6 +1,6 @@
 # SDL3 Zig examples
 
-This directory contains 62 native SDL3 examples:
+This directory contains 63 native SDL3 examples:
 
 - `sdl/` ports all 38 examples from
   [`libsdl-org/SDL@6880bed`](https://github.com/libsdl-org/SDL/tree/6880bed495226e7b87e9ef08fc552c0bcfd5fc29/examples).
@@ -33,13 +33,19 @@ The group and individual build/run steps link against system SDL3 libraries. Exa
 images, fonts, or music additionally link the matching SDL3_image, SDL3_ttf, or SDL3_mixer system
 library. `zig build example` remains an alias for `sdl-renderer-clear`.
 
+The repository-owned `shaders/` directory is a separate opt-in helper. It builds deterministic
+SPIR-V, DXIL, MSL, and reflection outputs from GLSL, HLSL, or Zig shader inputs, then provides a
+small SDL_GPU device-load smoke executable. See [shaders/README.md](shaders/README.md); it requires
+the source-built SDL_shadercross CLI and an external `glslangValidator` for GLSL.
+
 Builds install assets beside the executables under `zig-out/bin/sdl` and `zig-out/bin/raylib`. Run
 steps set their working directory to `examples/assets`, so source checkouts can also find them
 without installation.
 
 ## SDL ports
 
-All native examples present at the pinned SDL commit are included:
+All native examples present at the pinned SDL commit are included, along with the repository-owned
+shader device-load smoke:
 
 | Category | Count | Examples                                                                      |
 | -------- | ----: | ----------------------------------------------------------------------------- |
@@ -52,6 +58,7 @@ All native examples present at the pinned SDL commit are included:
 | pen      |     1 | drawing lines                                                                 |
 | renderer |    17 | clear through blending, including textures, geometry, viewports, and readback |
 | storage  |     1 | user storage                                                                  |
+| shader   |     1 | SDL_GPU shader device-load smoke                                              |
 
 ## Raylib-derived ports
 

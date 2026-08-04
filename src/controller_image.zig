@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_controller_image_c");
+pub const c = @import("sdl3_controller_image_c");
 const sdl = @import("sdl");
 const root = @This();
 
@@ -460,4 +460,148 @@ pub inline fn quit() void {
 /// - **See also:** CONTROLLERIMAGE_VERSION
 pub inline fn version() c_int {
     return c.ControllerImage_Version();
+}
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.Device;
+        _ = root.addData;
+        _ = root.addDataFromFile;
+        _ = root.addDataFromIoStream;
+        _ = root.createGamepadDevice;
+        _ = root.createGamepadDeviceByIdString;
+        _ = root.createGamepadDeviceByInstance;
+        _ = root.createSurfaceForAxis;
+        _ = root.createSurfaceForButton;
+        _ = root.deviceHasArtworkForAxis;
+        _ = root.deviceHasArtworkForButton;
+        _ = root.getDeviceType;
+        _ = root.getSvgForAxis;
+        _ = root.getSvgForButton;
+        _ = root.init;
+        _ = root.maxDatafileVersion;
+        _ = root.quit;
+        _ = root.version;
+    }
 }

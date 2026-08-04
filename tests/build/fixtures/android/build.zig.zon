@@ -1,0 +1,14 @@
+.{
+    .name = .sdl3_android_consumer,
+    .version = "0.0.0",
+    .fingerprint = 0x8bf14bfeba8a3894,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .sdl3 = .{ .path = "../../../.." },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+    },
+}

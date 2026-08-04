@@ -11,6 +11,7 @@ export interface GenerateOptions {
   profile: LibraryProfile;
   dependencyApis: ReadonlyMap<string, PublicApi>;
   defines: string[];
+  macroPrefixes?: string[];
   targets: string[];
   documentationInput: string;
   documentationPredefined: string[];
@@ -23,6 +24,7 @@ export async function generateBindings(options: GenerateOptions): Promise<Public
     includeDirectories: options.includeDirectories,
     publicIncludeDirectories: options.publicIncludeDirectories,
     apiPrefixes: options.profile.symbolPrefixes,
+    macroPrefixes: options.macroPrefixes,
     defines: options.defines,
     targets: options.targets,
     documentationInput: options.documentationInput,
@@ -84,9 +86,6 @@ function validateGeneratedSource(source: string): void {
   if (source.includes("[*c]")) {
     throw new Error("Generated public API leaks an unsupported C pointer type");
   }
-  if (/^pub const c\b/m.test(source)) {
-    throw new Error("Generated public API exposes the private translated module");
-  }
   if (/^pub const support\b/m.test(source)) {
     throw new Error("Generated public API exposes the private support module");
   }
@@ -111,6 +110,7 @@ function validateGeneratedSource(source: string): void {
       /^(\s*)(pub )?(?:const|fn|var)\s+([A-Za-z_@][A-Za-z0-9_@]*)/,
     );
     if (!declaration) continue;
+    if (declaration[3] === "c") continue;
     const isForwardingAlias = declaration[2] && /^\s*pub const [^=]+ = root\./.test(line);
     const previous = lines[index - 1] ?? "";
     if (isForwardingAlias) {

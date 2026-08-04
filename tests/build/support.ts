@@ -98,7 +98,7 @@ function consumerManifest(dependency: string): string {
   return `.{
     .name = .sdl3_distribution_consumer,
     .version = "0.0.0",
-    .fingerprint = 0xf2a2ad551e264093,
+    .fingerprint = 0xf1d8b5bd89c7c2c0,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .sdl3 = .{ .path = "${dependency.replaceAll("\\", "/")}" },

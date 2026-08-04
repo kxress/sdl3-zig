@@ -24,6 +24,7 @@ const Example = struct {
 };
 
 const examples = [_]Example{
+    .{ .name = "sdl-shader-device-load", .source = "examples/shaders/load.zig", .origin = .sdl },
     .{ .name = "sdl-asyncio-load-bitmaps", .source = "examples/sdl/asyncio/load_bitmaps.zig", .origin = .sdl },
     .{ .name = "sdl-audio-simple-playback", .source = "examples/sdl/audio/simple_playback.zig", .origin = .sdl },
     .{ .name = "sdl-audio-simple-playback-callback", .source = "examples/sdl/audio/simple_playback_callback.zig", .origin = .sdl },

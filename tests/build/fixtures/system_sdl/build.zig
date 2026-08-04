@@ -6,6 +6,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const linkage = b.option(Linkage, "linkage", "System library linkage") orelse .shared;
+    const allow_unknown_system_versions = b.option(
+        bool,
+        "allow_unknown_system_versions",
+        "Allow system SDL libraries without discoverable pkg-config versions",
+    ) orelse false;
+    const system_version_overrides = b.option(
+        []const []const u8,
+        "system_version_overrides",
+        "Component=version overrides for system SDL libraries",
+    ) orelse &.{};
     const image = b.option(bool, "link_image", "Link SDL_image dynamically") orelse false;
     const ttf = b.option(bool, "link_ttf", "Link SDL_ttf dynamically") orelse false;
     const mixer = b.option(bool, "link_mixer", "Link SDL_mixer dynamically") orelse false;
@@ -24,6 +34,9 @@ pub fn build(b: *std.Build) void {
         .link_mixer = mixer,
         .link_net = net,
         .linkage = linkage,
+        .distribution = .system,
+        .allow_unknown_system_versions = allow_unknown_system_versions,
+        .system_version_overrides = system_version_overrides,
     });
     const executable = b.addExecutable(.{
         .name = "system-sdl-check",

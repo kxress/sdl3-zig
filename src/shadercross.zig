@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const c = @import("sdl3_shadercross_c");
+pub const c = @import("sdl3_shadercross_c");
 const sdl = @import("sdl");
 const root = @This();
 
@@ -234,10 +234,10 @@ inline fn compileComputePipelineFromSpirv(device: ?*sdl.gpu.Device, info: ?*cons
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro)`: When true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
-/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro)`: When true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: When true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro outside this module)`: When true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -268,10 +268,10 @@ inline fn compileDxbcFromSpirv(info: ?*const SpirvInfo, size: ?*c_ulong) ?*anyop
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
-/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro)`: when true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro outside this module)`: when true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -317,9 +317,9 @@ inline fn compileGraphicsShaderFromSpirv(device: ?*sdl.gpu.Device, info: ?*const
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -393,7 +393,7 @@ inline fn reflectGraphicsSpirv(bytecode: []const u8, props: sdl.properties.Id) ?
 ///
 /// You must sdl.stdinc.free the returned string once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SPIRV_PSSL_COMPATIBILITY_BOOLEAN (C macro)`: generates PSSL-compatible shader.
+/// - `SDL_SHADERCROSS_PROP_SPIRV_PSSL_COMPATIBILITY_BOOLEAN (C macro outside this module)`: generates PSSL-compatible shader.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -408,7 +408,7 @@ inline fn transpileHlslFromSpirv(info: ?*const SpirvInfo) ?*anyopaque {
 ///
 /// You must sdl.stdinc.free the returned string once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING (C macro)`: specifies the MSL version that should be emitted. Defaults to 1.2.0.
+/// - `SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING (C macro outside this module)`: specifies the MSL version that should be emitted. Defaults to 1.2.0.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -446,3 +446,189 @@ pub const shadercross = struct {
     pub const transpileHlslFromSpirv = root.transpileHlslFromSpirv;
     pub const transpileMslFromSpirv = root.transpileMslFromSpirv;
 };
+
+// Force target-specific public declarations through Zig's lazy analysis.
+comptime {
+    if (builtin.abi == .android or builtin.abi == .androideabi) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .emscripten) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .ios) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .linux) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .macos) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .tvos) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+    if (builtin.os.tag == .windows) {
+        _ = root.ComputePipelineMetadata;
+        _ = root.GraphicsShaderMetadata;
+        _ = root.GraphicsShaderResourceInfo;
+        _ = root.HlslDefine;
+        _ = root.HlslInfo;
+        _ = root.IoVarMetadata;
+        _ = root.IoVarType;
+        _ = root.ShaderStage;
+        _ = root.SpirvInfo;
+        _ = root.compileComputePipelineFromSpirv;
+        _ = root.compileDxbcFromHlsl;
+        _ = root.compileDxbcFromSpirv;
+        _ = root.compileDxilFromHlsl;
+        _ = root.compileDxilFromSpirv;
+        _ = root.compileGraphicsShaderFromSpirv;
+        _ = root.compileSpirvFromHlsl;
+        _ = root.getHlslShaderFormats;
+        _ = root.getSpirvShaderFormats;
+        _ = root.init;
+        _ = root.quit;
+        _ = root.reflectComputeSpirv;
+        _ = root.reflectGraphicsSpirv;
+        _ = root.transpileHlslFromSpirv;
+        _ = root.transpileMslFromSpirv;
+    }
+}
