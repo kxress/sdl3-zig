@@ -1,5 +1,7 @@
 #include <SDL3/SDL_stdinc.h>
 
+void SDL_MemoryBarrierAcquireFunction(void) {}
+
 static SDL_malloc_func malloc_func;
 static SDL_calloc_func calloc_func;
 static SDL_realloc_func realloc_func;

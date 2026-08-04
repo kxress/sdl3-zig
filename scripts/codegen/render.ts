@@ -2693,6 +2693,7 @@ function renderObjectMacroExpression(
   macro: ObjectMacro,
   context: RenderContext,
 ): string | undefined {
+  if (/^SDL_PRILL[duxX]$/.test(macro.name)) return `c.${macro.name}`;
   if (macro.replacement.includes("(") && /\(\s*[A-Za-z_]\w*\s*\)/.test(macro.replacement)) {
     const casted = stripKnownIntegerCasts(macro.replacement, context);
     if (casted !== macro.replacement) return `c.${macro.name}`;
@@ -2815,6 +2816,55 @@ function renderPublicFunctionMacros(
 
 function renderGenericUtilityMacro(name: string, publicName: string): string[] | undefined {
   switch (name) {
+    case "SDL_COMPILE_TIME_ASSERT":
+      return [
+        `pub inline fn ${publicName}(comptime name: []const u8, comptime condition: bool) void {`,
+        "    if (!condition) @compileError(name);",
+        "}",
+      ];
+    case "SDL_CompilerBarrier":
+      return [
+        `pub inline fn ${publicName}() void {`,
+        "    memoryBarrierAcquireFunction();",
+        "}",
+      ];
+    case "SDL_const_cast":
+      return [
+        `pub inline fn ${publicName}(comptime T: type, value: anytype) T {`,
+        "    return @constCast(value);",
+        "}",
+      ];
+    case "SDL_reinterpret_cast":
+      return [
+        `pub inline fn ${publicName}(comptime T: type, value: anytype) T {`,
+        "    return @ptrCast(value);",
+        "}",
+      ];
+    case "SDL_SINT64_C":
+      return [
+        `pub inline fn ${publicName}(comptime value: comptime_int) i64 {`,
+        "    return value;",
+        "}",
+      ];
+    case "SDL_static_cast":
+      return [
+        `pub inline fn ${publicName}(comptime T: type, value: anytype) T {`,
+        "    return @as(T, value);",
+        "}",
+      ];
+    case "SDL_TriggerBreakpoint":
+    case "SDL_AssertBreakpoint":
+      return [
+        `pub inline fn ${publicName}() void {`,
+        "    @breakpoint();",
+        "}",
+      ];
+    case "SDL_UINT64_C":
+      return [
+        `pub inline fn ${publicName}(comptime value: comptime_int) u64 {`,
+        "    return value;",
+        "}",
+      ];
     case "SDL_arraysize":
       return [
         `pub inline fn ${publicName}(value: anytype) usize {`,

@@ -18451,7 +18451,7 @@ pub const platform_linux = c.SDL_PLATFORM_LINUX;
 pub const platform_unix = c.SDL_PLATFORM_UNIX;
 /// A printf-formatting string prefix for a `long long` value.
 ///
-/// This is just the prefix! You probably actually want SDL_PRILLd (C macro outside this module), SDL_PRILLu (C macro outside this module), SDL_PRILLx (C macro outside this module), or SDL_PRILLX (C macro outside this module) instead.
+/// This is just the prefix! You probably actually want stdinc.prilLd, stdinc.prilLu, stdinc.prilLx, or stdinc.prillx instead.
 /// Use it like this:
 /// ```c
 /// SDL_Log("Thereare%"SDL_PRILL_PREFIX"dbottlesofbeeronthewall.",bottles);
@@ -19912,6 +19912,54 @@ inline fn penTouchId() @TypeOf(c.SDL_PEN_TOUCHID) {
     return c.SDL_PEN_TOUCHID;
 }
 
+/// A printf-formatting string for a `long long` value.
+///
+/// Use it like this:
+/// ```c
+/// SDL_Log("Thereare%"SDL_PRILLd"bottlesofbeeronthewall.",bottles);
+/// ```
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn prilLd() @TypeOf(c.SDL_PRILLd) {
+    return c.SDL_PRILLd;
+}
+
+/// A printf-formatting string for a `unsigned long long` value.
+///
+/// Use it like this:
+/// ```c
+/// SDL_Log("Thereare%"SDL_PRILLu"bottlesofbeeronthewall.",bottles);
+/// ```
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn prilLu() @TypeOf(c.SDL_PRILLu) {
+    return c.SDL_PRILLu;
+}
+
+/// A printf-formatting string for an `unsigned long long` value as lower-case hexadecimal.
+///
+/// Use it like this:
+/// ```c
+/// SDL_Log("Thereare%"SDL_PRILLx"bottlesofbeeronthewall.",bottles);
+/// ```
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn prilLx() @TypeOf(c.SDL_PRILLx) {
+    return c.SDL_PRILLx;
+}
+
+/// A printf-formatting string for an `unsigned long long` value as upper-case hexadecimal.
+///
+/// Use it like this:
+/// ```c
+/// SDL_Log("Thereare%"SDL_PRILLX"bottlesofbeeronthewall.",bottles);
+/// ```
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn prillx() @TypeOf(c.SDL_PRILLX) {
+    return c.SDL_PRILLX;
+}
+
 /// The mouse.Id for mouse events simulated with touch input.
 ///
 /// - **Since:** This macro is available since SDL 3.2.0.
@@ -19927,6 +19975,15 @@ inline fn touchMouseId() @TypeOf(c.SDL_TOUCH_MOUSEID) {
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn arraysize(value: anytype) usize {
     return value.len;
+}
+
+/// The macro used when an assertion triggers a breakpoint.
+///
+/// This isn't for direct use by apps; use SDL_assert (C macro outside this module) or assert.triggerBreakpoint instead.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn assertBreakpoint() void {
+    @breakpoint();
 }
 
 /// Decrement an atomic variable used as a reference count.
@@ -20210,6 +20267,58 @@ inline fn colorspaceTransfer(cspace: c_uint) c_uint {
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceType(cspace: c_uint) c_uint {
     return (cspace >> 28) & 0x0F;
+}
+
+/// A compile-time assertion.
+///
+/// This can check constant values *known to the compiler at build time* for correctness, and end the compile with the error if they fail.
+/// Often times these are used to verify basic truths, like the size of a datatype is what is expected:
+/// ```c
+/// SDL_COMPILE_TIME_ASSERT(uint32_size,sizeof(Uint32)==4);
+/// ```
+///
+/// The `name` parameter must be a valid C symbol, and must be unique across all compile-time asserts in the same compilation unit (one run of the compiler), or the build might fail with cryptic errors on some targets. This is used with a C language trick that works on older compilers that don't support better assertion techniques.
+/// If you need an assertion that operates at runtime, on variable data, you should try SDL_assert (C macro outside this module) instead.
+///
+/// - **Parameters:**
+///   - `name`: a unique identifier for this assertion.
+///   - `x`: the value to test. Must be a boolean value.
+///
+/// - **Thread safety:** This macro doesn't generate any code to run.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** SDL_assert (C macro outside this module)
+inline fn compileTimeAssert(comptime name: []const u8, comptime condition: bool) void {
+    if (!condition) @compileError(name);
+}
+
+/// Mark a compiler barrier.
+///
+/// A compiler barrier prevents the compiler from reordering reads and writes to globally visible variables across the call.
+/// This macro only prevents the compiler from reordering reads and writes, it does not prevent the CPU from reordering reads and writes. However, all of the atomic operations that modify memory are full memory barriers.
+///
+/// - **Thread safety:** Obviously this macro is safe to use from any thread at any time, but if you find yourself needing this, you are probably dealing with some very sensitive code; be careful!
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn compilerBarrier() void {
+    memoryBarrierAcquireFunction();
+}
+
+/// Handle a Const Cast properly whether using C or C++.
+///
+/// If compiled as C++, this macro offers a proper C++ const_cast<>.
+/// If compiled as C, this macro does a normal C-style cast.
+/// This is helpful to avoid compiler warnings in C++.
+///
+/// - **Parameters:**
+///   - `type`: the type to cast the expression to.
+///   - `expression`: the expression to cast to a different type.
+///
+/// - **Returns:** `expression`, cast to `type`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.reinterpretCast
+/// - **See also:** stdinc.staticCast
+inline fn constCast(comptime T: type, value: anytype) T {
+    return @constCast(value);
 }
 
 /// A macro to copy memory between objects, with basic type checking.
@@ -20847,6 +20956,25 @@ inline fn pixelType(format: c_uint) c_uint {
     return (format >> 24) & 0x0F;
 }
 
+/// Handle a Reinterpret Cast properly whether using C or C++.
+///
+/// If compiled as C++, this macro offers a proper C++ reinterpret_cast<>.
+/// If compiled as C, this macro does a normal C-style cast.
+/// This is helpful to avoid compiler warnings in C++.
+///
+/// - **Parameters:**
+///   - `type`: the type to cast the expression to.
+///   - `expression`: the expression to cast to a different type.
+///
+/// - **Returns:** `expression`, cast to `type`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.staticCast
+/// - **See also:** stdinc.constCast
+inline fn reinterpretCast(comptime T: type, value: anytype) T {
+    return @ptrCast(value);
+}
+
 /// SDL macro keycode.scancodeTo.
 inline fn scancodeToKeycode(x: c_uint) c_uint {
     return x | c.SDLK_SCANCODE_MASK;
@@ -20864,6 +20992,16 @@ inline fn scancodeToKeycode(x: c_uint) c_uint {
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn secondsToNs(s: c_uint) c_uint {
     return (s) * c.SDL_NS_PER_SECOND;
+}
+
+/// Append the 64 bit integer suffix to a signed integer literal.
+///
+/// This helps compilers that might believe a integer literal larger than 0xFFFFFFFF is overflowing a 32-bit value. Use `stdinc.sint64c(0xFFFFFFFF1)` instead of `0xFFFFFFFF1` by itself.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.uint64c
+inline fn sint64c(comptime value: comptime_int) i64 {
+    return value;
 }
 
 /// Add two integers, checking for overflow.
@@ -20902,6 +21040,25 @@ inline fn sizeMulCheckOverflow(a: usize, b: usize, result: *usize) bool {
     const value, const overflow = @mulWithOverflow(a, b);
     result.* = value;
     return overflow == 0;
+}
+
+/// Handle a Static Cast properly whether using C or C++.
+///
+/// If compiled as C++, this macro offers a proper C++ static_cast<>.
+/// If compiled as C, this macro does a normal C-style cast.
+/// This is helpful to avoid compiler warnings in C++.
+///
+/// - **Parameters:**
+///   - `type`: the type to cast the expression to.
+///   - `expression`: the expression to cast to a different type.
+///
+/// - **Returns:** `expression`, cast to `type`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.reinterpretCast
+/// - **See also:** stdinc.constCast
+inline fn staticCast(comptime T: type, value: anytype) T {
+    return @as(T, value);
 }
 
 /// Byte-swap an unsigned 16-bit number.
@@ -21067,6 +21224,28 @@ inline fn swapFloatBe(x: f32) f32 {
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn swapFloatLe(x: c_uint) c_uint {
     return x;
+}
+
+/// Attempt to tell an attached debugger to pause.
+///
+/// This allows an app to programmatically halt ("break") the debugger as if it had hit a breakpoint, allowing the developer to examine program state, etc.
+/// This is a macronot a functionso that the debugger breaks on the source code line that used assert.triggerBreakpoint and not in some random guts of SDL. SDL_assert (C macro outside this module) uses this macro for the same reason.
+/// If the program is not running under a debugger, assert.triggerBreakpoint will likely terminate the app, possibly without warning. If the current platform isn't supported, this macro is left undefined.
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn triggerBreakpoint() void {
+    @breakpoint();
+}
+
+/// Append the 64 bit integer suffix to an unsigned integer literal.
+///
+/// This helps compilers that might believe a integer literal larger than 0xFFFFFFFF is overflowing a 32-bit value. Use `stdinc.uint64c(0xFFFFFFFF1)` instead of `0xFFFFFFFF1` by itself.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.sint64c
+inline fn uint64c(comptime value: comptime_int) u64 {
+    return value;
 }
 
 /// A macro to standardize error reporting on unsupported operations.
@@ -45545,6 +45724,7 @@ inline fn showAndroidToast(message: ?[:0]const u8, duration: c_int, gravity: c_i
 /// your code!
 pub const assert = struct {
     pub const AssertionHandler = root.AssertionHandler;
+    pub const breakpoint = root.assertBreakpoint;
     pub const Data = root.AssertData;
     pub const getAssertionHandler = root.getAssertionHandler;
     pub const getAssertionReport = root.getAssertionReport;
@@ -45555,6 +45735,7 @@ pub const assert = struct {
     pub const resetAssertionReport = root.resetAssertionReport;
     pub const setAssertionHandler = root.setAssertionHandler;
     pub const State = root.AssertState;
+    pub const triggerBreakpoint = root.triggerBreakpoint;
 };
 
 /// SDL offers a way to perform I/O asynchronously. This allows an app to read
@@ -45680,6 +45861,7 @@ pub const atomic = struct {
     pub const compareAndSwapInt = root.compareAndSwapAtomicInt;
     pub const compareAndSwapPointer = root.compareAndSwapAtomicPointer;
     pub const compareAndSwapU32 = root.compareAndSwapAtomicU32;
+    pub const compilerBarrier = root.compilerBarrier;
     pub const cpuPauseInstruction = root.cpuPauseInstruction;
     pub const decRef = root.atomicDecRef;
     pub const getInt = root.getAtomicInt;
@@ -49865,7 +50047,7 @@ pub const sharedObject = struct {
 ///
 /// SDL also offers other C-runtime-adjacent functionality in this header that
 /// either isn't, strictly speaking, part of any C runtime standards, like
-/// stdinc.crc32() and SDL_reinterpret_cast (C macro outside this module), etc. It also offers a few better
+/// stdinc.crc32() and stdinc.reinterpretCast, etc. It also offers a few better
 /// options, like stdinc.strlcpy(), which functions as a safer form of strcpy().
 pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) struct {
     pub const abs = root.abs;
@@ -49892,6 +50074,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -50004,6 +50188,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -50015,6 +50203,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -50024,6 +50213,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -50034,6 +50224,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -50075,6 +50266,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -50128,6 +50320,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -50240,6 +50434,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -50251,6 +50449,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -50260,6 +50459,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -50270,6 +50470,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -50311,6 +50512,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -50360,6 +50562,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -50472,6 +50676,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -50483,6 +50691,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -50492,6 +50701,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -50502,6 +50712,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -50543,6 +50754,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -50592,6 +50804,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -50704,6 +50918,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -50715,6 +50933,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -50724,6 +50943,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -50734,6 +50954,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -50775,6 +50996,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -50828,6 +51050,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -50940,6 +51164,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -50951,6 +51179,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -50960,6 +51189,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -50970,6 +51200,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -51011,6 +51242,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -51060,6 +51292,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -51172,6 +51406,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -51183,6 +51421,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -51192,6 +51431,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -51202,6 +51442,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -51243,6 +51484,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -51292,6 +51534,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -51407,6 +51651,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_ix32 = root.pr_ix32;
     pub const pr_ix64 = root.pr_ix64;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const prix64 = root.prix64;
     pub const qsort = root.qsort;
@@ -51419,6 +51667,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -51428,6 +51677,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -51438,6 +51688,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -51479,6 +51730,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;
@@ -51528,6 +51780,8 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const compileTimeAssert = root.compileTimeAssert;
+    pub const constCast = root.constCast;
     pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
@@ -51640,6 +51894,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const pr_iu32 = root.pr_iu32;
     pub const pr_ix32 = root.pr_ix32;
     pub const prill_prefix = root.prill_prefix;
+    pub const prilLd = root.prilLd;
+    pub const prilLu = root.prilLu;
+    pub const prillx = root.prillx;
+    pub const prilLx = root.prilLx;
     pub const prix32 = root.prix32;
     pub const qsort = root.qsort;
     pub const qsortR = root.qsortR;
@@ -51651,6 +51909,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const randR = root.randR;
     pub const realloc = root.realloc;
     pub const ReallocFunc = root.ReallocFunc;
+    pub const reinterpretCast = root.reinterpretCast;
     pub const round = root.round;
     pub const roundf = root.roundf;
     pub const scalbn = root.scalbn;
@@ -51660,6 +51919,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const setMemoryFunctions = root.setMemoryFunctions;
     pub const sin = root.sin;
     pub const sinf = root.sinf;
+    pub const sint64c = root.sint64c;
     pub const size_max = root.size_max;
     pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
@@ -51670,6 +51930,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sqrtf = root.sqrtf;
     pub const srand = root.srand;
     pub const sscanf = root.sscanf;
+    pub const staticCast = root.staticCast;
     pub const stepBackUtf8 = root.stepBackUtf8;
     pub const stepUtf8 = root.stepUtf8;
     pub const strcasecmp = root.strcasecmp;
@@ -51711,6 +51972,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const trunc = root.trunc;
     pub const truncf = root.truncf;
     pub const ucs4ToUtf8 = root.ucs4ToUtf8;
+    pub const uint64c = root.uint64c;
     pub const uitoa = root.uitoa;
     pub const ulltoa = root.ulltoa;
     pub const ultoa = root.ultoa;

@@ -185,6 +185,13 @@ export function renderCoverageReport(libraries: LibraryCoverage[]): string {
     "available through each module's `c` declaration and is not counted as a generated Zig " +
     "binding.",
     "",
+    "An intentional exclusion does not mean that no approximation is possible. It means that " +
+    "the generator does not claim a faithful standalone Zig binding for the C entry: an " +
+    "approximation may lose compile-time elimination, caller source information, target-specific " +
+    "behavior, static-analysis meaning, ownership, or linker effects. Such entries may still be " +
+    "available through the module's raw `c` import when the C translation exposes them, or may be " +
+    "covered by a higher-level Zig API without counting the macro itself as covered.",
+    "",
     "Coverage is reported two ways: **surface coverage** includes every analyzed API entry, while " +
     "**supported-scope coverage** removes entries explicitly excluded by generator policy from " +
     "the denominator. Every entry not emitted is listed below as either intentional or a " +

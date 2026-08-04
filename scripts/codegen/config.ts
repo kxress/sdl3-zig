@@ -93,7 +93,7 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_NO_THREAD_SAFETY_ANALYSIS",
             ],
             reason:
-              "Compiler, runtime, or thread-safety annotation selected by the C headers rather than a portable runtime binding.",
+              "No faithful standalone port: the C headers select compiler, runtime, or thread-entry annotations. A Zig declaration-level policy could approximate some of them, but these macros have no consumer-facing runtime value.",
           },
           {
             names: [
@@ -124,7 +124,8 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_TRY_ACQUIRE",
               "SDL_TRY_ACQUIRE_SHARED",
             ],
-            reason: "Compiler or static-analysis annotation with no portable runtime Zig binding.",
+            reason:
+              "No faithful standalone port: these are C compiler/static-analysis annotations for lock ordering, capabilities, aliasing, builtins, or varargs checking. A generator could preserve selected metadata, but a public Zig function would not provide the same analysis contract.",
           },
           {
             names: [
@@ -132,29 +133,21 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_assert_always",
               "SDL_assert_paranoid",
               "SDL_assert_release",
-              "SDL_AssertBreakpoint",
               "SDL_disabled_assert",
               "SDL_enabled_assert",
-              "SDL_TriggerBreakpoint",
             ],
             reason:
-              "Assertion or debugger macro requiring caller-location and target-specific behavior.",
+              "Approximation is possible, but not a faithful port: the macros depend on assertion build level, C expression stringification, caller file/line/function, static assertion data, retry handling, and target-specific debugger behavior. A bool-taking Zig helper would lose those semantics.",
           },
           {
-            names: [
-              "SDL_COMPILE_TIME_ASSERT",
-              "SDL_CompilerBarrier",
-              "SDL_const_cast",
-              "SDL_reinterpret_cast",
-              "SDL_SINT64_C",
-              "SDL_stack_alloc",
-              "SDL_stack_free",
-              "SDL_static_cast",
-              "SDL_STRINGIFY_ARG",
-              "SDL_UINT64_C",
-            ],
+            names: ["SDL_stack_alloc", "SDL_stack_free"],
             reason:
-              "C preprocessor, language, or target-specific compiler feature rather than a portable binding.",
+              "Approximation is possible with an allocator, but not faithfully: the C pair selects stack or SDL-heap storage by target/compiler and relies on matching lifetime and release semantics. An allocator-backed Zig helper would change those contracts.",
+          },
+          {
+            names: ["SDL_STRINGIFY_ARG"],
+            reason:
+              "No faithful standalone port: C stringifies the caller's preprocessor token before evaluation. A Zig function receives a value or an explicitly supplied string and cannot recover the original token spelling.",
           },
           {
             names: [
@@ -175,7 +168,7 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_ELF_NOTE_INTERNAL2",
             ],
             reason:
-              "ELF note construction performed by the C preprocessor and linker, not a runtime API.",
+              "No consumer-facing runtime port: these helpers paste tokens, dispatch variadic arguments, and emit ELF note/linker metadata. A Zig function could build a string, but it would not recreate the C object, symbol, or linker-note behavior.",
           },
           {
             names: [
@@ -192,11 +185,7 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_UNUSED",
             ],
             reason:
-              "Declaration annotation or compiler spelling with no standalone runtime Zig binding.",
-          },
-          {
-            names: ["SDL_PRILLd", "SDL_PRILLu", "SDL_PRILLx", "SDL_PRILLX"],
-            reason: "C format-string portability macro with no standalone Zig binding.",
+              "No standalone runtime port: these are declaration annotations or compiler spellings for visibility, deprecation, fallthrough, inlining, result use, return behavior, aliasing, capabilities, or unused values. Some could influence generator metadata, but exposing them as public functions would be misleading.",
           },
         ],
       },

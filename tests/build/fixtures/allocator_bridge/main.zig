@@ -49,6 +49,25 @@ const TrackingAllocator = struct {
 
 var backing: TrackingAllocator = .{};
 
+test "ported SDL macro helpers instantiate as Zig APIs" {
+    try std.testing.expectEqual(@as(i64, 0x7fff), sdl.stdinc.sint64c(0x7fff));
+    try std.testing.expectEqual(@as(u64, 0xffff), sdl.stdinc.uint64c(0xffff));
+    try std.testing.expectEqual(@as(u32, 7), sdl.stdinc.staticCast(u32, @as(u8, 7)));
+
+    var value: u32 = 11;
+    const mutable: *u32 = sdl.stdinc.constCast(*u32, @as(*const u32, &value));
+    const reinterpreted: *u32 = sdl.stdinc.reinterpretCast(*u32, mutable);
+    reinterpreted.* = 13;
+    try std.testing.expectEqual(@as(u32, 13), value);
+
+    sdl.atomic.compilerBarrier();
+    sdl.stdinc.compileTimeAssert("ported SDL macro helpers", true);
+    comptime {
+        _ = sdl.assert.breakpoint;
+        _ = sdl.assert.triggerBreakpoint;
+    }
+}
+
 test "allocator bridge preserves alignment, pairing, failure cleanup, and lifetime rules" {
     try sdl.AllocatorBridge.install(backing.allocator());
     try std.testing.expect(sdl.AllocatorBridge.isInstalled());
