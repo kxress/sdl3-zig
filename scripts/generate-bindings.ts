@@ -1,17 +1,19 @@
 import { resolve } from "@std/path";
 import { codegenConfiguration, renderTranslationUnit } from "./codegen/config.ts";
-import { generateBindings } from "./codegen/generator.ts";
+import { writeCoverageReport } from "./codegen/coverage.ts";
+import { generateBindings, type GeneratedBinding } from "./codegen/generator.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 import { runCommand } from "./utils/command.ts";
-import type { PublicApi } from "./codegen/profile.ts";
 
 export async function generateRepositoryBindings(
-  options: { outputRoot?: string } = {},
+  options: { outputRoot?: string; coverageOutput?: string } = {},
 ): Promise<void> {
   const outputRoot = options.outputRoot ?? resolve(repositoryRoot, "src");
+  const coverageOutput = options.coverageOutput ??
+    (options.outputRoot === undefined ? resolve(repositoryRoot, "COVERAGE.md") : undefined);
   await Deno.mkdir(outputRoot, { recursive: true });
 
-  const apiPromises = new Map<string, Promise<PublicApi>>();
+  const apiPromises = new Map<string, Promise<GeneratedBinding>>();
   const outputs = codegenConfiguration.libraries.map((library) =>
     resolve(outputRoot, library.output)
   );
@@ -53,6 +55,14 @@ export async function generateRepositoryBindings(
     stdout: "inherit",
     stderr: "inherit",
   });
+  if (coverageOutput) {
+    const generated = await Promise.all(apiPromises.values());
+    await writeCoverageReport(
+      coverageOutput,
+      generated.map((binding) => binding.coverage),
+    );
+    console.log(`Wrote ${coverageOutput}`);
+  }
 }
 
 function resolveRepositoryPath(path: string): string {

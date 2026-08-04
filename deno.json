@@ -6,7 +6,7 @@
     "fast-xml-parser": "npm:fast-xml-parser@5.10.1"
   },
   "fmt": {
-    "exclude": ["examples/assets", "vendor"],
+    "exclude": ["COVERAGE.md", "examples/assets", "vendor"],
     "lineWidth": 100,
     "semiColons": true,
     "singleQuote": false

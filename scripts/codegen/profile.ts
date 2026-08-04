@@ -16,6 +16,11 @@ export interface PublicApi {
   references: PublicReference[];
 }
 
+export interface CoverageExclusion {
+  names: string[];
+  reason: string;
+}
+
 export interface ConstantFamily {
   prefix: string;
   typedef: string;
@@ -66,6 +71,7 @@ export interface LibraryProfile {
   macroPrefixes?: string[];
   macroNamePrefixes?: string[];
   macroTypeAliases?: MacroTypeAlias[];
+  coverageExclusions?: CoverageExclusion[];
 }
 
 export type NamespaceStrategy =

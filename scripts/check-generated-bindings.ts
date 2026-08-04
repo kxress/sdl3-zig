@@ -20,7 +20,7 @@ export async function assertGeneratedBindingsMatch(
   committedRoot = resolve(repositoryRoot, "src"),
 ): Promise<void> {
   const expected = codegenConfiguration.libraries.map((library) => library.output).sort();
-  const actual = (await filesUnder(generatedRoot)).sort();
+  const actual = (await filesUnder(generatedRoot)).filter((file) => file !== "COVERAGE.md").sort();
   if (actual.join("\n") !== expected.join("\n")) {
     throw new Error(
       `Generated binding file set differs. Expected ${expected.join(", ")}; got ${
@@ -35,6 +35,17 @@ export async function assertGeneratedBindingsMatch(
     if (generated !== committed) {
       throw new Error(`Generated binding ${output} differs from the committed source`);
     }
+  }
+}
+
+export async function assertGeneratedCoverageReportMatch(
+  generatedRoot: string,
+  committedReport = resolve(repositoryRoot, "COVERAGE.md"),
+): Promise<void> {
+  const generated = await Deno.readTextFile(resolve(generatedRoot, "COVERAGE.md"));
+  const committed = await Deno.readTextFile(committedReport);
+  if (generated !== committed) {
+    throw new Error("Generated COVERAGE.md differs from the committed report");
   }
 }
 

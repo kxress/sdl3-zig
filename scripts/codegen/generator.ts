@@ -1,5 +1,6 @@
 import { dirname } from "@std/path";
 import { analyzeTargets, type ApiModel, mergeApiModels } from "./analysis.ts";
+import { collectLibraryCoverage, type LibraryCoverage } from "./coverage.ts";
 import type { LibraryProfile, PublicApi, PublicReference, PublicSymbol } from "./profile.ts";
 import { renderSemanticBindings } from "./render.ts";
 
@@ -18,7 +19,11 @@ export interface GenerateOptions {
   sourceLabel: string;
 }
 
-export async function generateBindings(options: GenerateOptions): Promise<PublicApi> {
+export interface GeneratedBinding extends PublicApi {
+  coverage: LibraryCoverage;
+}
+
+export async function generateBindings(options: GenerateOptions): Promise<GeneratedBinding> {
   const models = await analyzeTargets({
     translationUnit: options.translationUnit,
     includeDirectories: options.includeDirectories,
@@ -44,6 +49,12 @@ export async function generateBindings(options: GenerateOptions): Promise<Public
     symbolPrefixes: [...options.profile.symbolPrefixes],
     symbols: rendered.symbols,
     references: collectPublicReferences(mergedModel, rendered.symbols, options.profile),
+    coverage: collectLibraryCoverage(
+      mergedModel,
+      options.profile,
+      rendered.symbols,
+      options.sourceLabel,
+    ),
   };
 }
 
