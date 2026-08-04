@@ -344,8 +344,10 @@ Source archives and all other release inputs are verified by their pinned SHA-25
 
 ## Examples
 
-The repository includes SDL and selected 2D raylib-derived example ports. They intentionally use
-system libraries:
+The repository includes SDL and selected 2D raylib-derived example ports, all built against system
+libraries. The authoritative example inventory is the table in
+[`examples/build.zig`](examples/build.zig); see [`examples/README.md`](examples/README.md) for
+assets, origins, and licensing.
 
 ```sh
 zig build examples
@@ -353,8 +355,6 @@ zig build examples-sdl
 zig build examples-raylib
 zig build run-sdl-renderer-clear
 ```
-
-See [examples/README.md](examples/README.md) for the inventory, assets, origins, and licensing.
 
 ## License
 
