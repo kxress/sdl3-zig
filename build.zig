@@ -224,6 +224,7 @@ const SourceBuild = struct {
     step: *std.Build.Step,
     linkage: Linkage,
     shadercross_dxc: ShadercrossDxc,
+    runtime_directory: ?[]const u8,
 };
 
 fn findLibraryModule(library_modules: []const BuiltLibrary, module_name: []const u8) *std.Build.Module {
@@ -236,6 +237,7 @@ fn findLibraryModule(library_modules: []const BuiltLibrary, module_name: []const
 pub const RepositoryModules = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    native_build: ?*std.Build.Step,
     sdl: *std.Build.Module,
     test_: *std.Build.Module,
     controller_image: *std.Build.Module,
@@ -246,32 +248,80 @@ pub const RepositoryModules = struct {
     net: *std.Build.Module,
 };
 
+pub const RepositoryOptions = struct {
+    distribution: Distribution = .none,
+    linkage: Linkage = .shared,
+    image: bool = false,
+    ttf: bool = false,
+    mixer: bool = false,
+    net: bool = false,
+    source_cmake_generator: ?[]const u8 = null,
+    source_cmake_toolchain: ?[]const u8 = null,
+    source_features: SourceFeatureOptions = .{},
+    source_cmake_options: []const []const u8 = &.{},
+    source_mixer_cmake_options: []const []const u8 = &.{},
+    install_runtime: bool = true,
+};
+
 pub fn addRepositoryModules(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+) RepositoryModules {
+    return addRepositoryModulesWithOptions(b, target, optimize, .{});
+}
+
+pub fn addRepositoryModulesWithOptions(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    options: RepositoryOptions,
 ) RepositoryModules {
     const support = b.createModule(.{
         .root_source_file = b.path("src/support.zig"),
         .target = target,
         .optimize = optimize,
     });
+    const link_options = LinkOptions{
+        .sdl = options.distribution != .none,
+        .image = options.image,
+        .ttf = options.ttf,
+        .mixer = options.mixer,
+        .net = options.net,
+    };
+    const source_build: ?SourceBuild = if (options.distribution == .source)
+        addCmakeSourceBuild(
+            b,
+            target,
+            link_options,
+            options.linkage,
+            options.source_cmake_generator,
+            options.source_cmake_toolchain,
+            options.source_features,
+            options.source_cmake_options,
+            options.source_mixer_cmake_options,
+            .disabled,
+            null,
+        )
+    else
+        null;
     const library_modules = addLibraryModules(
         b,
         target,
         optimize,
         support,
-        .none,
-        .{},
-        .shared,
+        options.distribution,
+        link_options,
+        options.linkage,
         null,
         null,
         &sdl_metadata.libraries,
-        null,
+        source_build,
     );
-    return .{
+    const modules = RepositoryModules{
         .target = target,
         .optimize = optimize,
+        .native_build = if (source_build) |source| source.step else null,
         .sdl = findLibraryModule(library_modules, "sdl"),
         .test_ = findLibraryModule(library_modules, "test"),
         .controller_image = findLibraryModule(library_modules, "controller_image"),
@@ -281,6 +331,23 @@ pub fn addRepositoryModules(
         .mixer = findLibraryModule(library_modules, "mixer"),
         .net = findLibraryModule(library_modules, "net"),
     };
+    if (options.distribution == .prebuilt) {
+        configurePrebuilt(b, target, options.linkage, .{
+            .sdl = modules.sdl,
+            .test_ = null,
+            .controller_image = null,
+            .shadercross = null,
+            .image = if (options.image) modules.image else null,
+            .ttf = if (options.ttf) modules.ttf else null,
+            .mixer = if (options.mixer) modules.mixer else null,
+            .net = if (options.net) modules.net else null,
+            .optional_codecs = false,
+        });
+    }
+    if (options.distribution == .source and options.install_runtime) {
+        installRepositorySourceRuntime(b, source_build.?, target);
+    }
+    return modules;
 }
 
 fn linkOptionEnabled(configuration: sdl_metadata.Library, options: LinkOptions) bool {
@@ -791,11 +858,13 @@ fn addCmakeSourceBuild(
     if (dxc_runtime_selected) validateShadercrossDxcTarget(target);
     const package_root = b.build_root.path orelse ".";
     const prefix = b.cache_root.join(b.allocator, &.{"sdl3-source"}) catch @panic("OOM");
+    var runtime_directory_path: ?[]const u8 = null;
     if (linkage == .shared or dxc_runtime_selected) {
         const runtime_directory = b.cache_root.join(
             b.allocator,
             &.{"sdl3-source-runtimes"},
         ) catch @panic("OOM");
+        runtime_directory_path = runtime_directory;
         b.addNamedLazyPath(
             "source-runtime-directory",
             .{ .cwd_relative = runtime_directory },
@@ -1036,7 +1105,23 @@ fn addCmakeSourceBuild(
         .step = previous.?,
         .linkage = linkage,
         .shadercross_dxc = shadercross_dxc,
+        .runtime_directory = runtime_directory_path,
     };
+}
+
+fn installRepositorySourceRuntime(
+    b: *std.Build,
+    source: SourceBuild,
+    target: std.Build.ResolvedTarget,
+) void {
+    const runtime_directory = source.runtime_directory orelse return;
+    const install = b.addInstallDirectory(.{
+        .source_dir = .{ .cwd_relative = runtime_directory },
+        .install_dir = .prefix,
+        .install_subdir = if (target.result.os.tag == .windows) "bin" else "lib",
+    });
+    install.step.dependOn(source.step);
+    b.getInstallStep().dependOn(&install.step);
 }
 
 const DxcRuntime = enum { dxcompiler, dxil };

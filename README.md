@@ -344,8 +344,8 @@ Source archives and all other release inputs are verified by their pinned SHA-25
 
 ## Examples
 
-The repository includes SDL and selected 2D raylib-derived example ports, all built against system
-libraries. The authoritative example inventory is the table in
+The repository includes SDL and selected 2D raylib-derived example ports, built against the verified
+SDL-family sources bundled in the repository. The authoritative example inventory is the table in
 [`examples/build.zig`](examples/build.zig); see [`examples/README.md`](examples/README.md) for
 assets, origins, and licensing.
 

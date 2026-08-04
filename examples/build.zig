@@ -1,4 +1,5 @@
 const std = @import("std");
+const sdl3 = @import("../build.zig");
 
 pub const Modules = struct {
     target: std.Build.ResolvedTarget,
@@ -90,7 +91,14 @@ const examples = [_]Example{
     .{ .name = "raylib-audio-music-stream", .source = "examples/raylib/audio/music_stream.zig", .origin = .raylib, .mixer = true },
 };
 
-pub fn add(b: *std.Build, modules: Modules) void {
+pub fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+    const modules = sdl3.addRepositoryModulesWithOptions(b, target, optimize, .{
+        .distribution = .source,
+        .image = true,
+        .ttf = true,
+        .mixer = true,
+        .source_features = .{ .profile = .desktop },
+    });
     const all = b.step("examples", "Build and install every native example");
     const sdl_examples = b.step("examples-sdl", "Build and install all SDL example ports");
     const raylib_examples = b.step(
@@ -111,21 +119,30 @@ pub fn add(b: *std.Build, modules: Modules) void {
     });
 
     for (examples) |example| {
-        const imports = importsFor(b, modules, example);
+        const imports = importsFor(b, .{
+            .target = target,
+            .optimize = optimize,
+            .sdl = modules.sdl,
+            .image = modules.image,
+            .ttf = modules.ttf,
+            .mixer = modules.mixer,
+        }, example);
         const root_module = b.createModule(.{
             .root_source_file = b.path(example.source),
-            .target = modules.target,
-            .optimize = modules.optimize,
+            .target = target,
+            .optimize = optimize,
             .imports = imports,
         });
+        if (target.result.os.tag == .linux) {
+            root_module.addRPathSpecial("$ORIGIN/../lib");
+        } else if (target.result.os.tag == .macos) {
+            root_module.addRPathSpecial("@executable_path/../lib");
+        }
         const executable = b.addExecutable(.{
             .name = example.name,
             .root_module = root_module,
         });
-        executable.root_module.linkSystemLibrary("SDL3", .{});
-        if (example.image) executable.root_module.linkSystemLibrary("SDL3_image", .{});
-        if (example.ttf) executable.root_module.linkSystemLibrary("SDL3_ttf", .{});
-        if (example.mixer) executable.root_module.linkSystemLibrary("SDL3_mixer", .{});
+        if (modules.native_build) |native_build| executable.step.dependOn(native_build);
 
         const install = b.addInstallArtifact(executable, .{});
         install.step.dependOn(if (example.origin == .sdl)

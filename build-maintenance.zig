@@ -43,12 +43,5 @@ pub fn build(b: *std.Build) void {
     b.step("docs", "Generate HTML documentation for every public SDL module")
         .dependOn(&install_docs.step);
 
-    example_build.add(b, .{
-        .target = target,
-        .optimize = optimize,
-        .sdl = modules.sdl,
-        .image = modules.image,
-        .ttf = modules.ttf,
-        .mixer = modules.mixer,
-    });
+    example_build.add(b, target, optimize);
 }
