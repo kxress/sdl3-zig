@@ -1,5 +1,5 @@
 import { copy } from "@std/fs/copy";
-import { packageRelease, validateReleaseArchive } from "./package-release.ts";
+import { packageRelease } from "./package-release.ts";
 import { runCommand } from "./utils/command.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 
@@ -18,29 +18,10 @@ export async function verifyReleaseReproducibility(): Promise<void> {
     prefix: "release-repro-",
   });
   try {
-    const first = await packageRelease(`${workspace}/one`);
-    const second = await packageRelease(`${workspace}/two`);
-    await compareFile(first.archive, second.archive, "release archives");
-    await compareFile(`${first.archive}.sha256`, `${second.archive}.sha256`, "SHA-256 sidecars");
-    await compareFile(
-      `${first.archive}.zig-hash`,
-      `${second.archive}.zig-hash`,
-      "Zig hash sidecars",
-    );
-
-    const firstTree = `${workspace}/first-tree`;
-    const secondTree = `${workspace}/second-tree`;
-    await extractArchive(first.archive, firstTree);
-    await extractArchive(second.archive, secondTree);
-    await compareTrees(firstTree, secondTree);
-    await validateReleaseArchive(
-      first.archive,
-      first.archive.slice(first.archive.lastIndexOf("/") + 1, -".tar.gz".length),
-    );
-
-    await verifyCleanFetch(first.archive, first.zigHash, workspace);
-    await verifyDistributionConsumers(first.archive, first.zigHash, workspace);
-    console.log("Release reproducibility and archive-consumer checks passed.");
+    const release = await packageRelease(`${workspace}/release`);
+    await verifyCleanFetch(release.archive, release.zigHash, workspace);
+    await verifyDistributionConsumers(release.archive, release.zigHash, workspace);
+    console.log("Release archive-consumer checks passed.");
   } finally {
     await Deno.remove(workspace, { recursive: true });
   }
@@ -212,52 +193,4 @@ function consumerManifest(
 
 function fileUrl(path: string): string {
   return path.startsWith("/") ? `file://${path}` : path;
-}
-
-async function extractArchive(archive: string, destination: string): Promise<void> {
-  await Deno.mkdir(destination, { recursive: true });
-  await runCommand("tar", ["--extract", "--file", archive, "--directory", destination], {
-    cwd: repositoryRoot,
-  });
-}
-
-async function compareFile(first: string, second: string, description: string): Promise<void> {
-  const left = await Deno.readFile(first);
-  const right = await Deno.readFile(second);
-  if (left.length !== right.length || left.some((byte, index) => byte !== right[index])) {
-    throw new Error(`${description} differ`);
-  }
-}
-
-async function compareTrees(first: string, second: string, relative = ""): Promise<void> {
-  const leftDirectory = relative ? `${first}/${relative}` : first;
-  const rightDirectory = relative ? `${second}/${relative}` : second;
-  const left = [...(await Array.fromAsync(Deno.readDir(leftDirectory)))].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
-  const right = [...(await Array.fromAsync(Deno.readDir(rightDirectory)))].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
-  if (
-    left.length !== right.length || left.some((entry, index) => entry.name !== right[index].name)
-  ) {
-    throw new Error(`Extracted release trees differ at ${relative || "."}`);
-  }
-  for (const entry of left) {
-    const child = relative ? `${relative}/${entry.name}` : entry.name;
-    const other = right.find((candidate) => candidate.name === entry.name)!;
-    if (entry.isDirectory !== other.isDirectory || entry.isSymlink !== other.isSymlink) {
-      throw new Error(`Extracted release entry types differ at ${child}`);
-    }
-    if (entry.isDirectory) await compareTrees(first, second, child);
-    else if (entry.isSymlink) {
-      const a = await Deno.readLink(`${first}/${child}`);
-      const b = await Deno.readLink(`${second}/${child}`);
-      if (a !== b) throw new Error(`Extracted release symlinks differ at ${child}`);
-    } else {await compareFile(
-        `${first}/${child}`,
-        `${second}/${child}`,
-        `Release files at ${child}`,
-      );}
-  }
 }

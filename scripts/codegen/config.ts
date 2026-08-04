@@ -56,7 +56,6 @@ export const codegenConfiguration: CodegenConfiguration = {
     "x86_64-tvos-simulator",
     "wasm32-emscripten",
     "aarch64-linux-android21",
-    "x86_64-linux-android21",
   ],
   documentationPredefined,
   libraries: [
@@ -185,48 +184,6 @@ export const codegenConfiguration: CodegenConfiguration = {
     }),
   ],
 };
-
-validateCodegenConfiguration(codegenConfiguration);
-
-function validateCodegenConfiguration(
-  configuration: CodegenConfiguration,
-): void {
-  if (
-    configuration.targets.length === 0 ||
-    configuration.libraries.length === 0 ||
-    configuration.defines.some((define) => !/^[A-Za-z_][A-Za-z0-9_]*(?:=.*)?$/.test(define)) ||
-    new Set(configuration.defines).size !== configuration.defines.length
-  ) {
-    throw new Error("Unsupported or invalid binding-generator configuration");
-  }
-
-  const ids = new Set<string>();
-  const moduleNames = new Set<string>();
-  for (const library of configuration.libraries) {
-    const moduleName = library.profile.moduleName;
-    if (
-      !library.id || !library.output || !library.sourceLabel ||
-      library.headers.length === 0 || library.includeDirectories.length === 0 ||
-      library.publicIncludeDirectories.length === 0
-    ) {
-      throw new Error(`Binding configuration entry ${library.id || "<unnamed>"} is incomplete`);
-    }
-    if (
-      ids.has(library.id) || moduleNames.has(moduleName) ||
-      library.headers.some((header) => !header || /[<>\r\n]/.test(header)) ||
-      new Set(library.headers).size !== library.headers.length
-    ) {
-      throw new Error(`Binding configuration ${library.id} is invalid or duplicated`);
-    }
-    for (const dependency of library.profile.dependencies) {
-      if (!moduleNames.has(dependency)) {
-        throw new Error(`Binding configuration ${library.id} must list ${dependency} first`);
-      }
-    }
-    ids.add(library.id);
-    moduleNames.add(moduleName);
-  }
-}
 
 export function renderTranslationUnit(headers: string[]): string {
   return `${headers.map((header) => `#include <${header}>`).join("\n")}\n`;

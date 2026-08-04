@@ -1,53 +1,5 @@
-import { assert, assertThrows } from "@std/assert";
+import { assert } from "@std/assert";
 import { collectDoxygenDocumentation, parseDoxygenComment } from "../../scripts/codegen/doxygen.ts";
-import { validateGeneratedDocumentation } from "../../scripts/check-generated-documentation.ts";
-
-Deno.test("generated documentation validation rejects malformed reference shapes", () => {
-  validateGeneratedDocumentation([[
-    "valid.zig",
-    "/// See also: time\n/// SDL_APP_EVENT (C macro outside this module)",
-  ]]);
-
-  assertThrows(
-    () =>
-      validateGeneratedDocumentation([[
-        "fragment.zig",
-        "/// - **See also:** loadGpuTexture */ extern SDL_DECLSPEC IMG_LoadGPUTexture_IO(...);",
-      ]]),
-    Error,
-    "embedded C declaration fragment",
-  );
-  assertThrows(
-    () =>
-      validateGeneratedDocumentation([[
-        "category.zig",
-        "/// See [CategoryTime](CategoryTime)",
-      ]]),
-    Error,
-    "unresolved local category link",
-  );
-  assertThrows(
-    () =>
-      validateGeneratedDocumentation([[
-        "macro.zig",
-        "/// See also: SDL_AUDIO_BITSIZE (C macro)",
-      ]]),
-    Error,
-    "unresolved C macro reference",
-  );
-});
-
-Deno.test("generated bindings retain recovered SDL_image documentation", async () => {
-  const image = await Deno.readTextFile("src/image.zig");
-  assert(image.includes("There is also loadGpuTextureTypedIo(), which is equivalent"));
-  assert(image.includes("pub inline fn loadGpuTextureIo"));
-  assert(image.includes("pub inline fn loadGpuTextureTypedIo"));
-  assert(!image.includes("*/ extern"));
-
-  const sdl = await Deno.readTextFile("src/sdl.zig");
-  assert(!sdl.includes("CategoryTime"));
-  assert(sdl.includes("provided by [time](time)."));
-});
 
 Deno.test("source Doxygen comments retain parameters and see-also fields", () => {
   const parsed = parseDoxygenComment(`

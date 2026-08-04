@@ -47,8 +47,8 @@ content hash to `build.zig.zon`. During development, you can use a checkout inst
 },
 ```
 
-The package requires exactly Zig 0.16.0. Newer Zig versions are unsupported until the repository
-deliberately advances this pin.
+The package requires Zig 0.16.0 or newer. The repository pins Zig 0.16.0 for reproducible
+development and CI.
 
 ## Add SDL to your application
 
@@ -281,8 +281,8 @@ forms:
 - Output parameters become named result structs when that better represents the call.
 - SDL-owned strings and arrays use explicit ownership-aware types.
 - Resource lifetimes become methods when the documented lifecycle is unambiguous.
-- Bit flags preserve unknown bits, and every generated ABI-facing declaration gets compile-time
-  size, alignment, and relevant field-offset checks.
+- Bit flags preserve unknown bits, and recurring ABI-sensitive shapes are covered by focused
+  generator and consumer validation.
 
 The API is still evolving. Its direction—making SDL3 natural to use from Zig—is stable, but
 generated names and shapes may change as the generator handles more SDL patterns. The binding layer
@@ -304,11 +304,10 @@ zig build docs
 The HTML output in `zig-out/docs` includes every public module and optional companion.
 
 The `Documentation Pages` workflow publishes only an existing release tag. Its prepare job runs the
-coverage, target, binding, and documentation gates, then packages the generated HTML once. The
-deploy job downloads and revalidates that artifact without regenerating it. Published versions live
-under their immutable `v3.4.12+N` path, while `latest/` is the explicit stable alias; the artifact
-manifest retains prior version directories and records the exact source commit and coverage-ledger
-hash.
+target, binding, and documentation gates, then packages the generated HTML once. The deploy job
+downloads that artifact without regenerating it. Published versions live under their immutable
+`v3.4.12+N` path, while `latest/` is the explicit stable alias; prior version directories are
+retained when a new release is published.
 
 ## Generation and maintenance
 
@@ -317,15 +316,13 @@ extraction rules. `scripts/generate-bindings.ts` is the argument-free generation
 codegen modules combine Clang/CastXML analysis with Doxygen parsing to render the public Zig modules
 deterministically.
 
-Codex helped build the generator and its maintenance tooling. Both the generator and generated
-output are reviewed, so changes to a pin or generation rule are reproducible and visible in the
-binding diff.
+Both the generator and generated output are reviewed, so changes to a pin or generation rule are
+reproducible and visible in the binding diff.
 
-For repository work on Debian/Ubuntu, Arch, Artix, CachyOS, or MSYS2, install the system packages,
-then the pinned tools and use the explicit workflows:
+For repository work with the `.system` distribution, install your platform's SDL development
+packages, then the pinned tools and use the explicit workflows:
 
 ```sh
-./system_setup.sh
 mise trust
 mise install
 deno task setup
@@ -339,23 +336,16 @@ deno task release-check
 `fetch` populates the ignored local cache of verified upstream source trees when it is absent or
 does not match the pinned artifact manifest. `generate` rewrites bindings and package metadata.
 `check` runs formatting, type checks, source verification, metadata tests, binding tests, and
-consumer build tests. Binding checks also validate generated documentation references and reject
-embedded C declarations or unresolved local links. `deno task package:release` validates or
-repopulates that cache, then assembles the deterministic archive and its SHA-256 and Zig-hash
-sidecars. The archive also contains a generated `THIRD_PARTY_NOTICES` inventory with the hashes of
-every notice retained from the locked source and prebuilt inputs.
+consumer build tests. Binding checks compare generated output with the committed bindings.
+`deno task package:release` requires that prepared cache and generated bindings, then assembles the
+deterministic archive and its SHA-256 and Zig-hash sidecars.
 
-For the five SDL-family source archives that publish detached signatures, source verification also
-checks the exact archive bytes with `gpgv`. The trusted release-key fingerprints are pinned in
-`scripts/sync-sources.ts`; adding or retiring a key is a reviewed rotation that updates that list
-and its signature-fixture tests. The keyserver is used only to retrieve material matching those
-fingerprints. Other release assets are verified by their pinned SHA-256 checksums and are not
-represented as signed when upstream publishes no signature.
+Source archives and all other release inputs are verified by their pinned SHA-256 checksums.
 
 ## Examples
 
-The repository includes 38 SDL example ports and 24 selected 2D raylib-derived ports. They
-intentionally use system libraries:
+The repository includes SDL and selected 2D raylib-derived example ports. They intentionally use
+system libraries:
 
 ```sh
 zig build examples

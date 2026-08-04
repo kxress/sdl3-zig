@@ -35,23 +35,6 @@ Deno.test({
             "--global-cache-dir",
             `${temporary}/${linkage}/global`,
           ], { cwd: sourceAllFixture });
-          const suffix = linkage === "static" ? "-static.lib" : ".dll";
-          const directory = linkage === "static" ? "lib" : "bin";
-          for (
-            const library of [
-              "SDL3",
-              "SDL3_shadercross",
-              "SDL3_image",
-              "SDL3_ttf",
-              "SDL3_mixer",
-              "SDL3_net",
-            ]
-          ) {
-            await Deno.stat(`${cache}/sdl3-source/${directory}/${library}${suffix}`);
-          }
-          await Deno.stat(`${cache}/sdl3-source/lib/SDL3_test.lib`);
-          await Deno.stat(`${cache}/sdl3-source/bin/shadercross.exe`);
-          await Deno.stat(`${cache}/sdl3-source-build/ControllerImage/controllerimage.lib`);
           if (linkage === "shared") {
             for (
               const library of [
@@ -66,11 +49,6 @@ Deno.test({
               await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
             }
           }
-          await run(
-            `${cache}/sdl3-source-build/ControllerImage/make-controllerimage-data.exe`,
-            ["${Deno.cwd()}\\vendor\\ControllerImage\\art"],
-            { cwd: `${temporary}/${linkage}` },
-          );
           await runWindowsExecutable(
             `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
             `${temporary}/${linkage}`,

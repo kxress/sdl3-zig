@@ -45,14 +45,9 @@ Deno.test("Android builds a Zig SDL consumer and packages an APK", async () => {
     await copy(androidProject, project);
     await Deno.mkdir(`${project}/app/libs/arm64-v8a`, { recursive: true });
     await Deno.mkdir(`${project}/app/src/main/java/com/example/sdl3`, { recursive: true });
-    await Deno.mkdir(`${project}/app/src/main/assets`, { recursive: true });
     await copy(
       `${fixture}/MainActivity.java`,
       `${project}/app/src/main/java/com/example/sdl3/MainActivity.java`,
-    );
-    await copy(
-      `${fixture}/assets/android-consumer.txt`,
-      `${project}/app/src/main/assets/android-consumer.txt`,
     );
     await Deno.writeTextFile(
       `${project}/app/jni/CMakeLists.txt`,
@@ -119,7 +114,6 @@ Deno.test("Android builds a Zig SDL consumer and packages an APK", async () => {
     if (!listing.success) throw new Error(new TextDecoder().decode(listing.stderr));
     const files = new TextDecoder().decode(listing.stdout);
     assertStringIncludes(files, "lib/arm64-v8a/libmain.so");
-    assertStringIncludes(files, "assets/android-consumer.txt");
 
     const devices = await toolCommand(adb, ["devices"], { env });
     const connected = new TextDecoder().decode(devices.stdout)

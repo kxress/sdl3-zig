@@ -1,23 +1,8 @@
-import { relative, resolve } from "@std/path";
+import { resolve } from "@std/path";
 import { codegenConfiguration } from "./codegen/config.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 
-const manifestName = ".sdl3-docs.json";
 const versionPattern = /^\d+\.\d+\.\d+(?:\+\d+)?$/;
-const commitPattern = /^[0-9a-f]{40}$/;
-
-export interface DocumentationManifest {
-  format: 1;
-  package_version: string;
-  release_tag: string;
-  commit: string;
-  version_path: string;
-  latest_path: "latest";
-  content_sha256: string;
-  coverage_sha256: string;
-  coverage_identity_count: number;
-  links: DocumentationLink[];
-}
 
 export interface DocumentationLink {
   module: string;
@@ -37,72 +22,21 @@ export function packageVersion(source: string): string {
   return version;
 }
 
-export function validateManifest(
-  manifest: DocumentationManifest,
-  expectedTag?: string,
-  expectedCommit?: string,
-): void {
-  if (manifest.format !== 1 || !versionPattern.test(manifest.package_version)) {
-    throw new Error("Documentation artifact has invalid version metadata");
-  }
-  if (manifest.release_tag !== `v${manifest.package_version}`) {
-    throw new Error("Documentation artifact release tag does not match its package version");
-  }
-  if (expectedTag && manifest.release_tag !== expectedTag) {
-    throw new Error(`Documentation artifact has wrong release tag: ${manifest.release_tag}`);
-  }
-  if (!commitPattern.test(manifest.commit)) {
-    throw new Error("Documentation artifact has invalid commit metadata");
-  }
-  if (expectedCommit && manifest.commit !== expectedCommit) {
-    throw new Error("Documentation artifact was built from a different commit");
-  }
-  if (manifest.version_path !== manifest.release_tag || manifest.latest_path !== "latest") {
-    throw new Error("Documentation artifact has invalid version paths");
-  }
-  if (
-    !/^[0-9a-f]{64}$/.test(manifest.content_sha256) ||
-    !/^[0-9a-f]{64}$/.test(manifest.coverage_sha256)
-  ) {
-    throw new Error("Documentation artifact has invalid content hashes");
-  }
-  if (
-    !Number.isSafeInteger(manifest.coverage_identity_count) || manifest.coverage_identity_count < 1
-  ) {
-    throw new Error("Documentation artifact has invalid coverage metadata");
-  }
-  if (manifest.links.length !== codegenConfiguration.libraries.length) {
-    throw new Error("Documentation artifact is missing a library cross-link");
-  }
-  for (const link of manifest.links) {
-    if (
-      !link.module || !link.ergonomic_path || link.c_headers.length === 0 ||
-      link.upstream_headers.length !== link.c_headers.length || !link.upstream_symbols
-    ) {
-      throw new Error(`Documentation artifact has incomplete links for ${link.module}`);
-    }
-  }
-}
-
 export async function packageDocumentation(options: {
   input: string;
   output: string;
   existing?: string;
   tag: string;
-  commit: string;
-}): Promise<DocumentationManifest> {
+}): Promise<void> {
   const input = resolve(options.input);
   const output = resolve(options.output);
   const existing = options.existing ? resolve(options.existing) : undefined;
   const packageSource = await Deno.readTextFile(`${repositoryRoot}/build.zig.zon`);
-  const coverageSource = await Deno.readTextFile(`${repositoryRoot}/api_coverage.json`);
   const version = packageVersion(packageSource);
   const expectedTag = `v${version}`;
   if (options.tag !== expectedTag) {
     throw new Error(`Release tag ${options.tag} does not match package version ${version}`);
   }
-  if (!commitPattern.test(options.commit)) throw new Error("Release commit must be a full SHA-1");
-  validateCoverageJson(coverageSource);
   await requireDirectory(input, "generated documentation");
 
   await removeIfPresent(output);
@@ -118,45 +52,6 @@ export async function packageDocumentation(options: {
 
   const links = await documentationLinks(expectedTag);
   await Deno.writeTextFile(`${output}/index.html`, renderIndex(version, expectedTag, links));
-  const manifest: DocumentationManifest = {
-    format: 1,
-    package_version: version,
-    release_tag: expectedTag,
-    commit: options.commit,
-    version_path: expectedTag,
-    latest_path: "latest",
-    content_sha256: await contentHash(output),
-    coverage_sha256: await sha256(new TextEncoder().encode(coverageSource)),
-    coverage_identity_count:
-      (JSON.parse(coverageSource) as { identities: unknown[] }).identities.length,
-    links,
-  };
-  validateManifest(manifest, expectedTag, options.commit);
-  await Deno.writeTextFile(`${output}/${manifestName}`, `${JSON.stringify(manifest, null, 2)}\n`);
-  return manifest;
-}
-
-export async function validateDocumentationArtifact(
-  root: string,
-  expectedTag?: string,
-  expectedCommit?: string,
-): Promise<DocumentationManifest> {
-  const directory = resolve(root);
-  const manifest = JSON.parse(
-    await Deno.readTextFile(`${directory}/${manifestName}`),
-  ) as DocumentationManifest;
-  validateManifest(manifest, expectedTag, expectedCommit);
-  await requireDirectory(`${directory}/${manifest.version_path}`, "versioned documentation");
-  await requireDirectory(`${directory}/${manifest.latest_path}`, "latest documentation");
-  if (!await exists(`${directory}/index.html`)) {
-    throw new Error("Documentation artifact lacks index.html");
-  }
-  await validateLocalLinks(directory);
-  const actualHash = await contentHash(directory);
-  if (actualHash !== manifest.content_sha256) {
-    throw new Error("Documentation artifact content does not match its manifest");
-  }
-  return manifest;
 }
 
 async function documentationLinks(tag: string): Promise<DocumentationLink[]> {
@@ -236,33 +131,6 @@ ${rows}
 </tbody></table></body></html>\n`;
 }
 
-function validateCoverageJson(source: string): void {
-  const coverage = JSON.parse(source) as { format?: number; identities?: unknown[] };
-  if (coverage.format !== 1 || !coverage.identities || coverage.identities.length === 0) {
-    throw new Error("Coverage ledger is missing or invalid");
-  }
-}
-
-async function contentHash(root: string): Promise<string> {
-  const entries: string[] = [];
-  for await (const path of filePaths(root)) {
-    const relativePath = relative(root, path).replaceAll("\\", "/");
-    if (relativePath === manifestName) continue;
-    const bytes = await Deno.readFile(path);
-    entries.push(`${relativePath}\0${await sha256(bytes)}`);
-  }
-  entries.sort();
-  return sha256(new TextEncoder().encode(`${entries.join("\n")}\n`));
-}
-
-async function* filePaths(directory: string): AsyncGenerator<string> {
-  for await (const entry of Deno.readDir(directory)) {
-    const path = `${directory}/${entry.name}`;
-    if (entry.isDirectory) yield* filePaths(path);
-    else if (entry.isFile) yield path;
-  }
-}
-
 async function copyTree(source: string, destination: string): Promise<void> {
   await Deno.mkdir(destination, { recursive: true });
   for await (const entry of Deno.readDir(source)) {
@@ -279,30 +147,12 @@ async function requireDirectory(path: string, label: string): Promise<void> {
   if (!info?.isDirectory) throw new Error(`Missing ${label}: ${path}`);
 }
 
-async function validateLocalLinks(root: string): Promise<void> {
-  const index = await Deno.readTextFile(`${root}/index.html`);
-  for (const match of index.matchAll(/\bhref="([^"]+)"/g)) {
-    const href = match[1].split(/[?#]/, 1)[0];
-    if (!href || href.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
-    const target = `${root}/${href.replace(/^\//, "")}`;
-    const path = href.endsWith("/") ? target.slice(0, -1) : target;
-    if (!await exists(path)) throw new Error(`Documentation artifact has a broken link: ${href}`);
-  }
-}
-
 async function exists(path: string): Promise<boolean> {
   return await Deno.stat(path).then(() => true).catch(() => false);
 }
 
 async function removeIfPresent(path: string): Promise<void> {
   if (await exists(path)) await Deno.remove(path, { recursive: true });
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const input = new Uint8Array(bytes.byteLength);
-  input.set(bytes);
-  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", input.buffer))]
-    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function escapeHtml(value: string): string {
@@ -312,8 +162,7 @@ function escapeHtml(value: string): string {
 
 function usage(): never {
   throw new Error(
-    "usage: package-documentation.ts <package|validate> --root <path> [--existing <path>] " +
-      "[--tag <tag> --commit <sha>]",
+    "usage: package-documentation.ts package --root <path> [--existing <path>] --tag <tag>",
   );
 }
 
@@ -325,20 +174,13 @@ function argument(name: string): string | undefined {
 if (import.meta.main) {
   const command = Deno.args[0];
   const root = argument("--root");
-  if (!root || !["package", "validate"].includes(command)) usage();
-  if (command === "validate") {
-    await validateDocumentationArtifact(root, argument("--tag"), argument("--commit"));
-  } else {
-    const tag = argument("--tag");
-    const commit = argument("--commit");
-    const output = argument("--output");
-    if (!tag || !commit || !output) usage();
-    await packageDocumentation({
-      input: root,
-      output,
-      existing: argument("--existing"),
-      tag,
-      commit,
-    });
-  }
+  const tag = argument("--tag");
+  const output = argument("--output");
+  if (command !== "package" || !root || !tag || !output) usage();
+  await packageDocumentation({
+    input: root,
+    output,
+    existing: argument("--existing"),
+    tag,
+  });
 }

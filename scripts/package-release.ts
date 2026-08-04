@@ -1,7 +1,5 @@
 import { copy } from "@std/fs/copy";
 import { dirname, resolve } from "@std/path";
-import { assertRepositoryBindingsCurrent } from "./check-generated-bindings.ts";
-import { collectNoticePathsUnder, writeThirdPartyNotices } from "./third-party-notices.ts";
 import { runCommand } from "./utils/command.ts";
 import { repositoryRoot } from "./utils/paths.ts";
 import {
@@ -31,28 +29,30 @@ export async function stageReleaseTree(
   destination: string,
 ): Promise<string> {
   const release = await loadSdlRelease();
-  await ensureVendoredSources();
-  await assertRepositoryBindingsCurrent();
+  await requirePreparedInputs(release);
   const packageRoot = `${destination}/sdl3-${releaseVersion(release)}`;
   await Deno.mkdir(packageRoot, { recursive: true });
-  const expectedNotices = await copyPackageSources(release, packageRoot);
-  for (const notice of await stagePrebuilts(release, packageRoot, destination)) {
-    expectedNotices.add(notice);
-  }
-  await writeThirdPartyNotices(packageRoot, [...expectedNotices]);
+  await copyPackageSources(release, packageRoot);
+  await stagePrebuilts(release, packageRoot, destination);
   await validateReleaseTree(packageRoot);
   return packageRoot;
 }
 
-async function ensureVendoredSources(): Promise<void> {
-  await runCommand("deno", [
-    "run",
-    "--allow-read",
-    "--allow-write",
-    "--allow-run=curl,gpg,gpgv,mise",
-    "scripts/sync-sources.ts",
-    "update",
-  ], { cwd: repositoryRoot });
+async function requirePreparedInputs(release: SdlRelease): Promise<void> {
+  for (const path of packagePaths(release)) {
+    if (path === "prebuilt") continue;
+    try {
+      await Deno.lstat(`${repositoryRoot}/${path}`);
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        throw new Error(
+          `Release prerequisite is missing: ${path}; run deno task fetch and deno task generate first`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  }
 }
 
 export async function packageRelease(
@@ -181,17 +181,11 @@ async function releaseTreeMembers(root: string, packageName: string): Promise<st
   return members.sort();
 }
 
-async function copyPackageSources(release: SdlRelease, destination: string): Promise<Set<string>> {
-  const notices = new Set(["LICENSE"]);
+async function copyPackageSources(release: SdlRelease, destination: string): Promise<void> {
   for (const path of packagePaths(release)) {
-    if (path === "prebuilt" || path === "THIRD_PARTY_NOTICES") continue;
+    if (path === "prebuilt") continue;
     await copyPackagePath(`${repositoryRoot}/${path}`, `${destination}/${path}`);
-    if (path.startsWith("vendor/")) {
-      const input = `${repositoryRoot}/${path}`;
-      for (const notice of await collectNoticePathsUnder(input, path)) notices.add(notice);
-    }
   }
-  return notices;
 }
 
 async function copyPackagePath(source: string, destination: string): Promise<void> {
@@ -211,8 +205,7 @@ async function stagePrebuilts(
   release: SdlRelease,
   packageRoot: string,
   temporary: string,
-): Promise<Set<string>> {
-  const notices = new Set<string>();
+): Promise<void> {
   const prebuiltComponents = release.components.filter((component) => component.prebuilt);
   const names = prebuiltComponents.flatMap(binaryArtifactNames);
   const installations = await installArtifacts(names);
@@ -234,12 +227,11 @@ async function stagePrebuilts(
         requireInstallation(installations, artifactName(component, "macos"))
       }/${upstreamDirectory}.dmg`,
     ], { cwd: repositoryRoot });
-    await stageMinGW(component, mingw, packageRoot, installations, notices);
-    await stageMSVC(component, msvc, packageRoot, notices);
-    await stageMacOS(component, macos, packageRoot, notices);
+    await stageMinGW(component, mingw, packageRoot, installations);
+    await stageMSVC(component, msvc, packageRoot);
+    await stageMacOS(component, macos, packageRoot);
     console.log(`Staged ${component.id} ${component.version} prebuilts.`);
   }
-  return notices;
 }
 
 async function stageMinGW(
@@ -247,7 +239,6 @@ async function stageMinGW(
   extracted: string,
   packageRoot: string,
   installations: Map<string, string>,
-  notices: Set<string>,
 ): Promise<void> {
   for (const target of prebuiltTargetsFor("mingw")) {
     const destination = prebuiltDestination(component, packageRoot, target);
@@ -271,7 +262,6 @@ async function stageMinGW(
       optional,
       `${destination}/optional`,
     );
-    await addMappedNoticePaths(`${optionalRoot}/optional`, `${destination}/optional`, notices);
   }
 }
 
@@ -279,7 +269,6 @@ async function stageMSVC(
   component: SdlComponent,
   extracted: string,
   packageRoot: string,
-  notices: Set<string>,
 ): Promise<void> {
   for (const target of prebuiltTargetsFor("msvc")) {
     const destination = prebuiltDestination(component, packageRoot, target);
@@ -297,11 +286,6 @@ async function stageMSVC(
         `${extracted}/lib/${target.upstreamArch}/optional`,
         optional,
         `${destination}/optional`,
-      );
-      await addMappedNoticePaths(
-        `${extracted}/lib/${target.upstreamArch}/optional`,
-        `${destination}/optional`,
-        notices,
       );
     }
   }
@@ -321,7 +305,6 @@ async function stageMacOS(
   component: SdlComponent,
   extracted: string,
   packageRoot: string,
-  notices: Set<string>,
 ): Promise<void> {
   const destination = `${packageRoot}/prebuilt/${component.key}/macos`;
   const source = `${extracted}/${component.id}`;
@@ -331,15 +314,9 @@ async function stageMacOS(
     framework,
     `${destination}/frameworks/${component.id}.framework`,
   );
-  await addMappedNoticePaths(
-    framework,
-    `${destination}/frameworks/${component.id}.framework`,
-    notices,
-  );
   for (const name of component.macosOptionalFrameworks ?? []) {
     const optional = `${source}/optional/${name}.xcframework/macos-arm64_x86_64/${name}.framework`;
     await copyTo(optional, `${destination}/optional/${name}.framework`);
-    await addMappedNoticePaths(optional, `${destination}/optional/${name}.framework`, notices);
   }
 }
 
@@ -366,17 +343,6 @@ async function copyTo(source: string, destination: string): Promise<void> {
       throw new Error(`Required release input does not exist: ${source}`, { cause: error });
     }
     throw error;
-  }
-}
-
-async function addMappedNoticePaths(
-  source: string,
-  destination: string,
-  output: Set<string>,
-): Promise<void> {
-  const sourceNotices = await collectNoticePathsUnder(source);
-  for (const notice of sourceNotices) {
-    output.add(`${destination.slice(destination.indexOf("/prebuilt/") + 1)}/${notice}`);
   }
 }
 

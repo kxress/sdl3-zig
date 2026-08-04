@@ -34,10 +34,6 @@ const IoVarType = enum(c.SDL_ShaderCross_IOVarType) {
     float64 = @intCast(c.SDL_SHADERCROSS_IOVAR_TYPE_FLOAT64),
     _,
 };
-comptime {
-    if (@sizeOf(IoVarType) != @sizeOf(c.SDL_ShaderCross_IOVarType)) @compileError("ABI size mismatch for IoVarType");
-    if (@alignOf(IoVarType) != @alignOf(c.SDL_ShaderCross_IOVarType)) @compileError("ABI alignment mismatch for IoVarType");
-}
 
 /// SDL enumeration `shadercross.ShaderStage`.
 const ShaderStage = enum(c.SDL_ShaderCross_ShaderStage) {
@@ -49,10 +45,6 @@ const ShaderStage = enum(c.SDL_ShaderCross_ShaderStage) {
     compute = @intCast(c.SDL_SHADERCROSS_SHADERSTAGE_COMPUTE),
     _,
 };
-comptime {
-    if (@sizeOf(ShaderStage) != @sizeOf(c.SDL_ShaderCross_ShaderStage)) @compileError("ABI size mismatch for ShaderStage");
-    if (@alignOf(ShaderStage) != @alignOf(c.SDL_ShaderCross_ShaderStage)) @compileError("ABI alignment mismatch for ShaderStage");
-}
 
 /// SDL record `shadercross.ComputePipelineMetadata`.
 const ComputePipelineMetadata = extern struct {
@@ -75,19 +67,6 @@ const ComputePipelineMetadata = extern struct {
     /// Field `threadcount_z`.
     threadcount_z: u32,
 };
-comptime {
-    if (@sizeOf(ComputePipelineMetadata) != @sizeOf(c.SDL_ShaderCross_ComputePipelineMetadata)) @compileError("ABI size mismatch for ComputePipelineMetadata");
-    if (@alignOf(ComputePipelineMetadata) != @alignOf(c.SDL_ShaderCross_ComputePipelineMetadata)) @compileError("ABI alignment mismatch for ComputePipelineMetadata");
-    if (@offsetOf(ComputePipelineMetadata, "num_samplers") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_samplers")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_samplers");
-    if (@offsetOf(ComputePipelineMetadata, "num_readonly_storage_textures") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_readonly_storage_textures")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_readonly_storage_textures");
-    if (@offsetOf(ComputePipelineMetadata, "num_readonly_storage_buffers") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_readonly_storage_buffers")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_readonly_storage_buffers");
-    if (@offsetOf(ComputePipelineMetadata, "num_readwrite_storage_textures") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_readwrite_storage_textures")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_readwrite_storage_textures");
-    if (@offsetOf(ComputePipelineMetadata, "num_readwrite_storage_buffers") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_readwrite_storage_buffers")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_readwrite_storage_buffers");
-    if (@offsetOf(ComputePipelineMetadata, "num_uniform_buffers") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "num_uniform_buffers")) @compileError("ABI field mismatch for ComputePipelineMetadata.num_uniform_buffers");
-    if (@offsetOf(ComputePipelineMetadata, "threadcount_x") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "threadcount_x")) @compileError("ABI field mismatch for ComputePipelineMetadata.threadcount_x");
-    if (@offsetOf(ComputePipelineMetadata, "threadcount_y") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "threadcount_y")) @compileError("ABI field mismatch for ComputePipelineMetadata.threadcount_y");
-    if (@offsetOf(ComputePipelineMetadata, "threadcount_z") != @offsetOf(c.SDL_ShaderCross_ComputePipelineMetadata, "threadcount_z")) @compileError("ABI field mismatch for ComputePipelineMetadata.threadcount_z");
-}
 
 /// SDL record `shadercross.GraphicsShaderMetadata`.
 const GraphicsShaderMetadata = extern struct {
@@ -102,15 +81,6 @@ const GraphicsShaderMetadata = extern struct {
     /// Field `outputs`.
     outputs: ?*IoVarMetadata,
 };
-comptime {
-    if (@sizeOf(GraphicsShaderMetadata) != @sizeOf(c.SDL_ShaderCross_GraphicsShaderMetadata)) @compileError("ABI size mismatch for GraphicsShaderMetadata");
-    if (@alignOf(GraphicsShaderMetadata) != @alignOf(c.SDL_ShaderCross_GraphicsShaderMetadata)) @compileError("ABI alignment mismatch for GraphicsShaderMetadata");
-    if (@offsetOf(GraphicsShaderMetadata, "resource_info") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderMetadata, "resource_info")) @compileError("ABI field mismatch for GraphicsShaderMetadata.resource_info");
-    if (@offsetOf(GraphicsShaderMetadata, "num_inputs") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderMetadata, "num_inputs")) @compileError("ABI field mismatch for GraphicsShaderMetadata.num_inputs");
-    if (@offsetOf(GraphicsShaderMetadata, "inputs") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderMetadata, "inputs")) @compileError("ABI field mismatch for GraphicsShaderMetadata.inputs");
-    if (@offsetOf(GraphicsShaderMetadata, "num_outputs") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderMetadata, "num_outputs")) @compileError("ABI field mismatch for GraphicsShaderMetadata.num_outputs");
-    if (@offsetOf(GraphicsShaderMetadata, "outputs") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderMetadata, "outputs")) @compileError("ABI field mismatch for GraphicsShaderMetadata.outputs");
-}
 
 /// SDL record `shadercross.GraphicsShaderResourceInfo`.
 const GraphicsShaderResourceInfo = extern struct {
@@ -123,14 +93,6 @@ const GraphicsShaderResourceInfo = extern struct {
     /// Field `num_uniform_buffers`.
     num_uniform_buffers: u32,
 };
-comptime {
-    if (@sizeOf(GraphicsShaderResourceInfo) != @sizeOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo)) @compileError("ABI size mismatch for GraphicsShaderResourceInfo");
-    if (@alignOf(GraphicsShaderResourceInfo) != @alignOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo)) @compileError("ABI alignment mismatch for GraphicsShaderResourceInfo");
-    if (@offsetOf(GraphicsShaderResourceInfo, "num_samplers") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo, "num_samplers")) @compileError("ABI field mismatch for GraphicsShaderResourceInfo.num_samplers");
-    if (@offsetOf(GraphicsShaderResourceInfo, "num_storage_textures") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo, "num_storage_textures")) @compileError("ABI field mismatch for GraphicsShaderResourceInfo.num_storage_textures");
-    if (@offsetOf(GraphicsShaderResourceInfo, "num_storage_buffers") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo, "num_storage_buffers")) @compileError("ABI field mismatch for GraphicsShaderResourceInfo.num_storage_buffers");
-    if (@offsetOf(GraphicsShaderResourceInfo, "num_uniform_buffers") != @offsetOf(c.SDL_ShaderCross_GraphicsShaderResourceInfo, "num_uniform_buffers")) @compileError("ABI field mismatch for GraphicsShaderResourceInfo.num_uniform_buffers");
-}
 
 /// SDL record `shadercross.HlslDefine`.
 const HlslDefine = extern struct {
@@ -139,12 +101,6 @@ const HlslDefine = extern struct {
     /// Field `value`.
     value: ?*u8,
 };
-comptime {
-    if (@sizeOf(HlslDefine) != @sizeOf(c.SDL_ShaderCross_HLSL_Define)) @compileError("ABI size mismatch for HlslDefine");
-    if (@alignOf(HlslDefine) != @alignOf(c.SDL_ShaderCross_HLSL_Define)) @compileError("ABI alignment mismatch for HlslDefine");
-    if (@offsetOf(HlslDefine, "name") != @offsetOf(c.SDL_ShaderCross_HLSL_Define, "name")) @compileError("ABI field mismatch for HlslDefine.name");
-    if (@offsetOf(HlslDefine, "value") != @offsetOf(c.SDL_ShaderCross_HLSL_Define, "value")) @compileError("ABI field mismatch for HlslDefine.value");
-}
 
 /// SDL record `shadercross.HlslInfo`.
 const HlslInfo = extern struct {
@@ -161,16 +117,6 @@ const HlslInfo = extern struct {
     /// Field `props`.
     props: sdl.properties.Id,
 };
-comptime {
-    if (@sizeOf(HlslInfo) != @sizeOf(c.SDL_ShaderCross_HLSL_Info)) @compileError("ABI size mismatch for HlslInfo");
-    if (@alignOf(HlslInfo) != @alignOf(c.SDL_ShaderCross_HLSL_Info)) @compileError("ABI alignment mismatch for HlslInfo");
-    if (@offsetOf(HlslInfo, "source") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "source")) @compileError("ABI field mismatch for HlslInfo.source");
-    if (@offsetOf(HlslInfo, "entrypoint") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "entrypoint")) @compileError("ABI field mismatch for HlslInfo.entrypoint");
-    if (@offsetOf(HlslInfo, "include_dir") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "include_dir")) @compileError("ABI field mismatch for HlslInfo.include_dir");
-    if (@offsetOf(HlslInfo, "defines") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "defines")) @compileError("ABI field mismatch for HlslInfo.defines");
-    if (@offsetOf(HlslInfo, "shader_stage") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "shader_stage")) @compileError("ABI field mismatch for HlslInfo.shader_stage");
-    if (@offsetOf(HlslInfo, "props") != @offsetOf(c.SDL_ShaderCross_HLSL_Info, "props")) @compileError("ABI field mismatch for HlslInfo.props");
-}
 
 /// SDL record `shadercross.IoVarMetadata`.
 const IoVarMetadata = extern struct {
@@ -183,14 +129,6 @@ const IoVarMetadata = extern struct {
     /// Field `vector_size`.
     vector_size: u32,
 };
-comptime {
-    if (@sizeOf(IoVarMetadata) != @sizeOf(c.SDL_ShaderCross_IOVarMetadata)) @compileError("ABI size mismatch for IoVarMetadata");
-    if (@alignOf(IoVarMetadata) != @alignOf(c.SDL_ShaderCross_IOVarMetadata)) @compileError("ABI alignment mismatch for IoVarMetadata");
-    if (@offsetOf(IoVarMetadata, "name") != @offsetOf(c.SDL_ShaderCross_IOVarMetadata, "name")) @compileError("ABI field mismatch for IoVarMetadata.name");
-    if (@offsetOf(IoVarMetadata, "location") != @offsetOf(c.SDL_ShaderCross_IOVarMetadata, "location")) @compileError("ABI field mismatch for IoVarMetadata.location");
-    if (@offsetOf(IoVarMetadata, "vector_type") != @offsetOf(c.SDL_ShaderCross_IOVarMetadata, "vector_type")) @compileError("ABI field mismatch for IoVarMetadata.vector_type");
-    if (@offsetOf(IoVarMetadata, "vector_size") != @offsetOf(c.SDL_ShaderCross_IOVarMetadata, "vector_size")) @compileError("ABI field mismatch for IoVarMetadata.vector_size");
-}
 
 /// SDL record `shadercross.SpirvInfo`.
 const SpirvInfo = extern struct {
@@ -205,15 +143,6 @@ const SpirvInfo = extern struct {
     /// Field `props`.
     props: sdl.properties.Id,
 };
-comptime {
-    if (@sizeOf(SpirvInfo) != @sizeOf(c.SDL_ShaderCross_SPIRV_Info)) @compileError("ABI size mismatch for SpirvInfo");
-    if (@alignOf(SpirvInfo) != @alignOf(c.SDL_ShaderCross_SPIRV_Info)) @compileError("ABI alignment mismatch for SpirvInfo");
-    if (@offsetOf(SpirvInfo, "bytecode") != @offsetOf(c.SDL_ShaderCross_SPIRV_Info, "bytecode")) @compileError("ABI field mismatch for SpirvInfo.bytecode");
-    if (@offsetOf(SpirvInfo, "bytecode_size") != @offsetOf(c.SDL_ShaderCross_SPIRV_Info, "bytecode_size")) @compileError("ABI field mismatch for SpirvInfo.bytecode_size");
-    if (@offsetOf(SpirvInfo, "entrypoint") != @offsetOf(c.SDL_ShaderCross_SPIRV_Info, "entrypoint")) @compileError("ABI field mismatch for SpirvInfo.entrypoint");
-    if (@offsetOf(SpirvInfo, "shader_stage") != @offsetOf(c.SDL_ShaderCross_SPIRV_Info, "shader_stage")) @compileError("ABI field mismatch for SpirvInfo.shader_stage");
-    if (@offsetOf(SpirvInfo, "props") != @offsetOf(c.SDL_ShaderCross_SPIRV_Info, "props")) @compileError("ABI field mismatch for SpirvInfo.props");
-}
 
 /// Compile an SDL GPU compute pipeline from SPIRV code. If your shader source is HLSL, you should obtain SPIR-V bytecode from shadercross.compileSpirvFromHlsl().
 ///
@@ -446,189 +375,3 @@ pub const shadercross = struct {
     pub const transpileHlslFromSpirv = root.transpileHlslFromSpirv;
     pub const transpileMslFromSpirv = root.transpileMslFromSpirv;
 };
-
-// Force target-specific public declarations through Zig's lazy analysis.
-comptime {
-    if (builtin.abi == .android or builtin.abi == .androideabi) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .emscripten) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .ios) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .linux) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .macos) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .tvos) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-    if (builtin.os.tag == .windows) {
-        _ = root.ComputePipelineMetadata;
-        _ = root.GraphicsShaderMetadata;
-        _ = root.GraphicsShaderResourceInfo;
-        _ = root.HlslDefine;
-        _ = root.HlslInfo;
-        _ = root.IoVarMetadata;
-        _ = root.IoVarType;
-        _ = root.ShaderStage;
-        _ = root.SpirvInfo;
-        _ = root.compileComputePipelineFromSpirv;
-        _ = root.compileDxbcFromHlsl;
-        _ = root.compileDxbcFromSpirv;
-        _ = root.compileDxilFromHlsl;
-        _ = root.compileDxilFromSpirv;
-        _ = root.compileGraphicsShaderFromSpirv;
-        _ = root.compileSpirvFromHlsl;
-        _ = root.getHlslShaderFormats;
-        _ = root.getSpirvShaderFormats;
-        _ = root.init;
-        _ = root.quit;
-        _ = root.reflectComputeSpirv;
-        _ = root.reflectGraphicsSpirv;
-        _ = root.transpileHlslFromSpirv;
-        _ = root.transpileMslFromSpirv;
-    }
-}

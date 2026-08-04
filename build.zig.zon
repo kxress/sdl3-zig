@@ -6,12 +6,12 @@
     .dependencies = .{},
     .paths = .{
         "build.zig",
+        "build-maintenance.zig",
         "build.zig.zon",
         "sdl_metadata.zig",
-        "api_coverage.json",
-        "api_coverage_overrides.json",
         "src",
-        "examples",
+        "examples/build.zig",
+        "examples/steps.zig",
         "prebuilt",
         "vendor/SDL3",
         "vendor/ControllerImage",
@@ -21,7 +21,6 @@
         "vendor/SDL3_mixer",
         "vendor/SDL3_net",
         "LICENSE",
-        "THIRD_PARTY_NOTICES",
         "README.md",
     },
 }

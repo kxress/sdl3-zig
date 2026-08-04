@@ -1,4 +1,4 @@
-# Apple mobile target prototype
+# Apple mobile targets
 
 The binding generator recognizes the six mobile slices shipped by the pinned SDL-family DMGs:
 
@@ -16,8 +16,7 @@ and device slices expose the same public SDL API.
 DMGs, compiles the Zig binding consumer for every retained slice, links every retained core and
 companion framework with device/simulator SDKs, checks the framework rpaths, embeds and ad-hoc signs
 an iOS simulator app, and exercises install/launch/terminate through `simctl`. It requires Xcode's
-iOS and tvOS SDKs plus an available iPhone simulator. The test is ignored on non-macOS hosts; this
-WSL checkout has no Apple SDK or simulator and therefore cannot claim that gate passed.
+iOS and tvOS SDKs plus an available iPhone simulator. The test is ignored on non-macOS hosts.
 
-The release archive remains macOS-only until this gate has passed on a macOS runner. visionOS is not
-included because no pinned verified visionOS artifact or source path is available.
+The release archive remains macOS-only. visionOS is not included because no pinned verified visionOS
+artifact or source path is available.

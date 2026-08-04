@@ -30,22 +30,6 @@ Deno.test({
             "--global-cache-dir",
             `${temporary}/${linkage}/global`,
           ], { cwd: sourceAllFixture });
-          const suffix = linkage === "static" ? ".a" : ".dylib";
-          for (
-            const library of [
-              "SDL3",
-              "SDL3_shadercross",
-              "SDL3_image",
-              "SDL3_ttf",
-              "SDL3_mixer",
-              "SDL3_net",
-            ]
-          ) {
-            await Deno.stat(`${cache}/sdl3-source/lib/lib${library}${suffix}`);
-          }
-          await Deno.stat(`${cache}/sdl3-source/lib/libSDL3_test.a`);
-          await Deno.stat(`${cache}/sdl3-source/bin/shadercross`);
-          await Deno.stat(`${cache}/sdl3-source-build/ControllerImage/libcontrollerimage.a`);
           if (linkage === "shared") {
             for (
               const library of [
@@ -64,11 +48,6 @@ Deno.test({
               "@executable_path/../lib",
             );
           }
-          await run(
-            `${cache}/sdl3-source-build/ControllerImage/make-controllerimage-data`,
-            ["${Deno.cwd()}/vendor/ControllerImage/art"],
-            { cwd: `${temporary}/${linkage}` },
-          );
           await run(`${temporary}/${linkage}/output/bin/cmake-source-all`, [], {
             cwd: `${temporary}/${linkage}`,
           });

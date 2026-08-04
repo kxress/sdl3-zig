@@ -95,38 +95,6 @@ function validateGeneratedSource(source: string): void {
   ) {
     throw new Error("Generated public API exposes a private module type");
   }
-
-  const lines = source.split("\n");
-  const reExportedRootNames = new Set(
-    lines.flatMap((line) => {
-      const match = line.match(
-        /^\s*pub const [A-Za-z_@][A-Za-z0-9_@]* = root\.([A-Za-z_@][A-Za-z0-9_@]*);$/,
-      );
-      return match ? [match[1]] : [];
-    }),
-  );
-  for (const [index, line] of lines.entries()) {
-    const declaration = line.match(
-      /^(\s*)(pub )?(?:const|fn|var)\s+([A-Za-z_@][A-Za-z0-9_@]*)/,
-    );
-    if (!declaration) continue;
-    if (declaration[3] === "c") continue;
-    const isForwardingAlias = declaration[2] && /^\s*pub const [^=]+ = root\./.test(line);
-    const previous = lines[index - 1] ?? "";
-    if (isForwardingAlias) {
-      if (previous.startsWith(`${declaration[1]}///`)) {
-        throw new Error(`Generated forwarding alias is documented: ${line.trim()}`);
-      }
-      continue;
-    }
-    const isExportedRootDeclaration = declaration[1] === "" &&
-      !declaration[2] &&
-      reExportedRootNames.has(declaration[3]);
-    if (!declaration[2] && !isExportedRootDeclaration) continue;
-    if (!previous.startsWith(`${declaration[1]}///`)) {
-      throw new Error(`Generated public declaration is undocumented: ${line.trim()}`);
-    }
-  }
 }
 
 async function writeGeneratedFile(

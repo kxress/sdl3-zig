@@ -169,16 +169,15 @@ export function packagePaths(release: SdlRelease): string[] {
   return [
     ...new Set([
       "build.zig",
+      "build-maintenance.zig",
       "build.zig.zon",
       "sdl_metadata.zig",
-      "api_coverage.json",
-      "api_coverage_overrides.json",
       "src",
-      "examples",
+      "examples/build.zig",
+      "examples/steps.zig",
       "prebuilt",
       ...release.components.map((component) => `vendor/${component.vendorId}`),
       "LICENSE",
-      "THIRD_PARTY_NOTICES",
       "README.md",
     ]),
   ];

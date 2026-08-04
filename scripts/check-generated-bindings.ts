@@ -1,5 +1,4 @@
 import { relative, resolve } from "@std/path";
-import { validateGeneratedDocumentation } from "./check-generated-documentation.ts";
 import { codegenConfiguration } from "./codegen/config.ts";
 import { generateRepositoryBindings } from "./generate-bindings.ts";
 import { repositoryRoot } from "./utils/paths.ts";
@@ -37,14 +36,6 @@ export async function assertGeneratedBindingsMatch(
       throw new Error(`Generated binding ${output} differs from the committed source`);
     }
   }
-  validateGeneratedDocumentation(
-    expected.map((output) =>
-      [
-        output,
-        Deno.readTextFileSync(resolve(committedRoot, output)),
-      ] as const
-    ),
-  );
 }
 
 async function filesUnder(root: string): Promise<string[]> {

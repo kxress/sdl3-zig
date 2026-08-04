@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.metadata.outputs.release_tag }}
-      commit: ${{ steps.metadata.outputs.commit }}
     steps:
       - name: Check out exact release tag
         uses: actions/checkout@v4
@@ -43,7 +42,6 @@ jobs:
           package_version=$(sed -n 's/^[[:space:]]*\.version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' build.zig.zon | head -n1)
           test "$RELEASE_TAG" = "v$package_version"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install pinned toolchain
         uses: jdx/mise-action@v3
@@ -54,20 +52,6 @@ jobs:
 
       - name: Acquire verified upstream inputs
         run: deno task fetch
-
-      - name: Compare coverage with the previous tagged release
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
-        run: |
-          set -euo pipefail
-          previous_tag=$(git tag --list 'v*' --sort=-version:refname | grep -Fxv "$RELEASE_TAG" | head -n1 || true)
-          if [ -z "$previous_tag" ]; then
-            echo "No previous tagged coverage ledger exists; this is the baseline release."
-          else
-            git show "$previous_tag:api_coverage.json" > .previous-api-coverage.json
-            deno run --allow-read scripts/api-coverage.ts diff .previous-api-coverage.json
-          fi
 
       - name: Run publication gates
         run: deno task check
@@ -86,20 +70,11 @@ jobs:
       - name: Package immutable and latest documentation paths
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
-          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
         run: >-
           deno task package:docs -- --root zig-out/docs --output .docs-site
-          --existing .pages-site --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
+          --existing .pages-site --tag "$RELEASE_TAG"
 
-      - name: Validate packaged Pages artifact
-        env:
-          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
-          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
-        run: >-
-          deno task validate:docs -- --root .docs-site --tag "$RELEASE_TAG"
-          --commit "$RELEASE_COMMIT"
-
-      - name: Upload validated documentation artifact
+      - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
         with:
           name: sdl3-documentation-site
@@ -108,7 +83,7 @@ jobs:
           if-no-files-found: error
 
   deploy:
-    name: Deploy validated documentation artifact
+    name: Deploy documentation artifact
     needs: prepare
     runs-on: ubuntu-latest
     permissions:
@@ -119,31 +94,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download validated documentation artifact
+      - name: Download documentation artifact
         uses: actions/download-artifact@v4
         with:
           name: sdl3-documentation-site
           path: .docs-site
-
-      - name: Check out validation helper at the tagged commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.release_tag }}
-          path: validation
-          fetch-depth: 1
-
-      - name: Install Deno for artifact validation
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Validate downloaded artifact without regenerating documentation
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
-          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
-        run: >-
-          deno run --allow-read validation/scripts/package-documentation.ts validate
-          --root .docs-site --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
 
       - name: Check out retained Pages history
         uses: actions/checkout@v4

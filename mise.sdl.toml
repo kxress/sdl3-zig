@@ -4,13 +4,6 @@ url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3
 checksum = "sha256:f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7"
 strip_components = 1
 
-[tools."http:sdl-source-signature"]
-version = "3.4.12"
-url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz.sig"
-checksum = "sha256:5bc767b689788a4e4abfef7d252557de1efd77f1d11e1bd2f689792bc27f7975"
-format = "raw"
-bin = "SDL3-3.4.12.tar.gz.sig"
-
 [tools."http:sdl-mingw"]
 version = "3.4.12"
 url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-devel-3.4.12-mingw.zip"
@@ -35,13 +28,6 @@ version = "3.4.4"
 url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4.tar.gz"
 checksum = "sha256:29751304a13d25ac513f24305fa25b06a6edd9607718c90129b8350d35fc5573"
 strip_components = 1
-
-[tools."http:sdl-image-source-signature"]
-version = "3.4.4"
-url = "https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4.tar.gz.sig"
-checksum = "sha256:c398715f41a44b209f06ae73e96063f31a74e6987052c8eecd798c6587fa84bb"
-format = "raw"
-bin = "SDL3_image-3.4.4.tar.gz.sig"
 
 [tools."http:sdl-image-mingw"]
 version = "3.4.4"
@@ -80,13 +66,6 @@ url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL
 checksum = "sha256:63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d"
 strip_components = 1
 
-[tools."http:sdl-ttf-source-signature"]
-version = "3.2.2"
-url = "https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz.sig"
-checksum = "sha256:e174066104891b533fc7ba4c39694cb6000ff336f42d6416c435a6e6e4bd1cdb"
-format = "raw"
-bin = "SDL3_ttf-3.2.2.tar.gz.sig"
-
 [tools."http:freetype-source"]
 version = "9973564cfa63763a3e4ac67c09147899539b1e07"
 url = "https://github.com/libsdl-org/freetype/archive/9973564cfa63763a3e4ac67c09147899539b1e07.tar.gz"
@@ -117,13 +96,6 @@ version = "3.2.4"
 url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz"
 checksum = "sha256:182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901"
 strip_components = 1
-
-[tools."http:sdl-mixer-source-signature"]
-version = "3.2.4"
-url = "https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz.sig"
-checksum = "sha256:c83a421f6f7ad2471a66fc55bde28444250f15fd6c3dcb8e57cc774de70d6470"
-format = "raw"
-bin = "SDL3_mixer-3.2.4.tar.gz.sig"
 
 [tools."http:sdl-mixer-mingw"]
 version = "3.2.4"
@@ -161,13 +133,6 @@ version = "3.2.0"
 url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-3.2.0.tar.gz"
 checksum = "sha256:098522fc26d4e302ef9348aee6e76e67fe504dfefd7f596236568f8330570c41"
 strip_components = 1
-
-[tools."http:sdl-net-source-signature"]
-version = "3.2.0"
-url = "https://github.com/libsdl-org/SDL_net/releases/download/release-3.2.0/SDL3_net-3.2.0.tar.gz.sig"
-checksum = "sha256:beecc16fc302bceacbd1d54e005a2c5fa2872e5beba0e58f74766985f92e9518"
-format = "raw"
-bin = "SDL3_net-3.2.0.tar.gz.sig"
 
 [tools."http:sdl-net-mingw"]
 version = "3.2.0"

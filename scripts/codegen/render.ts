@@ -983,48 +983,8 @@ function renderPublicBindings(context: RenderContext): string {
   renderPublicFunctions(context, lines, moduleNames);
   privatizeNamespacedDeclarations(context, lines);
   renderNamespaces(context, lines);
-  renderTargetReachability(context, lines);
 
   return resolveDocumentationReferences(finish(lines), context);
-}
-
-function renderTargetReachability(context: RenderContext, lines: string[]): void {
-  const entries = new Map<string, string[] | undefined>();
-  for (const [id, name] of context.publicTypeNames) {
-    if (isPrimitiveTypedef(context.byId.get(id)) || !context.publicIds.has(id)) continue;
-    const node = context.byId.get(id);
-    entries.set(name, node ? context.model.publicNodeTargets[node.id] : undefined);
-  }
-  for (const [cName, name] of context.emittedNames) {
-    entries.set(name, declarationTargets(cName, context));
-  }
-  const groups = new Map<string, string[]>();
-  for (const [name, targets] of entries) {
-    const platforms = targets === undefined
-      ? ["all"]
-      : [...new Set(targets.map(targetPlatform))].sort();
-    for (const platform of platforms) {
-      const names = groups.get(platform) ?? [];
-      names.push(name);
-      groups.set(platform, names);
-    }
-  }
-  if (groups.size === 0) return;
-  lines.push(
-    "// Force target-specific public declarations through Zig's lazy analysis.",
-    "comptime {",
-  );
-  for (
-    const [platform, names] of [...groups.entries()].sort(([left], [right]) =>
-      left.localeCompare(right)
-    )
-  ) {
-    const condition = platform === "all" ? "true" : platformConditionForName(platform);
-    lines.push(`    if (${condition}) {`);
-    for (const name of [...new Set(names)].sort()) lines.push(`        _ = root.${name};`);
-    lines.push("    }");
-  }
-  lines.push("}", "");
 }
 
 function renderError(context: RenderContext, lines: string[]): void {
@@ -1854,7 +1814,6 @@ function renderPublicTypeDeclaration(
       context.renderedTypeIds.add(node.id);
       context.renderedTypeIds.add(targetNode.id);
       renderPublicRecord(name, targetNode, context, lines);
-      renderAbiAssertion(name, rawName, targetNode, context, lines);
     } else {
       context.renderedTypeIds.add(node.id);
       lines.push(`pub const ${name} = ${renderPublicType(target, context)};`);
@@ -1872,7 +1831,6 @@ function renderPublicTypeDeclaration(
     ));
     context.renderedTypeIds.add(node.id);
     renderPublicEnumeration(name, rawName, node, context, lines);
-    renderAbiAssertion(name, rawName, node, context, lines);
     registerPrimaryEmission(rawName, name, context);
     lines.push("");
     return;
@@ -1890,7 +1848,6 @@ function renderPublicTypeDeclaration(
     } else if (isOpaqueRecord(node)) lines.push(`pub const ${name} = opaque {};`);
     else {
       renderPublicRecord(name, node, context, lines);
-      renderAbiAssertion(name, rawName, node, context, lines);
     }
     registerPrimaryEmission(rawName, name, context);
     lines.push("");
@@ -5016,19 +4973,6 @@ function categoryDocumentationForNamespace(
   );
 }
 
-function platformNamespace(cName: string, context: RenderContext): string | undefined {
-  const targets = declarationTargets(cName, context);
-  if (!targets || targets.length === context.model.analysisTargets.length) return undefined;
-  const platforms = [...new Set(targets.map(targetPlatform))].sort();
-  if (platforms.length === 1) return platforms[0];
-  if (
-    platforms.length === 2 &&
-    platforms.includes("linux") &&
-    platforms.includes("macos")
-  ) return "unix";
-  return platforms.join("_or_");
-}
-
 function declarationTargets(cName: string, context: RenderContext): string[] | undefined {
   const node = context.nodesByName.get(cName)?.find((candidate) =>
     context.publicIds.has(candidate.id)
@@ -6447,42 +6391,6 @@ function canonicalPublicPath(
     throw new Error(`Missing canonical namespace path for ${cName} (${publicName})`);
   }
   return `${namespace}.${memberName}`;
-}
-
-function renderAbiAssertion(
-  publicName: string,
-  rawName: string,
-  node: XmlAstNode,
-  context: RenderContext,
-  lines: string[],
-): void {
-  const platformName = platformNamespace(rawName, context);
-  const indentation = platformName ? "        " : "    ";
-  lines.push("comptime {");
-  if (platformName) {
-    lines.push(`    if (${platformConditionForName(platformName)}) {`);
-  }
-  lines.push(
-    `${indentation}if (@sizeOf(${publicName}) != @sizeOf(c.${rawName})) @compileError("ABI size mismatch for ${publicName}");`,
-  );
-  lines.push(
-    `${indentation}if (@alignOf(${publicName}) != @alignOf(c.${rawName})) @compileError("ABI alignment mismatch for ${publicName}");`,
-  );
-  if (node.kind === "Struct") {
-    const usedNames = new Set<string>();
-    for (const [index, field] of recordFields(node, context).entries()) {
-      if (!field.attributes.name || isBitfield(field)) continue;
-      const publicField = uniqueIdentifier(
-        context.naming.fieldName(field.attributes.name || `field_${index}`),
-        usedNames,
-      );
-      lines.push(
-        `${indentation}if (@offsetOf(${publicName}, "${publicField}") != @offsetOf(c.${rawName}, "${field.attributes.name}")) @compileError("ABI field mismatch for ${publicName}.${publicField}");`,
-      );
-    }
-  }
-  if (platformName) lines.push("    }");
-  lines.push("}");
 }
 
 function normalizeInteger(value: string): string {

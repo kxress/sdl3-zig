@@ -34,7 +34,6 @@ pub const WindowsOptionalRuntime = struct {
 pub const Library = struct {
     key: []const u8,
     id: []const u8,
-    vendor_id: []const u8,
     module_name: []const u8,
     abi_import_name: []const u8,
     source: []const u8,
@@ -55,7 +54,6 @@ pub const libraries = [_]Library{
     .{
         .key = "sdl",
         .id = "SDL3",
-        .vendor_id = "SDL3",
         .module_name = "sdl",
         .abi_import_name = "sdl3_c",
         .source = "src/sdl.zig",
@@ -74,7 +72,6 @@ pub const libraries = [_]Library{
     .{
         .key = "test",
         .id = "SDL3_test",
-        .vendor_id = "SDL3",
         .module_name = "test",
         .abi_import_name = "sdl3_test_c",
         .source = "src/test.zig",
@@ -93,7 +90,6 @@ pub const libraries = [_]Library{
     .{
         .key = "controller_image",
         .id = "ControllerImage",
-        .vendor_id = "ControllerImage",
         .module_name = "controller_image",
         .abi_import_name = "sdl3_controller_image_c",
         .source = "src/controller_image.zig",
@@ -112,7 +108,6 @@ pub const libraries = [_]Library{
     .{
         .key = "shadercross",
         .id = "SDL3_shadercross",
-        .vendor_id = "SDL3_shadercross",
         .module_name = "shadercross",
         .abi_import_name = "sdl3_shadercross_c",
         .source = "src/shadercross.zig",
@@ -131,7 +126,6 @@ pub const libraries = [_]Library{
     .{
         .key = "image",
         .id = "SDL3_image",
-        .vendor_id = "SDL3_image",
         .module_name = "image",
         .abi_import_name = "sdl3_image_c",
         .source = "src/image.zig",
@@ -150,7 +144,6 @@ pub const libraries = [_]Library{
     .{
         .key = "ttf",
         .id = "SDL3_ttf",
-        .vendor_id = "SDL3_ttf",
         .module_name = "ttf",
         .abi_import_name = "sdl3_ttf_c",
         .source = "src/ttf.zig",
@@ -169,7 +162,6 @@ pub const libraries = [_]Library{
     .{
         .key = "mixer",
         .id = "SDL3_mixer",
-        .vendor_id = "SDL3_mixer",
         .module_name = "mixer",
         .abi_import_name = "sdl3_mixer_c",
         .source = "src/mixer.zig",
@@ -188,7 +180,6 @@ pub const libraries = [_]Library{
     .{
         .key = "net",
         .id = "SDL3_net",
-        .vendor_id = "SDL3_net",
         .module_name = "net",
         .abi_import_name = "sdl3_net_c",
         .source = "src/net.zig",

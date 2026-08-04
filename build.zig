@@ -1,19 +1,6 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const sdl_metadata = @import("sdl_metadata.zig");
-const example_build = @import("examples/build.zig");
-
-const supported_zig_version = .{ .major = 0, .minor = 16, .patch = 0 };
-
-fn requireSupportedZigVersion() void {
-    const version = builtin.zig_version;
-    if (version.major != supported_zig_version.major or
-        version.minor != supported_zig_version.minor or
-        version.patch != supported_zig_version.patch)
-    {
-        @panic("SDL3 requires exactly Zig 0.16.0; newer Zig versions are unsupported");
-    }
-}
+const maintenance_steps = @import("examples/steps.zig");
 
 pub const Distribution = enum {
     /// Import bindings without selecting or linking an SDL implementation.
@@ -246,6 +233,56 @@ fn findLibraryModule(library_modules: []const BuiltLibrary, module_name: []const
     std.debug.panic("library configuration dependency '{s}' was not created first", .{module_name});
 }
 
+pub const RepositoryModules = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    sdl: *std.Build.Module,
+    test_: *std.Build.Module,
+    controller_image: *std.Build.Module,
+    shadercross: *std.Build.Module,
+    image: *std.Build.Module,
+    ttf: *std.Build.Module,
+    mixer: *std.Build.Module,
+    net: *std.Build.Module,
+};
+
+pub fn addRepositoryModules(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) RepositoryModules {
+    const support = b.createModule(.{
+        .root_source_file = b.path("src/support.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const library_modules = addLibraryModules(
+        b,
+        target,
+        optimize,
+        support,
+        .none,
+        .{},
+        .shared,
+        null,
+        null,
+        &sdl_metadata.libraries,
+        null,
+    );
+    return .{
+        .target = target,
+        .optimize = optimize,
+        .sdl = findLibraryModule(library_modules, "sdl"),
+        .test_ = findLibraryModule(library_modules, "test"),
+        .controller_image = findLibraryModule(library_modules, "controller_image"),
+        .shadercross = findLibraryModule(library_modules, "shadercross"),
+        .image = findLibraryModule(library_modules, "image"),
+        .ttf = findLibraryModule(library_modules, "ttf"),
+        .mixer = findLibraryModule(library_modules, "mixer"),
+        .net = findLibraryModule(library_modules, "net"),
+    };
+}
+
 fn linkOptionEnabled(configuration: sdl_metadata.Library, options: LinkOptions) bool {
     if (std.mem.eql(u8, configuration.module_name, "sdl")) return options.sdl;
     if (std.mem.eql(u8, configuration.module_name, "test")) return options.test_;
@@ -458,7 +495,6 @@ fn addLibraryModules(
 }
 
 pub fn build(b: *std.Build) void {
-    requireSupportedZigVersion();
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const link_sdl = b.option(
@@ -702,42 +738,6 @@ pub fn build(b: *std.Build) void {
         .imports = facade_imports.items,
     });
 
-    const docs_options_files = b.addWriteFiles();
-    const docs_options = b.createModule(.{
-        .root_source_file = docs_options_files.add(
-            "sdl3_docs_options.zig",
-            "pub const test_ = true;\npub const controller_image = true;\npub const shadercross = true;\npub const image = true;\npub const ttf = true;\npub const mixer = true;\npub const net = true;\n",
-        ),
-        .target = target,
-        .optimize = optimize,
-    });
-    const docs = b.addObject(.{
-        .name = "sdl3-docs",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "sdl", .module = sdl },
-                .{ .name = "test", .module = test_module },
-                .{ .name = "controller_image", .module = controller_image },
-                .{ .name = "shadercross", .module = shadercross },
-                .{ .name = "image", .module = image },
-                .{ .name = "ttf", .module = ttf },
-                .{ .name = "mixer", .module = mixer },
-                .{ .name = "net", .module = net },
-                .{ .name = "sdl3_options", .module = docs_options },
-            },
-        }),
-    });
-    const install_docs = b.addInstallDirectory(.{
-        .source_dir = docs.getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-    });
-    const docs_step = b.step("docs", "Generate HTML documentation for every public SDL module");
-    docs_step.dependOn(&install_docs.step);
-
     if (distribution == .prebuilt) {
         configurePrebuilt(b, target, linkage, .{
             .sdl = if (effective_link_sdl) sdl else null,
@@ -752,14 +752,22 @@ pub fn build(b: *std.Build) void {
         });
     }
 
-    example_build.add(b, .{
-        .target = target,
-        .optimize = optimize,
-        .sdl = sdl,
-        .image = image,
-        .ttf = ttf,
-        .mixer = mixer,
-    });
+    addMaintenanceProxy(b, "docs");
+    addMaintenanceProxy(b, "examples");
+    addMaintenanceProxy(b, "examples-sdl");
+    addMaintenanceProxy(b, "examples-raylib");
+    addMaintenanceProxy(b, "example");
+    for (maintenance_steps.names) |name| {
+        addMaintenanceProxy(b, name);
+        addMaintenanceProxy(b, b.fmt("run-{s}", .{name}));
+    }
+}
+
+fn addMaintenanceProxy(b: *std.Build, name: []const u8) void {
+    const step = b.step(name, b.fmt("Run repository maintenance step {s}", .{name}));
+    const command = b.addSystemCommand(&.{ "zig", "build", "--build-file", "build-maintenance.zig", name });
+    command.setCwd(b.path("."));
+    step.dependOn(&command.step);
 }
 
 fn addCmakeSourceBuild(

@@ -1,10 +1,10 @@
 # SDL3 Zig examples
 
-This directory contains 63 native SDL3 examples:
+This directory contains native SDL3 examples:
 
-- `sdl/` ports all 38 examples from
+- `sdl/` contains ports from
   [`libsdl-org/SDL@6880bed`](https://github.com/libsdl-org/SDL/tree/6880bed495226e7b87e9ef08fc552c0bcfd5fc29/examples).
-- `raylib/` contains 24 selected 2D ports from
+- `raylib/` contains selected 2D ports from
   [`raysan5/raylib@3e49c80`](https://github.com/raysan5/raylib/tree/3e49c8079949c51f69d55a879d490cd6d41a58fa/examples).
 
 Raylib-derived source files start with `RAYLIB-DERIVED`, live only under `raylib/`, and produce

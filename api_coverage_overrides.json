@@ -1,6 +1,0 @@
-{
-  "SDL3:function:SDL_swprintf": {
-    "translation": "excluded",
-    "reason": "Wide-character variadic format representation is not safely compile-time checkable; use SDL_swprintf through a dedicated C adapter."
-  }
-}

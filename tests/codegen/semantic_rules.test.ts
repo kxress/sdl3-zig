@@ -300,10 +300,6 @@ Deno.test("semantic fixtures preserve independent pointer, slice, callback, and 
     "pub inline fn print(comptime format: [:0]const u8, args: anytype) c_int {",
   );
   assertStringIncludes(source, "validateCVarargs(format, args, false)");
-  assertStringIncludes(
-    source,
-    "Force target-specific public declarations through Zig's lazy analysis.",
-  );
   assertStringIncludes(source, "if (builtin.os.tag == .linux)");
   assertStringIncludes(source, "pub const StyleFlags = packed struct(u32)");
   assertStringIncludes(source, "bold: bool = false,");
