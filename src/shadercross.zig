@@ -144,6 +144,25 @@ const SpirvInfo = extern struct {
     props: sdl.properties.Id,
 };
 
+/// Printable format: "%d.%d.%d", MAJOR, MINOR, MICRO
+const major_version = c.SDL_SHADERCROSS_MAJOR_VERSION;
+/// SDL constant `shadercross.micro_version`.
+const micro_version = c.SDL_SHADERCROSS_MICRO_VERSION;
+/// SDL constant `shadercross.minor_version`.
+const minor_version = c.SDL_SHADERCROSS_MINOR_VERSION;
+/// SDL constant `shadercross.prop_hlsl_skip_spirv_roundtrip_boolean`.
+const prop_hlsl_skip_spirv_roundtrip_boolean = c.SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN;
+/// SDL constant `shadercross.prop_shader_cull_unused_bindings_boolean`.
+const prop_shader_cull_unused_bindings_boolean = c.SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN;
+/// SDL constant `shadercross.prop_shader_debug_enable_boolean`.
+const prop_shader_debug_enable_boolean = c.SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN;
+/// SDL constant `shadercross.prop_shader_debug_name_string`.
+const prop_shader_debug_name_string = c.SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING;
+/// SDL constant `shadercross.prop_spirv_msl_version_string`.
+const prop_spirv_msl_version_string = c.SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING;
+/// SDL constant `shadercross.prop_spirv_pssl_compatibility_boolean`.
+const prop_spirv_pssl_compatibility_boolean = c.SDL_SHADERCROSS_PROP_SPIRV_PSSL_COMPATIBILITY_BOOLEAN;
+
 /// Compile an SDL GPU compute pipeline from SPIRV code. If your shader source is HLSL, you should obtain SPIR-V bytecode from shadercross.compileSpirvFromHlsl().
 ///
 /// - **Parameters:**
@@ -163,10 +182,10 @@ inline fn compileComputePipelineFromSpirv(device: ?*sdl.gpu.Device, info: ?*cons
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: When true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
-/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro outside this module)`: When true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
+/// - `shadercross.prop_shader_debug_enable_boolean`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_debug_name_string`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_cull_unused_bindings_boolean`: When true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `shadercross.prop_hlsl_skip_spirv_roundtrip_boolean`: When true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -197,10 +216,10 @@ inline fn compileDxbcFromSpirv(info: ?*const SpirvInfo, size: ?*c_ulong) ?*anyop
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
-/// - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN (C macro outside this module)`: when true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
+/// - `shadercross.prop_shader_debug_enable_boolean`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_debug_name_string`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_cull_unused_bindings_boolean`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `shadercross.prop_hlsl_skip_spirv_roundtrip_boolean`: when true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -246,9 +265,9 @@ inline fn compileGraphicsShaderFromSpirv(device: ?*sdl.gpu.Device, info: ?*const
 ///
 /// You must sdl.stdinc.free the returned buffer once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN (C macro outside this module)`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING (C macro outside this module)`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
-/// - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN (C macro outside this module)`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+/// - `shadercross.prop_shader_debug_enable_boolean`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_debug_name_string`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+/// - `shadercross.prop_shader_cull_unused_bindings_boolean`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -322,7 +341,7 @@ inline fn reflectGraphicsSpirv(bytecode: []const u8, props: sdl.properties.Id) ?
 ///
 /// You must sdl.stdinc.free the returned string once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SPIRV_PSSL_COMPATIBILITY_BOOLEAN (C macro outside this module)`: generates PSSL-compatible shader.
+/// - `shadercross.prop_spirv_pssl_compatibility_boolean`: generates PSSL-compatible shader.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -337,7 +356,7 @@ inline fn transpileHlslFromSpirv(info: ?*const SpirvInfo) ?*anyopaque {
 ///
 /// You must sdl.stdinc.free the returned string once you are done with it.
 /// These are the optional properties that can be used:
-/// - `SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING (C macro outside this module)`: specifies the MSL version that should be emitted. Defaults to 1.2.0.
+/// - `shadercross.prop_spirv_msl_version_string`: specifies the MSL version that should be emitted. Defaults to 1.2.0.
 ///
 /// - **Parameters:**
 ///   - `info`: a struct describing the shader to transpile.
@@ -367,6 +386,15 @@ pub const shadercross = struct {
     pub const init = root.init;
     pub const IoVarMetadata = root.IoVarMetadata;
     pub const IoVarType = root.IoVarType;
+    pub const major_version = root.major_version;
+    pub const micro_version = root.micro_version;
+    pub const minor_version = root.minor_version;
+    pub const prop_hlsl_skip_spirv_roundtrip_boolean = root.prop_hlsl_skip_spirv_roundtrip_boolean;
+    pub const prop_shader_cull_unused_bindings_boolean = root.prop_shader_cull_unused_bindings_boolean;
+    pub const prop_shader_debug_enable_boolean = root.prop_shader_debug_enable_boolean;
+    pub const prop_shader_debug_name_string = root.prop_shader_debug_name_string;
+    pub const prop_spirv_msl_version_string = root.prop_spirv_msl_version_string;
+    pub const prop_spirv_pssl_compatibility_boolean = root.prop_spirv_pssl_compatibility_boolean;
     pub const quit = root.quit;
     pub const reflectComputeSpirv = root.reflectComputeSpirv;
     pub const reflectGraphicsSpirv = root.reflectGraphicsSpirv;

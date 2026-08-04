@@ -149,6 +149,26 @@ pub const Device = struct {
     }
 };
 
+/// SDL constant `CONTROLLERIMAGE_MAJOR_VERSION`.
+pub const major_version = c.CONTROLLERIMAGE_MAJOR_VERSION;
+/// The current micro (or patchlevel) version of ControllerImage headers.
+///
+/// If this were ControllerImage version 3.2.1, this value would be 1.
+///
+/// - **Since:** This macro is available since ControllerImage 1.0.0.
+pub const micro_version = c.CONTROLLERIMAGE_MICRO_VERSION;
+/// The current minor version of ControllerImage headers.
+///
+/// If this were ControllerImage version 3.2.1, this value would be 2.
+///
+/// - **Since:** This macro is available since ControllerImage 1.0.0.
+pub const minor_version = c.CONTROLLERIMAGE_MINOR_VERSION;
+/// The current version number macro of the ControllerImage headers.
+///
+/// - **Since:** This macro is available since ControllerImage 1.0.0.
+/// - **See also:** versionDefault
+pub const version = c.CONTROLLERIMAGE_VERSION;
+
 /// Add data to the ControllerImage database.
 ///
 /// The library needs a database of controller information to be useful. This data is external to the library and must be provided by the app. See the library's documentation on how to build the needed data file from the provided public domain assets.
@@ -458,6 +478,6 @@ pub inline fn quit() void {
 /// - **Returns:** the version of the linked library.
 /// - **Since:** This function is available since ControllerImage 1.0.0.
 /// - **See also:** CONTROLLERIMAGE_VERSION
-pub inline fn version() c_int {
+pub inline fn versionDefault() c_int {
     return c.ControllerImage_Version();
 }

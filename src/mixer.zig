@@ -1470,6 +1470,36 @@ pub const prop_play_start_frame_number = c.MIX_PROP_PLAY_START_FRAME_NUMBER;
 pub const prop_play_start_millisecond_number = c.MIX_PROP_PLAY_START_MILLISECOND_NUMBER;
 /// SDL constant `prop_play_start_order_number`.
 pub const prop_play_start_order_number = c.MIX_PROP_PLAY_START_ORDER_NUMBER;
+/// The current major version of SDL_mixer headers.
+///
+/// If this were SDL_mixer version 3.2.1, this value would be 3.
+///
+/// - **Since:** This macro is available since SDL_mixer 3.0.0.
+pub const major_version = c.SDL_MIXER_MAJOR_VERSION;
+/// The current micro (or patchlevel) version of the SDL_mixer headers.
+///
+/// If this were SDL_mixer version 3.2.1, this value would be 1.
+///
+/// - **Since:** This macro is available since SDL_mixer 3.0.0.
+pub const micro_version = c.SDL_MIXER_MICRO_VERSION;
+/// The current minor version of the SDL_mixer headers.
+///
+/// If this were SDL_mixer version 3.2.1, this value would be 2.
+///
+/// - **Since:** This macro is available since SDL_mixer 3.0.0.
+pub const minor_version = c.SDL_MIXER_MINOR_VERSION;
+/// This is the current version number macro of the SDL_mixer headers.
+///
+/// - **Since:** This macro is available since SDL_mixer 3.0.0.
+/// - **See also:** versionDefault
+pub const version = c.SDL_MIXER_VERSION;
+
+/// This macro will evaluate to true if compiled with SDL_mixer at least X.Y.Z.
+///
+/// - **Since:** This macro is available since SDL_mixer 3.0.0.
+pub inline fn versionAtleast(x: c_uint, y: c_uint, z: c_uint) bool {
+    return c.SDL_MIXER_MAJOR_VERSION >= x and c.SDL_MIXER_MAJOR_VERSION > x or c.SDL_MIXER_MINOR_VERSION >= y and c.SDL_MIXER_MAJOR_VERSION > x or c.SDL_MIXER_MINOR_VERSION > y or c.SDL_MIXER_MICRO_VERSION >= z;
+}
 
 /// Convert sample frames for a MIX_Audio's format to milliseconds.
 ///
@@ -3363,12 +3393,12 @@ pub inline fn untagTrack(track: ?Track, tag: ?[:0]const u8) void {
 
 /// Get the version of SDL_mixer that is linked against your program.
 ///
-/// If you are linking to SDL_mixer dynamically, then it is possible that the current version will be different than the version you compiled against. This function returns the current version, while SDL_MIXER_VERSION (C macro outside this module) is the version you compiled with.
+/// If you are linking to SDL_mixer dynamically, then it is possible that the current version will be different than the version you compiled against. This function returns the current version, while version is the version you compiled with.
 /// This function may be called safely at any time, even before init().
 ///
 /// - **Returns:** the version of the linked library.
 /// - **Since:** This function is available since SDL_mixer 3.0.0.
-/// - **See also:** SDL_MIXER_VERSION (C macro outside this module)
-pub inline fn version() c_int {
+/// - **See also:** version
+pub inline fn versionDefault() c_int {
     return c.MIX_Version();
 }

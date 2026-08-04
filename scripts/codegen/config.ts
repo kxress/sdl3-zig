@@ -66,6 +66,7 @@ export const codegenConfiguration: CodegenConfiguration = {
         displayName: "SDL",
         abiImportName: "sdl3_c",
         symbolPrefixes: ["SDL_"],
+        macroPrefixes: ["SDLK_"],
         dependencies: [],
         error: { provider: "local" },
         allocator: {
@@ -113,6 +114,20 @@ export const codegenConfiguration: CodegenConfiguration = {
         },
         releaseFunctions: ["SDL_free"],
         constantFamilies: [{ prefix: "VERBOSE_", typedef: "SDLTest_VerboseFlags" }],
+        macroPrefixes: [
+          "SDLTEST_",
+          "ASSERT_",
+          "Crc",
+          "CRC32_",
+          "DEFAULT_WINDOW_",
+          "FONT_",
+          "TEST_",
+        ],
+        macroNamePrefixes: ["SDLTEST_"],
+        macroTypeAliases: [
+          { name: "CrcUint32", type: "u32" },
+          { name: "CrcUint8", type: "u8" },
+        ],
         headerPrefixes: ["SDL_"],
         rootHeaders: ["SDL_test.h"],
         namespaceStrategy: { kind: "header_stem" },
@@ -129,6 +144,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       moduleName: "controller_image",
       displayName: "ControllerImage",
       symbolPrefix: "ControllerImage_",
+      macroPrefixes: ["CONTROLLERIMAGE_"],
+      macroNamePrefixes: ["CONTROLLERIMAGE_"],
       headers: ["controllerimage.h"],
       rootHeaders: ["controllerimage.h"],
       headerPrefixes: ["controllerimage"],
@@ -141,6 +158,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       moduleName: "shadercross",
       displayName: "SDL_shadercross",
       symbolPrefix: "SDL_ShaderCross_",
+      macroPrefixes: ["SDL_SHADERCROSS_"],
+      macroNamePrefixes: ["SDL_SHADERCROSS_"],
       headers: ["SDL3_shadercross/SDL_shadercross.h"],
       rootHeaders: ["SDL3_shadercross/SDL_shadercross.h"],
     }),
@@ -149,6 +168,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       moduleName: "image",
       displayName: "SDL_image",
       symbolPrefix: "IMG_",
+      macroPrefixes: ["SDL_IMAGE_"],
+      macroNamePrefixes: ["SDL_IMAGE_"],
       headers: ["SDL3_image/SDL_image.h"],
       rootHeaders: ["SDL_image.h"],
     }),
@@ -163,6 +184,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       ],
       rootHeaders: ["SDL_ttf.h"],
       constantFamilies: [{ prefix: "TTF_SUBSTRING_", typedef: "TTF_SubStringFlags" }],
+      macroPrefixes: ["SDL_TTF_", "TTF_SUBSTRING_"],
+      macroNamePrefixes: ["SDL_TTF_"],
       sourceLabel: "SDL3_ttf public headers",
     }),
     companionLibrary({
@@ -170,6 +193,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       moduleName: "mixer",
       displayName: "SDL_mixer",
       symbolPrefix: "MIX_",
+      macroPrefixes: ["SDL_MIXER_"],
+      macroNamePrefixes: ["SDL_MIXER_"],
       headers: ["SDL3_mixer/SDL_mixer.h"],
       rootHeaders: ["SDL_mixer.h"],
     }),
@@ -178,6 +203,8 @@ export const codegenConfiguration: CodegenConfiguration = {
       moduleName: "net",
       displayName: "SDL_net",
       symbolPrefix: "NET_",
+      macroPrefixes: ["SDL_NET_"],
+      macroNamePrefixes: ["SDL_NET_"],
       headers: ["SDL3_net/SDL_net.h"],
       rootHeaders: ["SDL_net.h"],
       releaseFunctions: ["NET_FreeLocalAddresses"],
@@ -199,6 +226,9 @@ interface CompanionLibraryOptions {
   sourceLabel?: string;
   releaseFunctions?: string[];
   constantFamilies?: ConstantFamily[];
+  macroPrefixes?: string[];
+  macroNamePrefixes?: string[];
+  macroTypeAliases?: LibraryProfile["macroTypeAliases"];
   headerPrefixes?: string[];
   documentation?: string;
   includeDirectory?: string;
@@ -225,6 +255,9 @@ function companionLibrary(
       },
       releaseFunctions: options.releaseFunctions ?? ["SDL_free"],
       constantFamilies: options.constantFamilies,
+      macroPrefixes: options.macroPrefixes,
+      macroNamePrefixes: options.macroNamePrefixes,
+      macroTypeAliases: options.macroTypeAliases,
       headerPrefixes: options.headerPrefixes ?? ["SDL_"],
       rootHeaders: options.rootHeaders,
       namespaceStrategy: { kind: "header_stem" },

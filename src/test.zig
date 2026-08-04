@@ -423,45 +423,63 @@ pub const TestCaseSetUpFp = ?*const fn (arg0: ?*?*anyopaque) callconv(.c) void;
 pub const TestCaseTearDownFp = ?*const fn (arg0: ?*anyopaque) callconv(.c) void;
 
 /// SDL type `Uint32`.
-pub const VerboseFlags = packed struct(u32) {
-    /// Flag bit `VERBOSE_VIDEO`.
-    video: bool = false,
-    /// Flag bit `VERBOSE_MODES`.
-    modes: bool = false,
-    /// Flag bit `VERBOSE_RENDER`.
-    render: bool = false,
-    /// Flag bit `VERBOSE_EVENT`.
-    event: bool = false,
-    /// Flag bit `VERBOSE_AUDIO`.
-    audio: bool = false,
-    /// Flag bit `VERBOSE_MOTION`.
-    motion: bool = false,
-    /// Unknown or currently unused bits preserved during integer round trips.
-    reserved_0: u26 = 0,
+pub const VerboseFlags = u32;
 
-    /// Preserve every known and unknown flag bit.
-    pub inline fn fromInt(value: u32) @This() {
-        return @bitCast(value);
-    }
+/// Assertion functions of SDL test framework.
+///
+/// This code is a part of the SDL test library, not the main SDL library.
+pub const assert_fail = c.ASSERT_FAIL;
+/// SDL constant `ASSERT_PASS`.
+pub const assert_pass = c.ASSERT_PASS;
+/// SDL constant `CRC32_POLY`.
+pub const crc32_poly = c.CRC32_POLY;
+/// SDL constant `DEFAULT_WINDOW_HEIGHT`.
+pub const default_window_height = c.DEFAULT_WINDOW_HEIGHT;
+/// Common functions of SDL test framework.
+///
+/// This code is a part of the SDL test library, not the main SDL library.
+pub const default_window_width = c.DEFAULT_WINDOW_WIDTH;
+/// Include file for SDL test framework.
+///
+/// This code is a part of the SDL test library, not the main SDL library.
+pub const max_log_message_length = c.SDLTEST_MAX_LOGMESSAGE_LENGTH;
+/// SDL constant `TEST_ABORTED`.
+pub const test_aborted = c.TEST_ABORTED;
+/// SDL constant `TEST_COMPLETED`.
+pub const test_completed = c.TEST_COMPLETED;
+/// SDL constant `TEST_DISABLED`.
+pub const test_disabled = c.TEST_DISABLED;
+/// Test suite related functions of SDL test framework.
+///
+/// This code is a part of the SDL test library, not the main SDL library.
+pub const test_enabled = c.TEST_ENABLED;
+/// SDL constant `TEST_RESULT_FAILED`.
+pub const test_result_failed = c.TEST_RESULT_FAILED;
+/// SDL constant `TEST_RESULT_NO_ASSERT`.
+pub const test_result_no_assert = c.TEST_RESULT_NO_ASSERT;
+/// SDL constant `TEST_RESULT_PASSED`.
+pub const test_result_passed = c.TEST_RESULT_PASSED;
+/// SDL constant `TEST_RESULT_SETUP_FAILURE`.
+pub const test_result_setup_failure = c.TEST_RESULT_SETUP_FAILURE;
+/// SDL constant `TEST_RESULT_SKIPPED`.
+pub const test_result_skipped = c.TEST_RESULT_SKIPPED;
+/// SDL constant `TEST_SKIPPED`.
+pub const test_skipped = c.TEST_SKIPPED;
+/// SDL constant `TEST_STARTED`.
+pub const test_started = c.TEST_STARTED;
 
-    /// Convert this flag set to its integer representation.
-    pub inline fn toInt(self: @This()) u32 {
-        return @bitCast(self);
-    }
-};
+/// CRC32 functions of SDL test framework.
+///
+/// This code is a part of the SDL test library, not the main SDL library.
+pub const crc_uint32 = u32;
 
-/// SDL constant `VERBOSE_AUDIO`.
-pub const verbose_flags_audio = c.VERBOSE_AUDIO;
-/// SDL constant `VERBOSE_EVENT`.
-pub const verbose_flags_event = c.VERBOSE_EVENT;
-/// SDL constant `VERBOSE_MODES`.
-pub const verbose_flags_modes = c.VERBOSE_MODES;
-/// SDL constant `VERBOSE_MOTION`.
-pub const verbose_flags_motion = c.VERBOSE_MOTION;
-/// SDL constant `VERBOSE_RENDER`.
-pub const verbose_flags_render = c.VERBOSE_RENDER;
-/// SDL constant `VERBOSE_VIDEO`.
-pub const verbose_flags_video = c.VERBOSE_VIDEO;
+/// SDL type macro `CrcUint8`.
+pub const crc_uint8 = u8;
+
+/// SDL macro FONT_LINE_HEIGHT.
+pub inline fn fontLineHeight() @TypeOf(c.FONT_CHARACTER_SIZE + 2) {
+    return c.FONT_CHARACTER_SIZE + 2;
+}
 
 /// Access SDL variable `FONT_CHARACTER_SIZE`.
 pub inline fn fontCharacterSizePtr() *c_int {

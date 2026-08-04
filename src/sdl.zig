@@ -19793,6 +19793,16 @@ const android_external_storage_write = c.SDL_ANDROID_EXTERNAL_STORAGE_WRITE;
 /// SDL constant `platform_android`.
 pub const platform_android = c.SDL_PLATFORM_ANDROID;
 
+/// The number of elements in a static array.
+///
+/// This will compile but return incorrect results for a pointer to an array; it has to be an array the compiler knows the size of.
+/// This macro looks like it double-evaluates the argument, but it does so inside of `sizeof`, so there are no side-effects here, as expressions do not actually run any code in these cases.
+///
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn arraysize(value: anytype) usize {
+    return value.len;
+}
+
 /// Decrement an atomic variable used as a reference count.
 ///
 /// ***Note: If you don't know what this macro is for, you shouldn't use it!***
@@ -19848,7 +19858,21 @@ inline fn audioBitSize(x: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn audioBytesize(x: c_uint) c_uint {
-    return ((x & c.SDL_AUDIO_MASK_BITSIZE)) / 8;
+    return (x & c.SDL_AUDIO_MASK_BITSIZE) / 8;
+}
+
+/// Calculate the size of each audio frame (in bytes) from an audio.Spec.
+///
+/// This reports on the size of an audio sample frame: stereo Sint16 data (2 channels of 2 bytes each) would be 4 bytes per frame, for example.
+///
+/// - **Parameters:**
+///   - `x`: an audio.Spec to query.
+///
+/// - **Returns:** the number of bytes used per sample frame.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn audioFrameSize(x: c_uint) c_uint {
+    return ((((x).format).format & c.SDL_AUDIO_MASK_BITSIZE) / 8) * (x).channels;
 }
 
 /// Determine if an audio.Format represents bigendian data.
@@ -19890,7 +19914,7 @@ inline fn audioIsfloat(x: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn audioIsint(x: c_uint) bool {
-    return (((x & c.SDL_AUDIO_MASK_FLOAT)) == 0);
+    return !(x & c.SDL_AUDIO_MASK_FLOAT != 0);
 }
 
 /// Determine if an audio.Format represents littleendian data.
@@ -19904,7 +19928,7 @@ inline fn audioIsint(x: c_uint) bool {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn audioIslittleendian(x: c_uint) bool {
-    return (((x & c.SDL_AUDIO_MASK_BIG_ENDIAN)) == 0);
+    return !(x & c.SDL_AUDIO_MASK_BIG_ENDIAN != 0);
 }
 
 /// Determine if an audio.Format represents signed data.
@@ -19932,12 +19956,62 @@ inline fn audioIssigned(x: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn audioIsunsigned(x: c_uint) bool {
-    return (((x & c.SDL_AUDIO_MASK_SIGNED)) == 0);
+    return !(x & c.SDL_AUDIO_MASK_SIGNED != 0);
+}
+
+/// A macro to determine an SDL_PixelFormat's bits per pixel.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+/// FourCC formats will report zero here, as it rarely makes sense to measure them per-pixel.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** the bits-per-pixel of `format`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** pixels.bytesPerPixel
+inline fn bitsPerPixel(format: c_uint) c_uint {
+    return if ((format != 0) and ((format >> 28) & 0x0F) != 1) 0 else ((format) >> 8) & 0xFF;
 }
 
 /// SDL macro mouse.buttonMask.
 inline fn buttonMask(x: c_uint) c_uint {
     return 1 << (x - 1);
+}
+
+/// A macro to determine an SDL_PixelFormat's bytes per pixel.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+/// FourCC formats do their best here, but many of them don't have a meaningful measurement of bytes per pixel.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** the bytes-per-pixel of `format`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** pixels.bitsPerPixel
+inline fn bytesPerPixel(format: c_uint) c_uint {
+    return if ((format != 0) and ((format >> 28) & 0x0F) != 1) if ((format) == c.SDL_PIXELFORMAT_YUY2 or (format) == c.SDL_PIXELFORMAT_UYVY or (format) == c.SDL_PIXELFORMAT_YVYU or (format) == c.SDL_PIXELFORMAT_P010) 2 else 1 else ((format) >> 0) & 0xFF;
+}
+
+/// Return a value clamped to a range.
+///
+/// If `x` is outside the range a values between `a` and `b`, the returned value will be `a` or `b` as appropriate. Otherwise, `x` is returned.
+/// This macro will produce incorrect results if `b` is less than `a`.
+/// This is a helper macro that might be more clear than writing out the comparisons directly, and works with any type that can be compared with the `<` and `>` operators. However, it double-evaluates all its parameters, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `x`: the value to compare.
+///   - `a`: the low end value.
+///   - `b`: the high end value.
+///
+/// - **Returns:** x, clamped between a and b.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn clamp(x: anytype, a: @TypeOf(x), b: @TypeOf(x)) @TypeOf(x) {
+    return if (x < a) a else if (x > b) b else x;
 }
 
 /// A macro to retrieve the chroma sample location of an pixels.Colorspace.
@@ -19949,7 +20023,7 @@ inline fn buttonMask(x: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceChroma(cspace: c_uint) c_uint {
-    return ((cspace >> 20) & 0x0F);
+    return (cspace >> 20) & 0x0F;
 }
 
 /// A macro to retrieve the matrix coefficients of an pixels.Colorspace.
@@ -19961,7 +20035,7 @@ inline fn colorspaceChroma(cspace: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceMatrix(cspace: c_uint) c_uint {
-    return (cspace & 0x1F);
+    return cspace & 0x1F;
 }
 
 /// A macro to retrieve the primaries of an pixels.Colorspace.
@@ -19973,7 +20047,7 @@ inline fn colorspaceMatrix(cspace: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspacePrimaries(cspace: c_uint) c_uint {
-    return ((cspace >> 10) & 0x1F);
+    return (cspace >> 10) & 0x1F;
 }
 
 /// A macro to retrieve the range of an pixels.Colorspace.
@@ -19985,7 +20059,7 @@ inline fn colorspacePrimaries(cspace: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceRange(cspace: c_uint) c_uint {
-    return ((cspace >> 24) & 0x0F);
+    return (cspace >> 24) & 0x0F;
 }
 
 /// A macro to retrieve the transfer characteristics of an pixels.Colorspace.
@@ -19997,7 +20071,7 @@ inline fn colorspaceRange(cspace: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceTransfer(cspace: c_uint) c_uint {
-    return ((cspace >> 5) & 0x1F);
+    return (cspace >> 5) & 0x1F;
 }
 
 /// A macro to retrieve the type of an pixels.Colorspace.
@@ -20009,7 +20083,35 @@ inline fn colorspaceTransfer(cspace: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn colorspaceType(cspace: c_uint) c_uint {
-    return ((cspace >> 28) & 0x0F);
+    return (cspace >> 28) & 0x0F;
+}
+
+/// A macro to copy memory between objects, with basic type checking.
+///
+/// stdinc.memcpy and stdinc.memmove do not care where you copy memory to and from, which can lead to bugs. This macro aims to avoid most of those bugs by making sure that the source and destination are both pointers to objects that are the same size. It does not check that the objects are the same *type*, just that the copy will not overflow either object.
+/// The size check happens at compile time, and the compiler will throw an error if the objects are different sizes.
+/// Generally this is intended to copy a single object, not an array.
+/// This macro looks like it double-evaluates its parameters, but the extras them are in `sizeof` sections, which generate no code nor side-effects.
+///
+/// - **Parameters:**
+///   - `dst`: a pointer to the destination object. Must not be NULL.
+///   - `src`: a pointer to the source object. Must not be NULL.
+///
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn copyp(destination: anytype, source: anytype) void {
+    @memcpy(std.mem.asBytes(destination), std.mem.asBytes(source));
+}
+
+/// A macro to insert a CPU-specific "pause" instruction into the program.
+///
+/// This can be useful in busy-wait loops, as it serves as a hint to the CPU as to the program's intent; some CPUs can use this to do more efficient processing. On some platforms, this doesn't do anything, so using this macro might just be a harmless no-op.
+/// Note that if you are busy-waiting, there are often more-efficient approaches with other synchronization primitives: mutexes, semaphores, condition variables, etc.
+///
+/// - **Thread safety:** This macro is safe to use from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn cpuPauseInstruction() void {
+    std.atomic.spinLoopHint();
 }
 
 /// Create a new thread with a default stack size.
@@ -20150,7 +20252,7 @@ inline fn definePixelFormat(type_: c_uint, order: c_uint, layout: c_uint, bits_2
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn definePixelfourcc(a: c_uint, b: c_uint, c_2: c_uint, d: c_uint) c_uint {
-    return (((((a)))) << 0) | (((((b)))) << 8) | (((((c_2)))) << 16) | (((((d)))) << 24);
+    return ((a) << 0) | ((b) << 8) | ((c_2) << 16) | ((d) << 24);
 }
 
 /// Define a four character code as a Uint32.
@@ -20165,7 +20267,85 @@ inline fn definePixelfourcc(a: c_uint, b: c_uint, c_2: c_uint, d: c_uint) c_uint
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn fourcc(a: c_uint, b: c_uint, c_2: c_uint, d: c_uint) c_uint {
-    return (((((a)))) << 0) | (((((b)))) << 8) | (((((c_2)))) << 16) | (((((d)))) << 24);
+    return ((a) << 0) | ((b) << 8) | ((c_2) << 16) | ((d) << 24);
+}
+
+/// Convert a UTF-8 string to the current locale's character encoding.
+///
+/// This is a helper macro that might be more clear than calling stdinc.iconvString directly. However, it double-evaluates its parameter, so do not use an expression with side-effects here.
+///
+/// - **Parameters:**
+///   - `S`: the string to convert.
+///
+/// - **Returns:** a new string, converted to the new encoding, or NULL on error.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn iconvUtf8Locale(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u8 {
+    return iconvString(allocator_, "", "UTF-8", source, strlen(source) + 1);
+}
+
+/// Convert a UTF-8 string to UCS-2.
+///
+/// This is a helper macro that might be more clear than calling stdinc.iconvString directly. However, it double-evaluates its parameter, so do not use an expression with side-effects here.
+///
+/// - **Parameters:**
+///   - `S`: the string to convert.
+///
+/// - **Returns:** a new string, converted to the new encoding, or NULL on error.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn iconvUtf8Ucs2(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u16 {
+    const bytes = try iconvString(allocator_, "UCS-2", "UTF-8", source, strlen(source) + 1);
+    return @as([*:0]u16, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u16) :0];
+}
+
+/// Convert a UTF-8 string to UCS-4.
+///
+/// This is a helper macro that might be more clear than calling stdinc.iconvString directly. However, it double-evaluates its parameter, so do not use an expression with side-effects here.
+///
+/// - **Parameters:**
+///   - `S`: the string to convert.
+///
+/// - **Returns:** a new string, converted to the new encoding, or NULL on error.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn iconvUtf8Ucs4(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u32 {
+    const bytes = try iconvString(allocator_, "UCS-4", "UTF-8", source, strlen(source) + 1);
+    return @as([*:0]u32, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u32) :0];
+}
+
+/// Convert a wchar_t string to UTF-8.
+///
+/// This is a helper macro that might be more clear than calling stdinc.iconvString directly. However, it double-evaluates its parameter, so do not use an expression with side-effects here.
+///
+/// - **Parameters:**
+///   - `S`: the string to convert.
+///
+/// - **Returns:** a new string, converted to the new encoding, or NULL on error.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn iconvWcharUtf8(allocator_: std.mem.Allocator, source: [*:0]const std.c.wchar_t) Error![:0]u8 {
+    return iconvString(allocator_, "UTF-8", "WCHAR_T", @ptrCast(source), (wcslen(@ptrCast(source)) + 1) * @sizeOf(std.c.wchar_t));
+}
+
+/// A macro to standardize error reporting on unsupported operations.
+///
+/// This simply calls error_.set() with a standardized error string, for convenience, consistency, and clarity.
+/// A common usage pattern inside SDL is this:
+/// ```c
+/// boolMyFunction(constchar*str){
+/// if(!str){
+/// returnSDL_InvalidParamError("str");//returnsfalse.
+/// }
+/// DoSomething(str);
+/// returntrue;
+/// }
+/// ```
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn invalidParamError(param: [:0]const u8) bool {
+    return setError("Parameter '%s' is invalid", .{param});
 }
 
 /// A macro to determine if an pixels.Colorspace has a full range.
@@ -20177,7 +20357,7 @@ inline fn fourcc(a: c_uint, b: c_uint, c_2: c_uint, d: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iscolorspaceFullRange(cspace: c_uint) bool {
-    return (((cspace >> 24) & 0x0F)) == c.SDL_COLOR_RANGE_FULL;
+    return ((cspace >> 24) & 0x0F) == c.SDL_COLOR_RANGE_FULL;
 }
 
 /// A macro to determine if an pixels.Colorspace has a limited range.
@@ -20189,7 +20369,7 @@ inline fn iscolorspaceFullRange(cspace: c_uint) bool {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iscolorspaceLimitedRange(cspace: c_uint) bool {
-    return (((cspace >> 24) & 0x0F)) != c.SDL_COLOR_RANGE_FULL;
+    return ((cspace >> 24) & 0x0F) != c.SDL_COLOR_RANGE_FULL;
 }
 
 /// A macro to determine if an pixels.Colorspace uses BT2020_NCL matrix coefficients.
@@ -20201,7 +20381,21 @@ inline fn iscolorspaceLimitedRange(cspace: c_uint) bool {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iscolorspaceMatrixBt2020Ncl(cspace: c_uint) bool {
-    return ((cspace & 0x1F)) == c.SDL_MATRIX_COEFFICIENTS_BT2020_NCL;
+    return (cspace & 0x1F) == c.SDL_MATRIX_COEFFICIENTS_BT2020_NCL;
+}
+
+/// A macro to determine if an pixels.Colorspace uses BT601 (or BT470BG) matrix coefficients.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `cspace`: an pixels.Colorspace to check.
+///
+/// - **Returns:** true if BT601 or BT470BG, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn iscolorspaceMatrixBt601(cspace: c_uint) bool {
+    return (cspace & 0x1F) == c.SDL_MATRIX_COEFFICIENTS_BT601 or (cspace & 0x1F) == c.SDL_MATRIX_COEFFICIENTS_BT470BG;
 }
 
 /// A macro to determine if an pixels.Colorspace uses BT709 matrix coefficients.
@@ -20213,7 +20407,165 @@ inline fn iscolorspaceMatrixBt2020Ncl(cspace: c_uint) bool {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iscolorspaceMatrixBt709(cspace: c_uint) bool {
-    return ((cspace & 0x1F)) == c.SDL_MATRIX_COEFFICIENTS_BT709;
+    return (cspace & 0x1F) == c.SDL_MATRIX_COEFFICIENTS_BT709;
+}
+
+/// A macro to determine if an pixels.PixelFormat is a 10-bit format.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format is 10-bit, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformat10Bit(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED32 and ((format >> 16) & 0x0F) == c.SDL_PACKEDLAYOUT_2101010;
+}
+
+/// A macro to determine if an pixels.PixelFormat has an alpha channel.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format has alpha, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatAlpha(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED8 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED32 and ((format >> 20) & 0x0F) == c.SDL_PACKEDORDER_ARGB or ((format >> 20) & 0x0F) == c.SDL_PACKEDORDER_RGBA or ((format >> 20) & 0x0F) == c.SDL_PACKEDORDER_ABGR or ((format >> 20) & 0x0F) == c.SDL_PACKEDORDER_BGRA or !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU8 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU32 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF32 and ((format >> 20) & 0x0F) == c.SDL_ARRAYORDER_ARGB or ((format >> 20) & 0x0F) == c.SDL_ARRAYORDER_RGBA or ((format >> 20) & 0x0F) == c.SDL_ARRAYORDER_ABGR or ((format >> 20) & 0x0F) == c.SDL_ARRAYORDER_BGRA;
+}
+
+/// A macro to determine if an pixels.PixelFormat is an array format.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format is an array, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatArray(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU8 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYU32 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF32;
+}
+
+/// A macro to determine if an pixels.PixelFormat is a floating point format.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format is a floating point, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatFloat(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_ARRAYF32;
+}
+
+/// A macro to determine if an pixels.PixelFormat is a "FourCC" format.
+///
+/// This covers custom and other unusual formats.
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format has alpha, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatFourcc(format: c_uint) bool {
+    return (format != 0) and ((format >> 28) & 0x0F) != 1;
+}
+
+/// A macro to determine if an pixels.PixelFormat is an indexed format.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format is indexed, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatIndexed(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_INDEX1 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_INDEX2 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_INDEX4 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_INDEX8;
+}
+
+/// A macro to determine if an pixels.PixelFormat is a packed format.
+///
+/// Note that this macro double-evaluates its parameter, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `format`: an pixels.PixelFormat to check.
+///
+/// - **Returns:** true if the format is packed, false otherwise.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn ispixelformatPacked(format: c_uint) bool {
+    return !(format != 0) and ((format >> 28) & 0x0F) != 1 and ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED8 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED16 or ((format >> 24) & 0x0F) == c.SDL_PIXELTYPE_PACKED32;
+}
+
+/// Return the greater of two values.
+///
+/// This is a helper macro that might be more clear than writing out the comparisons directly, and works with any type that can be compared with the `>` operator. However, it double-evaluates both its parameters, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `x`: the first value to compare.
+///   - `y`: the second value to compare.
+///
+/// - **Returns:** the greater of `x` and `y`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn max(x: anytype, y: @TypeOf(x)) @TypeOf(x) {
+    return if (x > y) x else y;
+}
+
+/// Insert a memory acquire barrier (macro version).
+///
+/// Please see atomic.memoryBarrierRelease for the details on what memory barriers are and when to use them.
+/// This is the macro version of this functionality; if possible, SDL will use compiler intrinsics or inline assembly, but some platforms might need to call the function version of this, atomic.memoryBarrierAcquireFunction, to do the heavy lifting. Apps that can use the macro should favor it over the function.
+///
+/// - **Thread safety:** Obviously this macro is safe to use from any thread at any time, but if you find yourself needing this, you are probably dealing with some very sensitive code; be careful!
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** atomic.memoryBarrierRelease
+/// - **See also:** atomic.memoryBarrierAcquireFunction
+inline fn memoryBarrierAcquire() void {
+    memoryBarrierAcquireFunction();
+}
+
+/// Insert a memory release barrier (macro version).
+///
+/// Memory barriers are designed to prevent reads and writes from being reordered by the compiler and being seen out of order on multi-core CPUs.
+/// A typical pattern would be for thread A to write some data and a flag, and for thread B to read the flag and get the data. In this case you would insert a release barrier between writing the data and the flag, guaranteeing that the data write completes no later than the flag is written, and you would insert an acquire barrier between reading the flag and reading the data, to ensure that all the reads associated with the flag have completed.
+/// In this pattern you should always see a release barrier paired with an acquire barrier and you should gate the data reads/writes with a single flag variable.
+/// For more information on these semantics, take a look at the blog post: [http://preshing.com/20120913/acquire-and-release-semantics](http://preshing.com/20120913/acquire-and-release-semantics)
+/// This is the macro version of this functionality; if possible, SDL will use compiler intrinsics or inline assembly, but some platforms might need to call the function version of this, atomic.memoryBarrierReleaseFunction to do the heavy lifting. Apps that can use the macro should favor it over the function.
+///
+/// - **Thread safety:** Obviously this macro is safe to use from any thread at any time, but if you find yourself needing this, you are probably dealing with some very sensitive code; be careful!
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** atomic.memoryBarrierAcquire
+/// - **See also:** atomic.memoryBarrierReleaseFunction
+inline fn memoryBarrierRelease() void {
+    memoryBarrierReleaseFunction();
+}
+
+/// Return the lesser of two values.
+///
+/// This is a helper macro that might be more clear than writing out the comparisons directly, and works with any type that can be compared with the `<` operator. However, it double-evaluates both its parameters, so do not use expressions with side-effects here.
+///
+/// - **Parameters:**
+///   - `x`: the first value to compare.
+///   - `y`: the second value to compare.
+///
+/// - **Returns:** the lesser of `x` and `y`.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn min(x: anytype, y: @TypeOf(x)) @TypeOf(x) {
+    return if (x < y) x else y;
 }
 
 /// Convert milliseconds to nanoseconds.
@@ -20281,7 +20633,7 @@ inline fn nsToUs(ns: c_uint) c_uint {
 
 /// A macro to retrieve the flags of an pixels.PixelFormat.
 ///
-/// This macro is generally not needed directly by an app, which should use specific tests, like SDL_ISPIXELFORMAT_FOURCC (C macro outside this module), instead.
+/// This macro is generally not needed directly by an app, which should use specific tests, like pixels.ispixelformatFourcc, instead.
 ///
 /// - **Parameters:**
 ///   - `format`: an pixels.PixelFormat to check.
@@ -20354,6 +20706,74 @@ inline fn secondsToNs(s: c_uint) c_uint {
     return (s) * c.SDL_NS_PER_SECOND;
 }
 
+/// Add two integers, checking for overflow.
+///
+/// If `a + b` would overflow, return false.
+/// Otherwise store `a + b` via ret and return true.
+///
+/// - **Parameters:**
+///   - `a`: the first addend.
+///   - `b`: the second addend.
+///   - `ret`: on non-overflow output, stores the addition result, may not be NULL.
+///
+/// - **Returns:** false on overflow, true if result is added without overflow.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn sizeAddCheckOverflow(a: usize, b: usize, result: *usize) bool {
+    const value, const overflow = @addWithOverflow(a, b);
+    result.* = value;
+    return overflow == 0;
+}
+
+/// Multiply two integers, checking for overflow.
+///
+/// If `a * b` would overflow, return false.
+/// Otherwise store `a * b` via ret and return true.
+///
+/// - **Parameters:**
+///   - `a`: the multiplicand.
+///   - `b`: the multiplier.
+///   - `ret`: on non-overflow output, stores the multiplication result, may not be NULL.
+///
+/// - **Returns:** false on overflow, true if result is multiplied without overflow.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn sizeMulCheckOverflow(a: usize, b: usize, result: *usize) bool {
+    const value, const overflow = @mulWithOverflow(a, b);
+    result.* = value;
+    return overflow == 0;
+}
+
+/// Byte-swap an unsigned 16-bit number.
+///
+/// This will always byte-swap the value, whether it's currently in the native byteorder of the system or not. You should use endian.swap16Le or endian.swap16Be instead, in most cases.
+/// Note that this is a forced-inline function in a header, and not a public API function available in the SDL library (which is to say, the code is embedded in the calling program and the linker and dynamic loader will not be able to find this function inside SDL itself).
+///
+/// - **Parameters:**
+///   - `x`: the value to byte-swap.
+///
+/// - **Returns:** `x`, with its bytes in the opposite endian order.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn swap16(x: u16) u16 {
+    return @byteSwap(x);
+}
+
+/// Swap a 16-bit value from bigendian to native byte order.
+///
+/// If this is running on a bigendian system, `x` is returned unchanged.
+/// This macro never references `x` more than once, avoiding side effects.
+///
+/// - **Parameters:**
+///   - `x`: the value to swap, in bigendian byte order.
+///
+/// - **Returns:** `x` in native byte order.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn swap16Be(x: u16) u16 {
+    return if (builtin.cpu.arch.endian() == .little) @byteSwap(x) else x;
+}
+
 /// Swap a 16-bit value from littleendian to native byte order.
 ///
 /// If this is running on a littleendian system, `x` is returned unchanged.
@@ -20365,8 +20785,38 @@ inline fn secondsToNs(s: c_uint) c_uint {
 /// - **Returns:** `x` in native byte order.
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
-inline fn swap16Le(x: c_uint) c_uint {
-    return x;
+inline fn swap16Le(x: u16) u16 {
+    return if (builtin.cpu.arch.endian() == .little) x else @byteSwap(x);
+}
+
+/// Byte-swap an unsigned 32-bit number.
+///
+/// This will always byte-swap the value, whether it's currently in the native byteorder of the system or not. You should use endian.swap32Le or endian.swap32Be instead, in most cases.
+/// Note that this is a forced-inline function in a header, and not a public API function available in the SDL library (which is to say, the code is embedded in the calling program and the linker and dynamic loader will not be able to find this function inside SDL itself).
+///
+/// - **Parameters:**
+///   - `x`: the value to byte-swap.
+///
+/// - **Returns:** `x`, with its bytes in the opposite endian order.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn swap32(x: u32) u32 {
+    return @byteSwap(x);
+}
+
+/// Swap a 32-bit value from bigendian to native byte order.
+///
+/// If this is running on a bigendian system, `x` is returned unchanged.
+/// This macro never references `x` more than once, avoiding side effects.
+///
+/// - **Parameters:**
+///   - `x`: the value to swap, in bigendian byte order.
+///
+/// - **Returns:** `x` in native byte order.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn swap32Be(x: u32) u32 {
+    return if (builtin.cpu.arch.endian() == .little) @byteSwap(x) else x;
 }
 
 /// Swap a 32-bit value from littleendian to native byte order.
@@ -20380,8 +20830,38 @@ inline fn swap16Le(x: c_uint) c_uint {
 /// - **Returns:** `x` in native byte order.
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
-inline fn swap32Le(x: c_uint) c_uint {
-    return x;
+inline fn swap32Le(x: u32) u32 {
+    return if (builtin.cpu.arch.endian() == .little) x else @byteSwap(x);
+}
+
+/// Byte-swap an unsigned 64-bit number.
+///
+/// This will always byte-swap the value, whether it's currently in the native byteorder of the system or not. You should use endian.swap64Le or endian.swap64Be instead, in most cases.
+/// Note that this is a forced-inline function in a header, and not a public API function available in the SDL library (which is to say, the code is embedded in the calling program and the linker and dynamic loader will not be able to find this function inside SDL itself).
+///
+/// - **Parameters:**
+///   - `x`: the value to byte-swap.
+///
+/// - **Returns:** `x`, with its bytes in the opposite endian order.
+/// - **Thread safety:** It is safe to call this function from any thread.
+/// - **Since:** This function is available since SDL 3.2.0.
+inline fn swap64(x: u64) u64 {
+    return @byteSwap(x);
+}
+
+/// Swap a 64-bit value from bigendian to native byte order.
+///
+/// If this is running on a bigendian system, `x` is returned unchanged.
+/// This macro never references `x` more than once, avoiding side effects.
+///
+/// - **Parameters:**
+///   - `x`: the value to swap, in bigendian byte order.
+///
+/// - **Returns:** `x` in native byte order.
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn swap64Be(x: u64) u64 {
+    return if (builtin.cpu.arch.endian() == .little) @byteSwap(x) else x;
 }
 
 /// Swap a 64-bit value from littleendian to native byte order.
@@ -20395,8 +20875,8 @@ inline fn swap32Le(x: c_uint) c_uint {
 /// - **Returns:** `x` in native byte order.
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
-inline fn swap64Le(x: c_uint) c_uint {
-    return x;
+inline fn swap64Le(x: u64) u64 {
+    return if (builtin.cpu.arch.endian() == .little) x else @byteSwap(x);
 }
 
 /// Swap a floating point value from bigendian to native byte order.
@@ -20429,6 +20909,16 @@ inline fn swapFloatLe(x: c_uint) c_uint {
     return x;
 }
 
+/// A macro to standardize error reporting on unsupported operations.
+///
+/// This simply calls error_.set() with a standardized error string, for convenience, consistency, and clarity.
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+inline fn unsupported() bool {
+    return setError("That operation is not supported", .{});
+}
+
 /// Convert microseconds to nanoseconds.
 ///
 /// This only converts whole numbers, not fractional microseconds.
@@ -20448,7 +20938,7 @@ inline fn usToNs(us: c_uint) c_uint {
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn versionAtleast(x: c_uint, y: c_uint, z: c_uint) bool {
-    return c.SDL_VERSION >= ((x * 1000000 + y * 1000 + z));
+    return c.SDL_VERSION >= (x * 1000000 + y * 1000 + z);
 }
 
 /// This macro turns the version numbers into a numeric value.
@@ -20550,6 +21040,54 @@ inline fn windowPosIsundefined(x: c_uint) bool {
 /// - **See also:** video.Window.setPosition
 inline fn windowPosUndefinedDisplay(x: c_uint) c_uint {
     return c.SDL_WINDOWPOS_UNDEFINED_MASK | x;
+}
+
+/// Clear an object's memory to zero.
+///
+/// This is wrapper over stdinc.memset that handles calculating the object size, so there's no chance of copy/paste errors, and the code is cleaner.
+/// This requires an object, not a pointer to an object, nor an array.
+///
+/// - **Parameters:**
+///   - `x`: the object to clear.
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.zerop
+/// - **See also:** stdinc.zeroa
+inline fn zero(value: anytype) void {
+    @memset(std.mem.asBytes(value), 0);
+}
+
+/// Clear an array's memory to zero.
+///
+/// This is wrapper over stdinc.memset that handles calculating the array size, so there's no chance of copy/paste errors, and the code is cleaner.
+/// This requires an array, not an object, nor a pointer to an object.
+///
+/// - **Parameters:**
+///   - `x`: an array to clear.
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.zero
+/// - **See also:** stdinc.zerop
+inline fn zeroa(value: anytype) void {
+    @memset(std.mem.asBytes(value), 0);
+}
+
+/// Clear an object's memory to zero, using a pointer.
+///
+/// This is wrapper over stdinc.memset that handles calculating the object size, so there's no chance of copy/paste errors, and the code is cleaner.
+/// This requires a pointer to an object, not an object itself, nor an array.
+///
+/// - **Parameters:**
+///   - `x`: a pointer to the object to clear.
+///
+/// - **Thread safety:** It is safe to call this macro from any thread.
+/// - **Since:** This macro is available since SDL 3.2.0.
+/// - **See also:** stdinc.zero
+/// - **See also:** stdinc.zeroa
+inline fn zerop(value: anytype) void {
+    @memset(std.mem.asBytes(value), 0);
 }
 
 /// Compute the absolute value of `x`.
@@ -35157,22 +35695,22 @@ inline fn memmove(dst: []u8, src: []const u8) *anyopaque {
 
 /// Insert a memory acquire barrier (function version).
 ///
-/// Please refer to SDL_MemoryBarrierRelease (C macro outside this module) for details. This is a function version, which might be useful if you need to use this functionality from a scripting language, etc. Also, some of the macro versions call this function behind the scenes, where more heavy lifting can happen inside of SDL. Generally, though, an app written in C/C++/etc should use the macro version, as it will be more efficient.
+/// Please refer to atomic.memoryBarrierRelease for details. This is a function version, which might be useful if you need to use this functionality from a scripting language, etc. Also, some of the macro versions call this function behind the scenes, where more heavy lifting can happen inside of SDL. Generally, though, an app written in C/C++/etc should use the macro version, as it will be more efficient.
 ///
 /// - **Thread safety:** Obviously this function is safe to use from any thread at any time, but if you find yourself needing this, you are probably dealing with some very sensitive code; be careful!
 /// - **Since:** This function is available since SDL 3.2.0.
-/// - **See also:** SDL_MemoryBarrierAcquire (C macro outside this module)
+/// - **See also:** atomic.memoryBarrierAcquire
 inline fn memoryBarrierAcquireFunction() void {
     c.SDL_MemoryBarrierAcquireFunction();
 }
 
 /// Insert a memory release barrier (function version).
 ///
-/// Please refer to SDL_MemoryBarrierRelease (C macro outside this module) for details. This is a function version, which might be useful if you need to use this functionality from a scripting language, etc. Also, some of the macro versions call this function behind the scenes, where more heavy lifting can happen inside of SDL. Generally, though, an app written in C/C++/etc should use the macro version, as it will be more efficient.
+/// Please refer to atomic.memoryBarrierRelease for details. This is a function version, which might be useful if you need to use this functionality from a scripting language, etc. Also, some of the macro versions call this function behind the scenes, where more heavy lifting can happen inside of SDL. Generally, though, an app written in C/C++/etc should use the macro version, as it will be more efficient.
 ///
 /// - **Thread safety:** Obviously this function is safe to use from any thread at any time, but if you find yourself needing this, you are probably dealing with some very sensitive code; be careful!
 /// - **Since:** This function is available since SDL 3.2.0.
-/// - **See also:** SDL_MemoryBarrierRelease (C macro outside this module)
+/// - **See also:** atomic.memoryBarrierRelease
 inline fn memoryBarrierReleaseFunction() void {
     c.SDL_MemoryBarrierReleaseFunction();
 }
@@ -44962,6 +45500,7 @@ pub const atomic = struct {
     pub const compareAndSwapInt = root.compareAndSwapAtomicInt;
     pub const compareAndSwapPointer = root.compareAndSwapAtomicPointer;
     pub const compareAndSwapU32 = root.compareAndSwapAtomicU32;
+    pub const cpuPauseInstruction = root.cpuPauseInstruction;
     pub const decRef = root.atomicDecRef;
     pub const getInt = root.getAtomicInt;
     pub const getPointer = root.getAtomicPointer;
@@ -44969,7 +45508,9 @@ pub const atomic = struct {
     pub const incRef = root.atomicIncRef;
     pub const Int = root.AtomicInt;
     pub const lockSpinlock = root.lockSpinlock;
+    pub const memoryBarrierAcquire = root.memoryBarrierAcquire;
     pub const memoryBarrierAcquireFunction = root.memoryBarrierAcquireFunction;
+    pub const memoryBarrierRelease = root.memoryBarrierRelease;
     pub const memoryBarrierReleaseFunction = root.memoryBarrierReleaseFunction;
     pub const setInt = root.setAtomicInt;
     pub const setPointer = root.setAtomicPointer;
@@ -45095,6 +45636,7 @@ pub const audio = struct {
     pub const devicePaused = root.audioDevicePaused;
     pub const flushStream = root.flushAudioStream;
     pub const Format = root.AudioFormat;
+    pub const frameSize = root.audioFrameSize;
     pub const getCurrentDriver = root.getCurrentAudioDriver;
     pub const getDeviceChannelMap = root.getAudioDeviceChannelMap;
     pub const getDeviceFormat = root.getAudioDeviceFormat;
@@ -45447,13 +45989,13 @@ pub const dlopenNotes = if (builtin.abi == .android or builtin.abi == .androidea
 
 /// Functions converting endian-specific values to different byte orders.
 ///
-/// These functions either unconditionally swap byte order (SDL_Swap16 (C API outside this module),
-/// SDL_Swap32 (C API outside this module), SDL_Swap64 (C API outside this module), endian.swapFloat), or they swap to/from the system's
-/// native byte order (endian.swap16Le, SDL_Swap16BE (C macro outside this module), endian.swap32Le, SDL_Swap32BE (C macro outside this module),
-/// endian.swap32Le, SDL_Swap32BE (C macro outside this module), endian.swapFloatLe, endian.swapFloatBe). In the
+/// These functions either unconditionally swap byte order (endian.swap16,
+/// endian.swap32, endian.swap64, endian.swapFloat), or they swap to/from the system's
+/// native byte order (endian.swap16Le, endian.swap16Be, endian.swap32Le, endian.swap32Be,
+/// endian.swap32Le, endian.swap32Be, endian.swapFloatLe, endian.swapFloatBe). In the
 /// latter case, the functionality is provided by macros that become no-ops if
 /// a swap isn't necessary: on an x86 (littleendian) processor, endian.swap32Le
-/// does nothing, but SDL_Swap32BE (C macro outside this module) reverses the bytes of the data. On a PowerPC
+/// does nothing, but endian.swap32Be reverses the bytes of the data. On a PowerPC
 /// processor (bigendian), the macros behavior is reversed.
 ///
 /// The swap routines are inline functions, and attempt to use compiler
@@ -45464,8 +46006,14 @@ pub const endian = struct {
     pub const byteorder = root.byteorder;
     pub const floatwordorder = root.floatwordorder;
     pub const lil_endian = root.lil_endian;
+    pub const swap16 = root.swap16;
+    pub const swap16Be = root.swap16Be;
     pub const swap16Le = root.swap16Le;
+    pub const swap32 = root.swap32;
+    pub const swap32Be = root.swap32Be;
     pub const swap32Le = root.swap32Le;
+    pub const swap64 = root.swap64;
+    pub const swap64Be = root.swap64Be;
     pub const swap64Le = root.swap64Le;
     pub const swapFloat = root.swapFloat;
     pub const swapFloatBe = root.swapFloatBe;
@@ -45496,45 +46044,61 @@ pub const endian = struct {
 pub const error_ = if (builtin.abi == .android or builtin.abi == .androideabi) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
     pub const setV = root.setErrorV;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .emscripten) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .ios) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .linux) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
     pub const setV = root.setErrorV;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .macos) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .tvos) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 } else if (builtin.os.tag == .windows) struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 } else struct {
     pub const clear = root.clearError;
     pub const get = root.getError;
+    pub const invalidParam = root.invalidParamError;
     pub const outOfMemory = root.outOfMemory;
     pub const set = root.setError;
+    pub const unsupported = root.unsupported;
 };
 
 /// Event queue management.
@@ -48551,6 +49115,8 @@ pub const pixels = struct {
     pub const alpha_transparent_float = root.alpha_transparent_float;
     pub const ArrayOrder = root.ArrayOrder;
     pub const BitmapOrder = root.BitmapOrder;
+    pub const bitsPerPixel = root.bitsPerPixel;
+    pub const bytesPerPixel = root.bytesPerPixel;
     pub const ChromaLocation = root.ChromaLocation;
     pub const Color = root.Color;
     pub const ColorPrimaries = root.ColorPrimaries;
@@ -48581,7 +49147,15 @@ pub const pixels = struct {
     pub const iscolorspaceFullRange = root.iscolorspaceFullRange;
     pub const iscolorspaceLimitedRange = root.iscolorspaceLimitedRange;
     pub const iscolorspaceMatrixBt2020Ncl = root.iscolorspaceMatrixBt2020Ncl;
+    pub const iscolorspaceMatrixBt601 = root.iscolorspaceMatrixBt601;
     pub const iscolorspaceMatrixBt709 = root.iscolorspaceMatrixBt709;
+    pub const ispixelformat10Bit = root.ispixelformat10Bit;
+    pub const ispixelformatAlpha = root.ispixelformatAlpha;
+    pub const ispixelformatArray = root.ispixelformatArray;
+    pub const ispixelformatFloat = root.ispixelformatFloat;
+    pub const ispixelformatFourcc = root.ispixelformatFourcc;
+    pub const ispixelformatIndexed = root.ispixelformatIndexed;
+    pub const ispixelformatPacked = root.ispixelformatPacked;
     pub const mapRgb = root.mapRgb;
     pub const mapRgba = root.mapRgba;
     pub const MatrixCoefficients = root.MatrixCoefficients;
@@ -49115,6 +49689,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -49130,8 +49705,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -49168,6 +49745,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49196,6 +49777,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -49204,6 +49786,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -49241,7 +49824,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -49313,12 +49898,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .emscripten) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -49334,8 +49923,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -49372,6 +49963,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49400,6 +49995,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -49408,6 +50004,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -49445,7 +50042,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -49513,12 +50112,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .ios) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -49534,8 +50137,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -49572,6 +50177,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49600,6 +50209,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -49608,6 +50218,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -49645,7 +50256,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -49713,12 +50326,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .linux) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -49734,8 +50351,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -49772,6 +50391,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -49800,6 +50423,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -49808,6 +50432,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -49845,7 +50470,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -49917,12 +50544,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .macos) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -49938,8 +50569,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -49976,6 +50609,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50004,6 +50641,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -50012,6 +50650,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -50049,7 +50688,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -50117,12 +50758,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .tvos) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -50138,8 +50783,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -50176,6 +50823,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50204,6 +50855,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -50212,6 +50864,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -50249,7 +50902,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -50317,12 +50972,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else if (builtin.os.tag == .windows) struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -50338,8 +50997,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -50376,6 +51037,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50404,6 +51069,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -50412,6 +51078,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -50453,7 +51120,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -50521,12 +51190,16 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 } else struct {
     pub const abs = root.abs;
     pub const acos = root.acos;
     pub const acosf = root.acosf;
     pub const alignedAlloc = root.alignedAlloc;
     pub const alignedFree = root.alignedFree;
+    pub const arraysize = root.arraysize;
     pub const asin = root.asin;
     pub const asinf = root.asinf;
     pub const asprintf = root.asprintf;
@@ -50542,8 +51215,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const CallocFunc = root.CallocFunc;
     pub const ceil = root.ceil;
     pub const ceilf = root.ceilf;
+    pub const clamp = root.clamp;
     pub const CompareCallback = root.CompareCallback;
     pub const CompareCallbackR = root.CompareCallbackR;
+    pub const copyp = root.copyp;
     pub const copysign = root.copysign;
     pub const copysignf = root.copysignf;
     pub const cos = root.cos;
@@ -50580,6 +51255,10 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const iconvOpen = root.iconvOpen;
     pub const iconvString = root.iconvString;
     pub const IconvT = root.IconvT;
+    pub const iconvUtf8Locale = root.iconvUtf8Locale;
+    pub const iconvUtf8Ucs2 = root.iconvUtf8Ucs2;
+    pub const iconvUtf8Ucs4 = root.iconvUtf8Ucs4;
+    pub const iconvWcharUtf8 = root.iconvWcharUtf8;
     pub const invalid_unicode_codepoint = root.invalid_unicode_codepoint;
     pub const isalnum = root.isalnum;
     pub const isalpha = root.isalpha;
@@ -50608,6 +51287,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const ltoa = root.ltoa;
     pub const malloc = root.malloc;
     pub const MallocFunc = root.MallocFunc;
+    pub const max = root.max;
     pub const max_sint64 = root.max_sint64;
     pub const max_time = root.max_time;
     pub const max_uint64 = root.max_uint64;
@@ -50616,6 +51296,7 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const memmove = root.memmove;
     pub const memset = root.memset;
     pub const memset4 = root.memset4;
+    pub const min = root.min;
     pub const min_sint64 = root.min_sint64;
     pub const min_time = root.min_time;
     pub const min_uint64 = root.min_uint64;
@@ -50653,7 +51334,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const sin = root.sin;
     pub const sinf = root.sinf;
     pub const size_max = root.size_max;
+    pub const sizeAddCheckOverflow = root.sizeAddCheckOverflow;
     pub const sizeAddCheckOverflowDefault = root.sizeAddCheckOverflowDefault;
+    pub const sizeMulCheckOverflow = root.sizeMulCheckOverflow;
     pub const sizeMulCheckOverflowDefault = root.sizeMulCheckOverflowDefault;
     pub const snprintf = root.snprintf;
     pub const sqrt = root.sqrt;
@@ -50721,6 +51404,9 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const wcsstr = root.wcsstr;
     pub const wcstol = root.wcstol;
     pub const WcstolResult = root.WcstolResult;
+    pub const zero = root.zero;
+    pub const zeroa = root.zeroa;
+    pub const zerop = root.zerop;
 };
 
 /// The storage API is a high-level API designed to abstract away the

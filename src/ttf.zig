@@ -1332,6 +1332,14 @@ const DrawOperation = extern union {
     copy: CopyOperation,
 };
 
+/// SDL constant `major_version`.
+pub const major_version = c.SDL_TTF_MAJOR_VERSION;
+/// SDL constant `micro_version`.
+pub const micro_version = c.SDL_TTF_MICRO_VERSION;
+/// SDL constant `minor_version`.
+pub const minor_version = c.SDL_TTF_MINOR_VERSION;
+/// This is the version number macro for the current SDL_ttf version.
+pub const version = c.SDL_TTF_VERSION;
 /// Black (900) named font weight value
 pub const font_weight_black = c.TTF_FONT_WEIGHT_BLACK;
 /// Bold (700) named font weight value
@@ -1404,6 +1412,11 @@ pub const sub_string_flags_line_start = c.TTF_SUBSTRING_LINE_START;
 pub const sub_string_flags_text_end = c.TTF_SUBSTRING_TEXT_END;
 /// This substring contains the beginning of the text
 pub const sub_string_flags_text_start = c.TTF_SUBSTRING_TEXT_START;
+
+/// This macro will evaluate to true if compiled with SDL_ttf at least X.Y.Z.
+pub inline fn versionAtleast(x: c_uint, y: c_uint, z: c_uint) bool {
+    return c.SDL_TTF_MAJOR_VERSION >= x and c.SDL_TTF_MAJOR_VERSION > x or c.SDL_TTF_MINOR_VERSION >= y and c.SDL_TTF_MAJOR_VERSION > x or c.SDL_TTF_MINOR_VERSION > y or c.SDL_TTF_MICRO_VERSION >= z;
+}
 
 /// Add a fallback font.
 ///
@@ -3664,7 +3677,7 @@ pub inline fn updateText(text: ?*Text) sdl.Error!void {
 /// - **Returns:** SDL_ttf version.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL_ttf 3.0.0.
-pub inline fn version() c_int {
+pub inline fn versionDefault() c_int {
     return c.TTF_Version();
 }
 

@@ -1,4 +1,4 @@
-import type { ApiModel, FunctionMacro, XmlAstNode } from "./analysis.ts";
+import type { ApiModel, FunctionMacro, ObjectMacro, XmlAstNode } from "./analysis.ts";
 import { appendDocumentationParagraph, renderDocComment } from "./documentation.ts";
 import {
   type BorrowedSliceInfo,
@@ -27,6 +27,7 @@ interface RenderContext {
   publicVariables: XmlAstNode[];
   functionMacros: FunctionMacro[];
   functionMacrosByName: Map<string, FunctionMacro>;
+  objectMacros: ObjectMacro[];
   nodesByName: Map<string, XmlAstNode[]>;
   documentationByName: Map<string, ApiModel["documentation"]>;
   headerDocumentationByHeader: Map<string, ApiModel["headerDocumentation"][number]>;
@@ -118,7 +119,7 @@ function createContext(
   const naming = new ZigNaming([
     ...model.nodes.map((node) => node.attributes.name ?? ""),
     ...model.constants.map((constant) => constant.name),
-  ], model.apiPrefixes);
+  ], [...model.apiPrefixes, ...(profile.macroNamePrefixes ?? [])]);
   const byId = new Map(model.nodes.map((node) => [node.id, node]));
   const publicIds = new Set(model.publicNodeIds);
   const publicNodes = model.nodes.filter((node) => publicIds.has(node.id));
@@ -157,6 +158,7 @@ function createContext(
     publicVariables: publicNodes.filter((node) => node.kind === "Variable"),
     functionMacros: model.functionMacros ?? [],
     functionMacrosByName: new Map((model.functionMacros ?? []).map((macro) => [macro.name, macro])),
+    objectMacros: model.objectMacros ?? [],
     nodesByName: indexByName(model.nodes, (node) => node.attributes.name),
     documentationByName,
     headerDocumentationByHeader,
@@ -978,6 +980,8 @@ function renderPublicBindings(context: RenderContext): string {
     ],
   );
   renderPublicConstants(context, lines, moduleNames);
+  renderPublicMacroTypeAliases(context, lines, moduleNames);
+  renderPublicObjectMacros(context, lines, moduleNames);
   renderPublicFunctionMacros(context, lines, moduleNames);
   renderPublicVariables(context, lines, moduleNames);
   renderPublicFunctions(context, lines, moduleNames);
@@ -2625,6 +2629,83 @@ function renderPublicConstants(
   if (emitted) lines.push("");
 }
 
+function renderPublicMacroTypeAliases(
+  context: RenderContext,
+  lines: string[],
+  moduleNames: Set<string>,
+): void {
+  for (const alias of context.profile.macroTypeAliases ?? []) {
+    const name = uniqueIdentifier(context.naming.valueName(alias.name), moduleNames);
+    lines.push(...documentationLines(
+      alias.name,
+      context,
+      `SDL type macro \`${alias.name}\`.`,
+    ));
+    lines.push(`pub const ${name} = ${alias.type};`);
+    lines.push("");
+    registerPrimaryEmission(alias.name, name, context);
+  }
+}
+
+function renderPublicObjectMacros(
+  context: RenderContext,
+  lines: string[],
+  moduleNames: Set<string>,
+): void {
+  const typeAliases = new Set((context.profile.macroTypeAliases ?? []).map((alias) => alias.name));
+  for (const macro of context.objectMacros) {
+    if (context.constantsByName.has(macro.name) || typeAliases.has(macro.name)) continue;
+    const expression = renderObjectMacroExpression(macro, context);
+    if (!expression) continue;
+    const baseName = context.naming.functionName(macro.name);
+    const name = uniqueIdentifier(
+      moduleNames.has(baseName) ? `${baseName}Macro` : baseName,
+      moduleNames,
+    );
+    lines.push(...documentationLines(
+      macro.name,
+      context,
+      `SDL macro ${macro.name}.`,
+    ));
+    lines.push(`pub inline fn ${name}() @TypeOf(${expression}) {`);
+    lines.push(`    return ${expression};`);
+    lines.push("}");
+    lines.push("");
+    registerPrimaryEmission(macro.name, name, context);
+  }
+}
+
+function renderObjectMacroExpression(
+  macro: ObjectMacro,
+  context: RenderContext,
+): string | undefined {
+  let expression = stripOuterParentheses(macro.replacement.trim())
+    .replaceAll(/\b(0[xX][0-9a-fA-F]+|[0-9]+)(?:[uUlL]+)\b/g, "$1");
+  const identifiers = expression.match(/(?<![0-9A-Za-z_.])[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+  for (const identifier of identifiers) {
+    if (context.constantsByName.has(identifier)) {
+      expression = expression.replaceAll(
+        new RegExp(`(?<![A-Za-z0-9_.])${escapeRegExp(identifier)}\\b`, "g"),
+        `c.${identifier}`,
+      );
+      continue;
+    }
+    if (context.publicVariables.some((node) => node.attributes.name === identifier)) {
+      expression = expression.replaceAll(
+        new RegExp(`(?<![A-Za-z0-9_.])${escapeRegExp(identifier)}\\b`, "g"),
+        `c.${identifier}`,
+      );
+      continue;
+    }
+    return undefined;
+  }
+  if (!/^[A-Za-z0-9_().\s|&^+\-*/%<>=!~]+$/.test(expression)) return undefined;
+  return expression.replaceAll(/\s+/g, " ").trim()
+    .replaceAll("&&", " and ")
+    .replaceAll("||", " or ")
+    .replaceAll(/\s+/g, " ").trim();
+}
+
 function constantFamilyFor(
   constant: ApiModel["constants"][number],
   context: RenderContext,
@@ -2651,22 +2732,42 @@ function renderPublicFunctionMacros(
     const documentation = (context.documentationByName.get(macro.name) ?? []).find((item) =>
       item.kind === "define" || item.kind === "function"
     );
-    if (!documentation) continue;
+    if (
+      !documentation &&
+      !(context.profile.macroPrefixes ?? []).some((prefix) => macro.name.startsWith(prefix))
+    ) continue;
     const baseName = context.naming.functionName(macro.name);
     const name = uniqueIdentifier(
       moduleNames.has(baseName) ? baseName + "Macro" : baseName,
       moduleNames,
     );
+    const utility = renderGenericUtilityMacro(macro.name, name);
+    if (utility) {
+      lines.push(...documentationLines(
+        macro.name,
+        context,
+        "SDL macro " + macro.name + ".",
+      ));
+      lines.push(...utility);
+      lines.push("");
+      registerPrimaryEmission(macro.name, name, context);
+      continue;
+    }
     let parameterTypes = macroParameterTypes(macro, context);
     if (!parameterTypes) continue;
     const parameterNames = uniqueMacroParameterNames(macro, context, moduleNames);
-    let expression = renderIntegerMacroExpression(
-      macro,
-      context,
-      new Map(macro.parameters.map((parameter, index) => [parameter, parameterNames[index]])),
-      parameterTypes,
-    );
+    const byteSwapWidth = byteSwapMacroWidth(macro.name);
+    if (byteSwapWidth) parameterTypes = [byteSwapWidth];
+    let expression = byteSwapWidth
+      ? renderByteSwapExpression(macro.name, parameterNames[0])
+      : renderIntegerMacroExpression(
+        macro,
+        context,
+        new Map(macro.parameters.map((parameter, index) => [parameter, parameterNames[index]])),
+        parameterTypes,
+      );
     let returnType = expression && macroExpressionReturnsBool(expression) ? "bool" : "c_uint";
+    if (byteSwapWidth) returnType = byteSwapWidth;
     if (!expression) {
       const call = renderFunctionMacroCall(macro, context, parameterNames);
       if (!call) continue;
@@ -2692,6 +2793,139 @@ function renderPublicFunctionMacros(
     lines.push("");
     registerPrimaryEmission(macro.name, name, context);
   }
+}
+
+function renderGenericUtilityMacro(name: string, publicName: string): string[] | undefined {
+  switch (name) {
+    case "SDL_arraysize":
+      return [
+        `pub inline fn ${publicName}(value: anytype) usize {`,
+        "    return value.len;",
+        "}",
+      ];
+    case "SDL_min":
+      return [
+        `pub inline fn ${publicName}(x: anytype, y: @TypeOf(x)) @TypeOf(x) {`,
+        "    return if (x < y) x else y;",
+        "}",
+      ];
+    case "SDL_max":
+      return [
+        `pub inline fn ${publicName}(x: anytype, y: @TypeOf(x)) @TypeOf(x) {`,
+        "    return if (x > y) x else y;",
+        "}",
+      ];
+    case "SDL_clamp":
+      return [
+        `pub inline fn ${publicName}(x: anytype, a: @TypeOf(x), b: @TypeOf(x)) @TypeOf(x) {`,
+        "    return if (x < a) a else if (x > b) b else x;",
+        "}",
+      ];
+    case "SDL_zero":
+    case "SDL_zeroa":
+    case "SDL_zerop":
+      return [
+        `pub inline fn ${publicName}(value: anytype) void {`,
+        "    @memset(std.mem.asBytes(value), 0);",
+        "}",
+      ];
+    case "SDL_copyp":
+      return [
+        `pub inline fn ${publicName}(destination: anytype, source: anytype) void {`,
+        "    @memcpy(std.mem.asBytes(destination), std.mem.asBytes(source));",
+        "}",
+      ];
+    case "SDL_size_add_check_overflow":
+      return [
+        `pub inline fn ${publicName}(a: usize, b: usize, result: *usize) bool {`,
+        "    const value, const overflow = @addWithOverflow(a, b);",
+        "    result.* = value;",
+        "    return overflow == 0;",
+        "}",
+      ];
+    case "SDL_size_mul_check_overflow":
+      return [
+        `pub inline fn ${publicName}(a: usize, b: usize, result: *usize) bool {`,
+        "    const value, const overflow = @mulWithOverflow(a, b);",
+        "    result.* = value;",
+        "    return overflow == 0;",
+        "}",
+      ];
+    case "SDL_CPUPauseInstruction":
+      return [
+        `pub inline fn ${publicName}() void {`,
+        "    std.atomic.spinLoopHint();",
+        "}",
+      ];
+    case "SDL_Unsupported":
+      return [
+        `pub inline fn ${publicName}() bool {`,
+        '    return setError("That operation is not supported", .{});',
+        "}",
+      ];
+    case "SDL_InvalidParamError":
+      return [
+        `pub inline fn ${publicName}(param: [:0]const u8) bool {`,
+        "    return setError(\"Parameter '%s' is invalid\", .{param});",
+        "}",
+      ];
+    case "SDL_MemoryBarrierAcquire":
+      return [
+        `pub inline fn ${publicName}() void {`,
+        "    memoryBarrierAcquireFunction();",
+        "}",
+      ];
+    case "SDL_MemoryBarrierRelease":
+      return [
+        `pub inline fn ${publicName}() void {`,
+        "    memoryBarrierReleaseFunction();",
+        "}",
+      ];
+    case "SDL_iconv_utf8_locale":
+      return [
+        `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u8 {`,
+        '    return iconvString(allocator_, "", "UTF-8", source, strlen(source) + 1);',
+        "}",
+      ];
+    case "SDL_iconv_utf8_ucs2":
+      return [
+        `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u16 {`,
+        '    const bytes = try iconvString(allocator_, "UCS-2", "UTF-8", source, strlen(source) + 1);',
+        "    return @as([*:0]u16, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u16) :0];",
+        "}",
+      ];
+    case "SDL_iconv_utf8_ucs4":
+      return [
+        `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u32 {`,
+        '    const bytes = try iconvString(allocator_, "UCS-4", "UTF-8", source, strlen(source) + 1);',
+        "    return @as([*:0]u32, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u32) :0];",
+        "}",
+      ];
+    case "SDL_iconv_wchar_utf8":
+      return [
+        `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [*:0]const std.c.wchar_t) Error![:0]u8 {`,
+        '    return iconvString(allocator_, "UTF-8", "WCHAR_T", @ptrCast(source), (wcslen(@ptrCast(source)) + 1) * @sizeOf(std.c.wchar_t));',
+        "}",
+      ];
+    default:
+      return undefined;
+  }
+}
+
+function byteSwapMacroWidth(name: string): string | undefined {
+  const match = name.match(/^SDL_Swap(16|32|64)(?:LE|BE)?$/);
+  return match ? `u${match[1]}` : undefined;
+}
+
+function renderByteSwapExpression(name: string, parameter: string): string {
+  const swapped = `@byteSwap(${parameter})`;
+  if (name.endsWith("LE")) {
+    return `if (builtin.cpu.arch.endian() == .little) ${parameter} else ${swapped}`;
+  }
+  if (name.endsWith("BE")) {
+    return `if (builtin.cpu.arch.endian() == .little) ${swapped} else ${parameter}`;
+  }
+  return swapped;
 }
 
 interface FunctionMacroCall {
@@ -2772,6 +3006,8 @@ function renderFunctionMacroCall(
 }
 
 function macroExpressionReturnsBool(expression: string): boolean {
+  if (/^\s*if\s*\(/.test(expression)) return false;
+  if (expression.includes("?")) return false;
   return /(?:^|[^=!<>])!(?!=)/.test(expression) ||
     /(?:==|!=|<=|>=|&&|\|\||(?<![<>])[<>](?!<|>))/.test(
       expression,
@@ -2920,10 +3156,118 @@ function renderIntegerMacroExpression(
       "c." + identifier,
     );
   }
-  if (!/^[A-Za-z0-9_().\s|&^+\-*/%<>=!~]+$/.test(expression)) {
+  if (!/^[A-Za-z0-9_().\s|&^+\-*/%<>=!~?:]+$/.test(expression)) {
     return undefined;
   }
-  return expression.replaceAll(/\s+/g, " ").trim();
+  expression = translateCConditionalExpression(expression);
+  if (!expression) return undefined;
+  expression = translateCLogicalExpression(expression);
+  if (!expression) return undefined;
+  return expression.replaceAll(/\s+/g, " ").trim()
+    .replaceAll(/\s+/g, " ").trim();
+}
+
+function translateCLogicalExpression(expression: string): string | undefined {
+  const value = stripOuterParentheses(expression);
+  for (const operator of ["||", "&&"] as const) {
+    const index = topLevelOperator(value, operator);
+    if (index === undefined) continue;
+    const left = translateCLogicalExpression(value.slice(0, index));
+    const right = translateCLogicalExpression(value.slice(index + operator.length));
+    if (!left || !right) return undefined;
+    return `${asBooleanExpression(left)}${operator === "||" ? " or " : " and "}${
+      asBooleanExpression(right)
+    }`;
+  }
+  if (value.startsWith("!")) {
+    const operand = translateCLogicalExpression(value.slice(1));
+    return operand ? `!${asBooleanExpression(operand)}` : undefined;
+  }
+  let result = "";
+  let start = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== "(") continue;
+    const close = matchingParenthesis(value, index);
+    if (close === undefined) return undefined;
+    const nested = translateCLogicalExpression(value.slice(index + 1, close));
+    if (!nested) return undefined;
+    result += value.slice(start, index) + `(${nested})`;
+    start = close + 1;
+    index = close;
+  }
+  return result + value.slice(start);
+}
+
+function asBooleanExpression(expression: string): string {
+  return /(?:==|!=|<=|>=|(?<![<>])[<>](?![<>]))/.test(expression) ||
+      /\b(?:and|or)\b/.test(expression) || /^if\s*\(/.test(expression) || expression.startsWith("!")
+    ? expression
+    : `(${expression} != 0)`;
+}
+
+function topLevelOperator(value: string, operator: string): number | undefined {
+  let depth = 0;
+  for (let index = 0; index <= value.length - operator.length; index++) {
+    if (value[index] === "(") depth++;
+    else if (value[index] === ")") depth--;
+    else if (depth === 0 && value.slice(index, index + operator.length) === operator) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function translateCConditionalExpression(expression: string): string | undefined {
+  const value = stripOuterParentheses(expression);
+  const question = topLevelCharacter(value, "?");
+  if (question !== undefined) {
+    const colon = matchingConditionalColon(value, question);
+    if (colon === undefined) return undefined;
+    const condition = translateCConditionalExpression(value.slice(0, question));
+    const whenTrue = translateCConditionalExpression(value.slice(question + 1, colon));
+    const whenFalse = translateCConditionalExpression(value.slice(colon + 1));
+    if (!condition || !whenTrue || !whenFalse) return undefined;
+    return `if (${condition}) ${whenTrue} else ${whenFalse}`;
+  }
+
+  let result = "";
+  let start = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== "(") continue;
+    const close = matchingParenthesis(value, index);
+    if (close === undefined) return undefined;
+    const nested = translateCConditionalExpression(value.slice(index + 1, close));
+    if (!nested) return undefined;
+    result += value.slice(start, index) + `(${nested})`;
+    start = close + 1;
+    index = close;
+  }
+  return result + value.slice(start);
+}
+
+function topLevelCharacter(value: string, character: string): number | undefined {
+  let depth = 0;
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === "(") depth++;
+    else if (value[index] === ")") depth--;
+    else if (depth === 0 && value[index] === character) return index;
+  }
+  return undefined;
+}
+
+function matchingConditionalColon(value: string, question: number): number | undefined {
+  let depth = 0;
+  let nestedQuestions = 0;
+  for (let index = question + 1; index < value.length; index++) {
+    if (value[index] === "(") depth++;
+    else if (value[index] === ")") depth--;
+    else if (depth === 0 && value[index] === "?") nestedQuestions++;
+    else if (depth === 0 && value[index] === ":") {
+      if (nestedQuestions === 0) return index;
+      nestedQuestions--;
+    }
+  }
+  return undefined;
 }
 
 function stripKnownIntegerCasts(expression: string, context: RenderContext): string {
@@ -2954,14 +3298,15 @@ function expandIntegerMacroExpression(
   const parameterOccurrences = macro.parameters.map((parameter) =>
     [...macro.replacement.matchAll(new RegExp("\\b" + escapeRegExp(parameter) + "\\b", "g"))].length
   );
-  if (parameterOccurrences.some((count) => count !== 1)) return undefined;
+  if (parameterOccurrences.some((count) => count === 0)) return undefined;
   let expression = macro.replacement.trim();
   for (const [index, parameter] of macro.parameters.entries()) {
     const replacement = substitutions.get(parameter);
     if (replacement === undefined) return undefined;
-    const parenthesizedReplacement = isIntegerCastMacro(macro) && index === 0
-      ? `(${replacement})`
-      : replacement;
+    const parenthesizedReplacement =
+      (isIntegerCastMacro(macro) && index === 0) || parameterOccurrences[index] > 1
+        ? `(${replacement})`
+        : replacement;
     expression = expression.replaceAll(
       new RegExp("(?<![A-Za-z0-9_])\\(\\s*" + escapeRegExp(parameter) + "\\s*\\)", "g"),
       parenthesizedReplacement,

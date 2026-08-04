@@ -196,6 +196,19 @@ pub const prop_metadata_ignore_props_boolean = c.IMG_PROP_METADATA_IGNORE_PROPS_
 pub const prop_metadata_loop_count_number = c.IMG_PROP_METADATA_LOOP_COUNT_NUMBER;
 /// SDL constant `prop_metadata_title_string`.
 pub const prop_metadata_title_string = c.IMG_PROP_METADATA_TITLE_STRING;
+/// SDL constant `major_version`.
+pub const major_version = c.SDL_IMAGE_MAJOR_VERSION;
+/// SDL constant `micro_version`.
+pub const micro_version = c.SDL_IMAGE_MICRO_VERSION;
+/// SDL constant `minor_version`.
+pub const minor_version = c.SDL_IMAGE_MINOR_VERSION;
+/// This is the version number macro for the current SDL_image version.
+pub const version = c.SDL_IMAGE_VERSION;
+
+/// This macro will evaluate to true if compiled with SDL_image at least X.Y.Z.
+pub inline fn versionAtleast(x: c_uint, y: c_uint, z: c_uint) bool {
+    return c.SDL_IMAGE_MAJOR_VERSION >= x and c.SDL_IMAGE_MAJOR_VERSION > x or c.SDL_IMAGE_MINOR_VERSION >= y and c.SDL_IMAGE_MAJOR_VERSION > x or c.SDL_IMAGE_MINOR_VERSION > y or c.SDL_IMAGE_MICRO_VERSION >= z;
+}
 
 /// Add a frame to an animation encoder.
 ///
@@ -2882,6 +2895,6 @@ pub inline fn saveWebpAnimationIo(anim: ?*Animation, closeio: bool, quality: c_i
 ///
 /// - **Returns:** SDL_image version.
 /// - **Since:** This function is available since SDL_image 3.0.0.
-pub inline fn version() c_int {
+pub inline fn versionDefault() c_int {
     return c.IMG_Version();
 }

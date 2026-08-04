@@ -351,6 +351,32 @@ pub const prop_datagram_socket_allow_broadcast_boolean = c.NET_PROP_DATAGRAM_SOC
 pub const prop_datagram_socket_reuseaddr_boolean = c.NET_PROP_DATAGRAM_SOCKET_REUSEADDR_BOOLEAN;
 /// SDL constant `prop_server_reuseaddr_boolean`.
 pub const prop_server_reuseaddr_boolean = c.NET_PROP_SERVER_REUSEADDR_BOOLEAN;
+/// SDL constant `major_version`.
+pub const major_version = c.SDL_NET_MAJOR_VERSION;
+/// The current micro (or patchlevel) version of the SDL_net headers.
+///
+/// If this were SDL_net version 3.2.1, this value would be 1.
+///
+/// - **Since:** This macro is available since SDL_net 3.0.0.
+pub const micro_version = c.SDL_NET_MICRO_VERSION;
+/// The current minor version of the SDL_net headers.
+///
+/// If this were SDL_net version 3.2.1, this value would be 2.
+///
+/// - **Since:** This macro is available since SDL_net 3.0.0.
+pub const minor_version = c.SDL_NET_MINOR_VERSION;
+/// This is the version number macro for the current SDL_net version.
+///
+/// - **Since:** This macro is available since SDL_net 3.0.0.
+/// - **See also:** versionDefault
+pub const version = c.SDL_NET_VERSION;
+
+/// This macro will evaluate to true if compiled with SDL_net at least X.Y.Z.
+///
+/// - **Since:** This macro is available since SDL_net 3.0.0.
+pub inline fn versionAtleast(x: c_uint, y: c_uint, z: c_uint) bool {
+    return c.SDL_NET_MAJOR_VERSION >= x and c.SDL_NET_MAJOR_VERSION > x or c.SDL_NET_MINOR_VERSION >= y and c.SDL_NET_MAJOR_VERSION > x or c.SDL_NET_MINOR_VERSION > y or c.SDL_NET_MICRO_VERSION >= z;
+}
 
 /// Named output values.
 pub const AcceptClientResult = struct {
@@ -882,7 +908,7 @@ pub inline fn unrefAddress(address: ?*Address) void {
 /// - **Returns:** SDL_net version.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL_net 3.0.0.
-pub inline fn version() c_int {
+pub inline fn versionDefault() c_int {
     return c.NET_Version();
 }
 

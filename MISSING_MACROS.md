@@ -183,16 +183,16 @@ preserve the C return behavior where a predicate returns an integer mask rather 
 ### Generic C utility macros — use Zig idioms, not textual emulation
 
 `SDL_arraysize`, `SDL_clamp`, `SDL_COMPILE_TIME_ASSERT`, `SDL_CompilerBarrier`, `SDL_const_cast`,
-`SDL_copyp`, `SDL_CPUPauseInstruction`, `SDL_max`, `SDL_min`, `SDL_reinterpret_cast`,
-`SDL_SINT64_C`, `SDL_stack_alloc`, `SDL_stack_free`, `SDL_static_cast`, `SDL_STRINGIFY_ARG`,
-`SDL_UINT64_C`, `SDL_zero`, `SDL_zeroa`, `SDL_zerop`.
+`SDL_copyp`, `SDL_max`, `SDL_min`, `SDL_reinterpret_cast`, `SDL_SINT64_C`, `SDL_stack_alloc`,
+`SDL_stack_free`, `SDL_static_cast`, `SDL_STRINGIFY_ARG`, `SDL_UINT64_C`, `SDL_zero`, `SDL_zeroa`,
+`SDL_zerop`.
 
 `SDL_min`, `SDL_max`, `SDL_clamp`, and `SDL_arraysize` are reasonable generic inline functions.
 `SDL_zero*` and `SDL_copyp` can use compile-time-sized `@memset`/`@memcpy` helpers. Cast macros,
 stringification, compile-time assertions, integer literal suffixes, and stack allocation are
-language/preprocessor features with no one-to-one public Zig function. `SDL_CompilerBarrier` and
-`SDL_CPUPauseInstruction` require target-specific atomics or assembly; do not implement them with an
-arbitrary no-op.
+language/preprocessor features with no one-to-one public Zig function. `SDL_CompilerBarrier`
+requires target-specific atomics or assembly and remains omitted. `SDL_CPUPauseInstruction` is
+represented by the inline `std.atomic.spinLoopHint()` adapter.
 
 ### SDL ELF note construction — not portable application API
 
@@ -242,9 +242,9 @@ variants, preserving the exact integer widths.
 
 ### Size-overflow and version arithmetic
 
-`SDL_size_add_check_overflow`, `SDL_size_mul_check_overflow` should not be ported as textual macros:
-they write a caller-provided result and select compiler builtins. A Zig helper returning an optional
-or error-checked result would be safer, but is an API redesign rather than a direct macro alias.
+`SDL_size_add_check_overflow` and `SDL_size_mul_check_overflow` write a caller-provided result and
+select compiler builtins. They are represented by typed inline Zig helpers using
+`@addWithOverflow`/`@mulWithOverflow`, preserving the result-pointer and boolean-success contract.
 
 `SDL_VERSIONNUM`, `SDL_VERSIONNUM_MAJOR`, `SDL_VERSIONNUM_MICRO`, and `SDL_VERSIONNUM_MINOR` are
 pure integer arithmetic and should be rendered as typed inline functions. The core SDL equivalents
@@ -262,3 +262,18 @@ are already rendered; the companion `VERSION_ATLEAST` gaps above should follow t
 4. Leave compiler annotations, ELF-note construction, textual casts/stringification, stack macros,
    and target-specific barriers/breakpoints out of the public runtime API unless a separate Zig
    contract and target matrix prove that the translation is sound.
+
+## Implementation status
+
+The inventory has now been addressed through the generic generator. The companion version/property
+prefixes, ControllerImage prefixes, SDL_test families and CRC type aliases are emitted; the four
+companion `VERSION_ATLEAST` macros, numeric/audio/pixel helpers, endian helpers, iconv convenience
+wrappers, error helpers, memory barriers, overflow checks, interface initialization, and generic
+utility helpers are emitted as inline Zig adapters. Generated output remains target-aware and is
+regenerated from the configured profiles rather than hand-maintained.
+
+The remaining deliberate omissions are compiler/static-analysis annotations, assertion and
+debugger-breakpoint macros, ELF-note construction, compiler barriers, textual casts/stringification,
+stack allocation, compile-time assertion syntax, and other preprocessor-only declarations. These
+have no portable public Zig runtime contract in the configured target matrix; the rationale for each
+group is documented above.

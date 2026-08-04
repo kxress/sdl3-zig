@@ -57,6 +57,12 @@ export interface FunctionMacro {
   header?: string;
 }
 
+export interface ObjectMacro {
+  name: string;
+  replacement: string;
+  header?: string;
+}
+
 export interface ApiModel {
   target: string;
   analysisTargets: string[];
@@ -72,6 +78,7 @@ export interface ApiModel {
   constantTargets: Record<string, string[]>;
   functionMacros?: FunctionMacro[];
   functionMacroTargets?: Record<string, string[]>;
+  objectMacros?: ObjectMacro[];
 }
 
 const declarationKinds = new Set([
@@ -432,6 +439,17 @@ export async function analyzeTargets(
           return location !== undefined && isPublicSourcePath(location, resolvedOptions);
         },
       );
+      const definitions = parseMacroDefinitions(macroResult.stdout);
+      model.objectMacros = macroNames.flatMap((name): ObjectMacro[] => {
+        const definition = definitions.get(name);
+        return definition
+          ? [{
+            name,
+            replacement: definition.replacement,
+            header: definition.header,
+          }]
+          : [];
+      });
       const macroProbe = `${temporaryDirectory}/macros-${index}.c`;
       await Deno.writeTextFile(macroProbe, renderMacroProbe(shim, macroNames));
       const expandedMacroCommand = buildMacroCommand(targetOptions, macroProbe, true);
@@ -499,6 +517,7 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
         [name, targets],
       ) => [name, [...targets]]),
     ),
+    objectMacros: (first.objectMacros ?? []).map((macro) => ({ ...macro })),
   };
   const publicIds = new Set(merged.publicNodeIds);
   const mergedNodeIds = new Set(merged.nodes.map((node) => node.id));
@@ -587,6 +606,15 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
         model.target,
         targets,
       );
+    }
+    const mergedObjectMacros = new Map(
+      (merged.objectMacros ?? []).map((macro) => [macro.name, macro]),
+    );
+    for (const macro of model.objectMacros ?? []) {
+      if (!mergedObjectMacros.has(macro.name)) {
+        mergedObjectMacros.set(macro.name, { ...macro });
+        merged.objectMacros?.push({ ...macro });
+      }
     }
   }
 

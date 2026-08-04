@@ -21,6 +21,11 @@ export interface ConstantFamily {
   typedef: string;
 }
 
+export interface MacroTypeAlias {
+  name: string;
+  type: string;
+}
+
 export interface LocalAllocatorProfile {
   provider: "local";
   malloc: string;
@@ -58,6 +63,9 @@ export interface LibraryProfile {
   rootHeaders: string[];
   namespaceStrategy: NamespaceStrategy;
   constantFamilies?: ConstantFamily[];
+  macroPrefixes?: string[];
+  macroNamePrefixes?: string[];
+  macroTypeAliases?: MacroTypeAlias[];
 }
 
 export type NamespaceStrategy =

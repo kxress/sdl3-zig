@@ -35,7 +35,7 @@ export async function generateRepositoryBindings(
         profile: library.profile,
         dependencyApis: new Map(resolvedDependencies),
         defines: codegenConfiguration.defines,
-        macroPrefixes: library.profile.constantFamilies?.map((family) => family.prefix),
+        macroPrefixes: library.profile.macroPrefixes,
         targets: codegenConfiguration.targets,
         documentationInput: resolveRepositoryPath(library.documentation),
         documentationPredefined: codegenConfiguration.documentationPredefined,
