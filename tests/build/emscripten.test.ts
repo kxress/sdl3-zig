@@ -5,9 +5,15 @@ const emsdk = Deno.env.get("EMSDK");
 
 Deno.test({
   name: "Emscripten builds, stages, and runs the SDL source consumer",
-  ignore: emsdk === undefined,
+  ignore: emsdk === undefined && Deno.env.get("CI") !== "true",
   async fn() {
-    const sdk = emsdk!;
+    if (emsdk === undefined) {
+      throw new Error(
+        "EMSDK is unset in CI; install and activate the pinned Emscripten SDK before running " +
+          "the consumer fixture.",
+      );
+    }
+    const sdk = emsdk;
     const emscripten = `${sdk}/upstream/emscripten`;
     const sysroot = `${emscripten}/cache/sysroot`;
     const toolchain = `${emscripten}/cmake/Modules/Platform/Emscripten.cmake`;

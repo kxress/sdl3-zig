@@ -8,11 +8,17 @@ pub fn build(b: *std.Build) void {
         @panic("-Dandroid_ndk is required");
     const toolchain = b.option([]const u8, "source_cmake_toolchain", "Android CMake toolchain") orelse
         @panic("-Dsource_cmake_toolchain is required");
+    const androidAbi, const crtTriple = switch (target.result.cpu.arch) {
+        .aarch64 => .{ "arm64-v8a", "aarch64-linux-android" },
+        .x86_64 => .{ "x86_64", "x86_64-linux-android" },
+        else => @panic("Android fixture supports only aarch64 and x86_64 targets"),
+    };
     const sysroot = b.fmt("{s}/toolchains/llvm/prebuilt/linux-x86_64/sysroot", .{ndk});
     const libc = b.addWriteFiles().add("android-libc.txt", b.fmt(
-        "include_dir={s}/usr/include\nsys_include_dir={s}/usr/include\ncrt_dir={s}/usr/lib/aarch64-linux-android/21\nmsvc_lib_dir=\nkernel32_lib_dir=\ngcc_dir=\n",
-        .{ sysroot, sysroot, sysroot },
+        "include_dir={s}/usr/include\nsys_include_dir={s}/usr/include\ncrt_dir={s}/usr/lib/{s}/21\nmsvc_lib_dir=\nkernel32_lib_dir=\ngcc_dir=\n",
+        .{ sysroot, sysroot, sysroot, crtTriple },
     ));
+    const cmakeAbi = b.fmt("-DANDROID_ABI={s}", .{androidAbi});
 
     const library = b.addLibrary(.{
         .name = "main",
@@ -31,7 +37,7 @@ pub fn build(b: *std.Build) void {
         .android_ndk_root = ndk,
         .source_cmake_toolchain = toolchain,
         .source_cmake_options = &.{
-            "-DANDROID_ABI=arm64-v8a",
+            cmakeAbi,
             "-DANDROID_PLATFORM=android-21",
             "-DSDL_ANDROID_JAR=OFF",
             "-DSDL_SHARED=OFF",

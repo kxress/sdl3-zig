@@ -1,0 +1,20 @@
+#define TARGET_OS_MACCATALYST 0
+#define TARGET_OS_VISION 0
+#if defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
+#define TARGET_OS_IPHONE 1
+#define TARGET_OS_IOS 1
+#define TARGET_OS_TV 0
+#else
+#define TARGET_OS_IPHONE 0
+#define TARGET_OS_IOS 0
+#define TARGET_OS_TV 0
+#endif
+#if defined(__ENVIRONMENT_TVOS_VERSION_MIN_REQUIRED__)
+#undef TARGET_OS_TV
+#define TARGET_OS_TV 1
+#endif
+#if defined(__ENVIRONMENT_SIMULATOR)
+#define TARGET_OS_SIMULATOR 1
+#else
+#define TARGET_OS_SIMULATOR 0
+#endif

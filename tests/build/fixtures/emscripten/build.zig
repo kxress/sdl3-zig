@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     object.setLibCFile(libc);
+    object.root_module.addCSourceFile(.{ .file = b.path("long_double_probe.c"), .flags = &.{} });
     _ = sdl3.addTo(b, object, .{
         .distribution = .source,
         .linkage = .static,

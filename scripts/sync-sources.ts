@@ -33,6 +33,10 @@ if (Deno.args.length !== 1 || (action !== "update" && action !== "check")) {
   throw new Error("usage: sync-sources.ts update|check");
 }
 
+if (action === "update") {
+  await Deno.mkdir(join(root, "vendor"), { recursive: true });
+}
+
 if (await vendoredSourcesMatchManifest()) {
   console.log(`Using existing verified source cache at ${join(root, "vendor")}.`);
   Deno.exit(0);

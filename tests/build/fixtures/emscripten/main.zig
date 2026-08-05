@@ -3,6 +3,10 @@ const sdl = @import("sdl");
 
 var preload_verified = false;
 
+extern fn sdl_long_double_size() callconv(.c) usize;
+extern fn sdl_long_double_alignment() callconv(.c) usize;
+extern fn sdl_long_double_roundtrip(value: c_longdouble) callconv(.c) c_longdouble;
+
 export fn SDL_AppInit(
     appstate: ?*?*anyopaque,
     argc: c_int,
@@ -36,6 +40,28 @@ export fn SDL_AppQuit(appstate: ?*anyopaque, result: sdl.init.AppResult) callcon
 }
 
 pub fn main() void {
+    const long_double_value: c_longdouble = 1.25;
+    if (sdl_long_double_size() != @sizeOf(c_longdouble) or
+        sdl_long_double_alignment() != @alignOf(c_longdouble) or
+        sdl_long_double_roundtrip(long_double_value) != long_double_value)
+    {
+        std.process.exit(1);
+    }
+
+    var long_double_text: [32]u8 = undefined;
+    const long_double_length = sdl.stdinc.snprintf(
+        &long_double_text,
+        long_double_text.len,
+        "%Lf",
+        .{@as(c_longdouble, 1.25)},
+    );
+    if (long_double_length < 0 or
+        long_double_length > @as(c_int, @intCast(long_double_text.len)) or
+        !std.mem.eql(u8, long_double_text[0..@intCast(long_double_length)], "1.250000"))
+    {
+        std.process.exit(1);
+    }
+
     const result = sdl.enterAppMainCallbacks(
         0,
         null,

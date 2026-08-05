@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { type ApiModel, mergeApiModels, type XmlAstNode } from "../../scripts/codegen/analysis.ts";
 
 function node(id: string, name: string, location: string, order: number): XmlAstNode {
@@ -72,4 +72,59 @@ Deno.test("target merging preserves declarations and constants with their availa
     "aarch64-macos",
   ]);
   assertEquals(merged.constantTargets["macro:PATTERN_MACOS_ONLY"], ["aarch64-macos"]);
+});
+
+Deno.test("target merging preserves normalized declaration semantics and rejects contradictions", () => {
+  const linux = model(
+    "x86_64-linux-gnu",
+    [node("shared-linux", "PATTERN_Shared", "shared", 0)],
+    [],
+  );
+  const macos = model("aarch64-macos", [node("shared-macos", "PATTERN_Shared", "shared", 0)], []);
+  linux.declarationSemantics = {
+    PATTERN_Shared: {
+      linkage: "default",
+      inline: "always",
+      returnFlow: "normal",
+      resultUse: "ordinary",
+    },
+  };
+  macos.declarationSemantics = structuredClone(linux.declarationSemantics);
+  assertEquals(mergeApiModels([linux, macos]).declarationSemantics, linux.declarationSemantics);
+
+  macos.declarationSemantics!.PATTERN_Shared.inline = "hint";
+  assertThrows(() => mergeApiModels([linux, macos]), Error, "Contradictory declaration semantics");
+});
+
+Deno.test("target merging accepts platform visibility variation", () => {
+  const linux = model(
+    "x86_64-linux-gnu",
+    [node("shared-linux", "PATTERN_Shared", "shared", 0)],
+    [],
+  );
+  const windows = model(
+    "x86_64-windows-gnu",
+    [node("shared-windows", "PATTERN_Shared", "shared", 0)],
+    [],
+  );
+  linux.declarationSemantics = {
+    PATTERN_Shared: {
+      linkage: "exported",
+      inline: "none",
+      returnFlow: "normal",
+      resultUse: "ordinary",
+    },
+  };
+  windows.declarationSemantics = {
+    PATTERN_Shared: {
+      linkage: "default",
+      inline: "none",
+      returnFlow: "normal",
+      resultUse: "ordinary",
+    },
+  };
+  assertEquals(
+    mergeApiModels([linux, windows]).declarationSemantics?.PATTERN_Shared?.linkage,
+    "exported",
+  );
 });

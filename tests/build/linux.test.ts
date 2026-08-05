@@ -5,6 +5,7 @@ import {
   buildDistributionConsumer,
   command,
   run,
+  runScopedExecutable,
   stageDistributionConsumer,
   withTempDirectory,
 } from "./support.ts";
@@ -70,7 +71,7 @@ Deno.test({
           await Deno.stat(
             `${temporary}/${linkage}/output/share/ControllerImage/controllerimage-kenney.bin`,
           );
-          await run(`${temporary}/${linkage}/output/bin/cmake-source-all`, [], {
+          await runScopedExecutable(`${temporary}/${linkage}/output/bin/cmake-source-all`, [], {
             cwd: `${temporary}/${linkage}/output/share/ControllerImage`,
             env: linkage === "shared"
               ? { SDL_VIDEODRIVER: "offscreen", SDL_RENDER_DRIVER: "software" }

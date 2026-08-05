@@ -1,4 +1,8 @@
-import type { ConstantFamily, LibraryProfile } from "./profile.ts";
+import {
+  type ConstantFamily,
+  type LibraryProfile,
+  materializeCoveragePolicies,
+} from "./profile.ts";
 
 export interface LibraryConfiguration {
   id: string;
@@ -78,8 +82,81 @@ export const codegenConfiguration: CodegenConfiguration = {
           alignedFree: "SDL_aligned_free",
           setMemoryFunctions: "SDL_SetMemoryFunctions",
           getNumAllocations: "SDL_GetNumAllocations",
+          alignmentGuarantee: "sdl_bounded",
         },
-        releaseFunctions: ["SDL_free"],
+        releaseFunctions: ["SDL_free", "SDL_aligned_free"],
+        manualFunctionMacros: [
+          {
+            cName: "SDL_iconv_utf8_locale",
+            kind: "iconv_utf8_locale",
+            ownership: {
+              transformation: "owned_string",
+              retainsAllocator: false,
+              releasesSourceBeforeReturn: true,
+            },
+          },
+          {
+            cName: "SDL_iconv_utf8_ucs2",
+            kind: "iconv_utf8_ucs2",
+            ownership: {
+              transformation: "owned_string",
+              retainsAllocator: false,
+              releasesSourceBeforeReturn: true,
+            },
+          },
+          {
+            cName: "SDL_iconv_utf8_ucs4",
+            kind: "iconv_utf8_ucs4",
+            ownership: {
+              transformation: "owned_string",
+              retainsAllocator: false,
+              releasesSourceBeforeReturn: true,
+            },
+          },
+          {
+            cName: "SDL_iconv_wchar_utf8",
+            kind: "iconv_wchar_utf8",
+            ownership: {
+              transformation: "owned_string",
+              retainsAllocator: false,
+              releasesSourceBeforeReturn: true,
+            },
+          },
+        ],
+        allocationContracts: [
+          {
+            cName: "SDL_malloc",
+            mallocLike: true,
+            releaseFunction: "SDL_free",
+          },
+          {
+            cName: "SDL_calloc",
+            mallocLike: true,
+            allocationSize: [0, 1],
+            releaseFunction: "SDL_free",
+          },
+          {
+            cName: "SDL_realloc",
+            mallocLike: false,
+            allocationSize: [1],
+            releaseFunction: "SDL_free",
+          },
+          {
+            cName: "SDL_aligned_alloc",
+            mallocLike: true,
+            releaseFunction: "SDL_aligned_free",
+          },
+          {
+            cName: "SDL_strdup",
+            mallocLike: true,
+            releaseFunction: "SDL_free",
+          },
+          {
+            cName: "SDL_strndup",
+            mallocLike: true,
+            releaseFunction: "SDL_free",
+          },
+        ],
         headerPrefixes: ["SDL_"],
         rootHeaders: ["SDL_main.h"],
         namespaceStrategy: { kind: "documented_category" },
@@ -137,7 +214,7 @@ export const codegenConfiguration: CodegenConfiguration = {
               "SDL_enabled_assert",
             ],
             reason:
-              "Approximation is possible, but not a faithful port: the macros depend on assertion build level, C expression stringification, caller file/line/function, static assertion data, retry handling, and target-specific debugger behavior. A bool-taking Zig helper would lose those semantics.",
+              "Rejected after a pinned Zig 0.16.0 proof attempt: no generic inline helper can provide C's per-call-site static SDL_AssertData, #condition token stringification, and caller function/file/line simultaneously. SDL_ReportAssertion mutates and retains that data in a process-wide linked report, so a temporary stack record aliases after return and a shared record loses site independence and is not thread-safe. Macro-level SDL_ASSERT_LEVEL elision must also avoid evaluating disabled conditions, while break/abort remain target-specific control flow. Keep the raw assert runtime APIs and use Zig assertions for ordinary invariants; no honest additive adapter is emitted.",
           },
           {
             names: ["SDL_stack_alloc", "SDL_stack_free"],
@@ -315,6 +392,16 @@ export const codegenConfiguration: CodegenConfiguration = {
     }),
   ],
 };
+
+for (const library of codegenConfiguration.libraries) {
+  const exclusions = library.profile.coverageExclusions;
+  if (exclusions) {
+    library.profile.coveragePolicies = materializeCoveragePolicies(
+      exclusions,
+      codegenConfiguration.targets,
+    );
+  }
+}
 
 export function renderTranslationUnit(headers: string[]): string {
   return `${headers.map((header) => `#include <${header}>`).join("\n")}\n`;

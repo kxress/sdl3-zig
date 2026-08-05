@@ -15,6 +15,74 @@ export function appendDocumentationParagraph(
   documentation.push(paragraph);
 }
 
+/**
+ * Add declaration-level diagnostics that Doxygen cannot reliably preserve.
+ *
+ * Clang's DeprecatedAttr, result-use, and analyzer-only return-flow attributes are semantic
+ * metadata rather than Zig declaration modifiers. Keeping them in the generated documentation
+ * makes the contract visible without pretending that Zig 0.16 can emit warning-only or analyzer
+ * declaration attributes.
+ */
+export function appendDeclarationSemanticsDocumentation(
+  source: string,
+  semantics: {
+    deprecated?: { message?: string; replacement?: string };
+    resultUse?: "ordinary" | "should_use";
+    returnFlow?: "normal" | "no_return" | "analyzer_no_return";
+  } | undefined,
+): string {
+  if (!semantics) return source;
+  let result = source.trim();
+  const deprecated = semantics.deprecated;
+  if (deprecated && !/\*\*deprecated:\*\*/i.test(result)) {
+    const message = deprecated.message?.trim();
+    const replacement = deprecated.replacement?.trim();
+    const details = message ? ` ${message}` : " This declaration is deprecated.";
+    const replacementText = replacement ? ` Use \`${replacement}\` instead.` : "";
+    result = appendSemanticParagraph(
+      result,
+      `**Deprecated:**${details}${replacementText}`,
+    );
+  } else if (deprecated?.replacement?.trim()) {
+    const replacement = deprecated.replacement.trim();
+    if (!result.includes(replacement)) {
+      result = appendSemanticParagraph(result, `**Replacement:** Use \`${replacement}\` instead.`);
+    }
+  }
+  if (
+    semantics.resultUse === "should_use" &&
+    !/\*\*(?:nodiscard|result use):\*\*/i.test(result)
+  ) {
+    result = appendSemanticParagraph(
+      result,
+      "**Result use:** The return value should be checked or otherwise consumed.",
+    );
+  }
+  if (
+    semantics.returnFlow === "no_return" &&
+    !/\*\*(?:Control flow|Non-returning):\*\*/i.test(result)
+  ) {
+    result = appendSemanticParagraph(
+      result,
+      "> **Control flow:** This function does not return.",
+    );
+  } else if (
+    semantics.returnFlow === "analyzer_no_return" &&
+    !/\*\*(?:Control flow|Analyzer control flow):\*\*/i.test(result)
+  ) {
+    result = appendSemanticParagraph(
+      result,
+      "> **Analyzer control flow:** Static analyzers may treat this function as non-returning, " +
+        "but it can return at runtime.",
+    );
+  }
+  return result;
+}
+
+function appendSemanticParagraph(source: string, paragraph: string): string {
+  return source.length > 0 ? `${source}\n\n${paragraph}` : paragraph;
+}
+
 function formatDocumentationMarkdown(sourceLines: string[]): string[] {
   const lines = separateDocumentationSummary(splitInlineCodeFences(sourceLines));
   const formatted: string[] = [];

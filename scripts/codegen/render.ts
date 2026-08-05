@@ -1,5 +1,9 @@
 import type { ApiModel, FunctionMacro, ObjectMacro, XmlAstNode } from "./analysis.ts";
-import { appendDocumentationParagraph, renderDocComment } from "./documentation.ts";
+import {
+  appendDeclarationSemanticsDocumentation,
+  appendDocumentationParagraph,
+  renderDocComment,
+} from "./documentation.ts";
 import {
   type BorrowedSliceInfo,
   createFunctionPlan,
@@ -12,7 +16,15 @@ import {
   type SliceRelationship,
 } from "./function-plan.ts";
 import { uniqueIdentifier, ZigNaming } from "./naming.ts";
-import type { LibraryProfile, PublicApi, PublicReference, PublicSymbol } from "./profile.ts";
+import type {
+  AllocationContract,
+  LibraryProfile,
+  ManualFunctionMacro,
+  OwnershipSymbol,
+  PublicApi,
+  PublicReference,
+  PublicSymbol,
+} from "./profile.ts";
 
 interface RenderContext {
   model: ApiModel;
@@ -54,6 +66,7 @@ export interface RenderedBindings {
   source: string;
   symbols: PublicSymbol[];
   coverageNames: string[];
+  ownership: OwnershipSymbol[];
 }
 
 interface ResourceInfo {
@@ -112,10 +125,12 @@ export function renderSemanticBindings(
 ): RenderedBindings {
   const context = createContext(model, profile, dependencyApis);
   const source = renderPublicBindings(context);
+  const symbols = collectPublicSymbols(context);
   return {
     source,
-    symbols: collectPublicSymbols(context),
+    symbols,
     coverageNames: [...context.coverageNames].sort(),
+    ownership: collectOwnershipSymbols(context, symbols),
   };
 }
 
@@ -187,15 +202,164 @@ function createContext(
     functionPlans: new Map(),
     needsOwnedStringSupport: false,
   };
+  validateManualFunctionMacros(context);
   validatePublicSignatures(context);
   context.ownedStringRecords = collectOwnedStringRecords(context);
   context.functionPlans = new Map(
     context.publicFunctions.map((node) => [node.id, planFunction(node, context)]),
   );
+  validateRestrictMetadata(context);
+  validateAllocationContracts(context);
   context.needsOwnedStringSupport = [...context.functionPlans.values()].some((plan) =>
     plan.ownedArray?.kind === "strings" || plan.ownedArray?.kind === "string_records"
   );
   return context;
+}
+
+function validateManualFunctionMacros(context: RenderContext): void {
+  const configured = context.profile.manualFunctionMacros ?? [];
+  const seen = new Set<string>();
+  const available = new Set(context.functionMacros.map((macro) => macro.name));
+  for (const manual of configured) {
+    if (seen.has(manual.cName)) {
+      throw new Error(`Duplicate manual function macro configuration for ${manual.cName}`);
+    }
+    seen.add(manual.cName);
+    if (!available.has(manual.cName)) {
+      throw new Error(`Manual function macro ${manual.cName} is not present in the analyzed API`);
+    }
+    if (!renderManualFunctionMacro(manual.kind, "__manual_function_macro__")) {
+      throw new Error(
+        `Manual function macro ${manual.cName} has no renderer for kind ${manual.kind}`,
+      );
+    }
+  }
+}
+
+/** Validate C restrict indexes while deliberately keeping them out of Zig signatures. */
+function validateRestrictMetadata(context: RenderContext): void {
+  for (const [cName, semantics] of Object.entries(context.model.declarationSemantics ?? {})) {
+    const indexes = semantics.restrictParameters;
+    if (!indexes) continue;
+    const node = context.publicFunctions.find((candidate) => candidate.attributes.name === cName);
+    if (!node) {
+      throw new Error(`Restrict metadata for ${cName} has no public function declaration`);
+    }
+    const argumentCount = splitIds(node.attributes.arguments).length || node.members.length;
+    const seen = new Set<number>();
+    for (const index of indexes) {
+      const location = sourceLocationForName(context, cName);
+      const source = formatAllocationSource(location);
+      if (!Number.isInteger(index) || index < 0 || index >= argumentCount || !seen.add(index)) {
+        throw new Error(
+          `Contradictory restrict metadata for ${cName}${source}: ` +
+            `parameter index ${index} is outside ${argumentCount} parameters or duplicated`,
+        );
+      }
+    }
+  }
+}
+
+/** Cross-check explicit allocator metadata before rendering any public wrapper. */
+function validateAllocationContracts(context: RenderContext): void {
+  const contracts: AllocationContract[] = context.profile.allocationContracts ?? [];
+  const seen = new Set<string>();
+  for (const contract of contracts) {
+    const location = sourceLocationForName(context, contract.cName);
+    const source = formatAllocationSource(location);
+    if (!seen.add(contract.cName)) {
+      throw new Error(`Duplicate allocation contract for ${contract.cName}${source}`);
+    }
+    const node = context.publicFunctions.find((candidate) =>
+      candidate.attributes.name === contract.cName
+    );
+    if (!node) {
+      throw new Error(`Allocation contract names no public C function ${contract.cName}${source}`);
+    }
+    const semantics = context.model.declarationSemantics?.[contract.cName];
+    const observedMallocLike = semantics?.mallocLike ?? false;
+    if (contract.mallocLike !== undefined && observedMallocLike !== contract.mallocLike) {
+      throw new Error(
+        `Contradictory allocator metadata for ${contract.cName}${source}: ` +
+          `configured mallocLike=${contract.mallocLike}, observed ` +
+          `${observedMallocLike ? "malloc-like" : "not malloc-like"}`,
+      );
+    }
+    if (contract.allocationSize !== undefined) {
+      const observed = semantics?.allocationSize?.parameters;
+      if (!observed || !sameNumberList(observed, contract.allocationSize)) {
+        throw new Error(
+          `Contradictory allocation-size metadata for ${contract.cName}${source}: ` +
+            `configured [${contract.allocationSize.join(", ")}], observed ` +
+            `${observed ? `[${observed.join(", ")}]` : "none"}`,
+        );
+      }
+    }
+    if (contract.alignment !== undefined) {
+      const observed = semantics?.alignment;
+      if (observed !== contract.alignment) {
+        throw new Error(
+          `Contradictory alignment metadata for ${contract.cName}${source}: ` +
+            `configured ${contract.alignment}, observed ${observed ?? "none"}`,
+        );
+      }
+    }
+    if (contract.releaseFunction !== undefined) {
+      const release = contract.releaseFunction;
+      const configured = context.profile.releaseFunctions.includes(release) ||
+        (context.profile.allocator.provider === "local" &&
+          (context.profile.allocator.free === release ||
+            context.profile.allocator.alignedFree === release)) ||
+        (context.profile.allocator.provider === "dependency" &&
+          context.profile.allocator.free === release);
+      if (!configured) {
+        throw new Error(
+          `Contradictory release metadata for ${contract.cName}${source}: ` +
+            `${release} is not configured for ${context.profile.moduleName}`,
+        );
+      }
+      const releaseNode = context.publicFunctions.find((candidate) =>
+        candidate.attributes.name === release
+      );
+      if (!releaseNode) {
+        throw new Error(
+          `Configured release function ${release} for ${contract.cName}${source} ` +
+            "is not a public C declaration",
+        );
+      }
+    }
+  }
+}
+
+function sameNumberList(left: number[], right: number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sourceLocationForName(
+  context: RenderContext,
+  cName: string,
+): { file?: string; line?: number; column?: number } | undefined {
+  const node = context.publicFunctions.find((candidate) => candidate.attributes.name === cName);
+  if (!node) return undefined;
+  const location = context.model.locations[node.attributes.location];
+  if (location) {
+    return {
+      ...location,
+      file: location.file ? context.model.files[location.file] ?? location.file : undefined,
+    };
+  }
+  return {
+    file: node.attributes.file,
+    line: Number(node.attributes.line),
+  };
+}
+
+function formatAllocationSource(
+  location: { file?: string; line?: number; column?: number } | undefined,
+): string {
+  if (!location?.file || !Number.isFinite(location.line)) return "";
+  return ` at ${location.file}:${location.line}` +
+    (location.column === undefined ? "" : `:${location.column}`);
 }
 
 function resolveDependencyTypeNames(
@@ -994,10 +1158,51 @@ function renderPublicBindings(context: RenderContext): string {
   renderPublicFunctionMacros(context, lines, moduleNames);
   renderPublicVariables(context, lines, moduleNames);
   renderPublicFunctions(context, lines, moduleNames);
+  if (context.profile.moduleName === "sdl") renderZigLogAdapter(lines);
   privatizeNamespacedDeclarations(context, lines);
   renderNamespaces(context, lines);
 
   return resolveDocumentationReferences(finish(lines), context);
+}
+
+function renderZigLogAdapter(lines: string[]): void {
+  lines.push(
+    "/// Format a Zig message and forward it to SDL without reinterpreting percent signs.",
+    "/// Reentrant calls from an SDL output callback are ignored on the same thread.",
+    "threadlocal var sdlLogAdapterActive = false;",
+    "",
+    "pub inline fn logMessageFmt(category: c_int, priority: LogPriority, comptime format: []const u8, args: anytype) void {",
+    "    if (sdlLogAdapterActive) return;",
+    "    sdlLogAdapterActive = true;",
+    "    defer sdlLogAdapterActive = false;",
+    "    var buffer: [1024]u8 = undefined;",
+    "    const message = std.fmt.bufPrintZ(&buffer, format, args) catch {",
+    '        c.SDL_LogMessage(category, @intCast(@intFromEnum(priority)), "%s", "SDL log formatting failed");',
+    "        return;",
+    "    };",
+    '    c.SDL_LogMessage(category, @intCast(@intFromEnum(priority)), "%s", message.ptr);',
+    "}",
+    "",
+    "/// Adapt Zig's standard log callback to SDL's application logging category.",
+    "///",
+    "/// The default scope is forwarded unchanged. Named scopes are prefixed in the already",
+    "/// formatted message so the fixed C format remains `%s` and cannot reinterpret user text.",
+    "pub fn stdLogFn(comptime level: std.log.Level, comptime scope: @EnumLiteral(), comptime format: []const u8, args: anytype) void {",
+    "    const priority: LogPriority = switch (level) {",
+    "        .debug => .debug,",
+    "        .info => .info,",
+    "        .warn => .warn,",
+    "        .err => .error_,",
+    "    };",
+    '    if (comptime std.mem.eql(u8, @tagName(scope), "default")) {',
+    "        logMessageFmt(c.SDL_LOG_CATEGORY_APPLICATION, priority, format, args);",
+    "    } else {",
+    '        const scoped_format = std.fmt.comptimePrint("[{s}] {s}", .{@tagName(scope), format});',
+    "        logMessageFmt(c.SDL_LOG_CATEGORY_APPLICATION, priority, scoped_format, args);",
+    "    }",
+    "}",
+    "",
+  );
 }
 
 function renderError(context: RenderContext, lines: string[]): void {
@@ -1032,21 +1237,26 @@ function renderAllocatorBridge(
     "/// deinitialized; a second install returns error.AlreadyInstalled.",
     "pub const AllocatorBridge = struct {",
     "    /// Failures reported by the allocator bridge.",
-    "    pub const Error = error{ AlreadyInstalled, AllocationsAlreadyMade, SdlFailure };",
+    "    pub const Error = error{ AlreadyInstalled, AllocationsAlreadyMade, AllocationCountUnavailable, InvalidBackingAllocator, SdlFailure };",
     "",
     "    /// Installs `backing` as SDL's process-wide allocator.",
     "    ///",
-    "    /// The allocator value is copied, but its backing state is borrowed indefinitely. This",
-    "    /// function must run before any SDL allocation or initialization call.",
+    "    /// The allocator value is copied, but its backing state is borrowed indefinitely. The",
+    "    /// backing allocator must be process-lifetime and callable from every SDL thread;",
+    "    /// scoped, fixed-buffer, and non-thread-safe backing allocators are invalid.",
+    "    /// This function must run before any SDL allocation or initialization call.",
     "    pub fn install(backing: std.mem.Allocator) @This().Error!void {",
     "        if (allocator_bridge_installed) return error.AlreadyInstalled;",
-    `        if (c.${allocator.getNumAllocations}() > 0) return error.AllocationsAlreadyMade;`,
+    "        if (backing.ptr == allocator.ptr and backing.vtable == allocator.vtable) return error.InvalidBackingAllocator;",
+    `        const existing_allocations = c.${allocator.getNumAllocations}();`,
+    "        if (existing_allocations < 0) return error.AllocationCountUnavailable;",
+    "        if (existing_allocations > 0) return error.AllocationsAlreadyMade;",
     "        allocator_bridge_backing = backing;",
     `        if (!c.${allocator.setMemoryFunctions}(`,
-    "            @ptrCast(&allocatorBridgeMalloc),",
-    "            @ptrCast(&allocatorBridgeCalloc),",
-    "            @ptrCast(&allocatorBridgeRealloc),",
-    "            @ptrCast(&allocatorBridgeFree),",
+    "            allocatorBridgeMallocFn,",
+    "            allocatorBridgeCallocFn,",
+    "            allocatorBridgeReallocFn,",
+    "            allocatorBridgeFreeFn,",
     "        )) {",
     "            allocator_bridge_backing = null;",
     "            return error.SdlFailure;",
@@ -1058,6 +1268,11 @@ function renderAllocatorBridge(
     "    pub fn isInstalled() bool {",
     "        return allocator_bridge_installed;",
     "    }",
+    "",
+    "    /// Returns whether a safety-build callback rejected a foreign or corrupt allocation header.",
+    "    pub fn hadSafetyFault() bool {",
+    "        return allocator_bridge_corrupt_header;",
+    "    }",
     "};",
     "",
     "const AllocatorBridgeHeader = struct {",
@@ -1066,18 +1281,23 @@ function renderAllocatorBridge(
     "    base_len: usize,",
     "    requested_len: usize,",
     "};",
+    "comptime {",
+    '    if (@alignOf(AllocatorBridgeHeader) != @alignOf(usize)) @compileError("allocator bridge header alignment changed");',
+    '    if (@sizeOf(AllocatorBridgeHeader) < 3 * @sizeOf(usize)) @compileError("allocator bridge header layout changed");',
+    "}",
     "",
     "const allocator_bridge_magic: usize = @bitCast(@as(isize, -0x53444c));",
     "const allocator_bridge_alignment = std.mem.Alignment.of(std.c.max_align_t);",
     "var allocator_bridge_backing: ?std.mem.Allocator = null;",
     "var allocator_bridge_installed = false;",
+    "var allocator_bridge_corrupt_header = false;",
     "",
-    "fn allocatorBridgeMalloc(size: c_ulong) callconv(.c) ?*anyopaque {",
+    "fn allocatorBridgeMalloc(size: usize) callconv(.c) ?*anyopaque {",
     "    const length = std.math.cast(usize, size) orelse return null;",
     "    return allocatorBridgeAllocate(length);",
     "}",
     "",
-    "fn allocatorBridgeCalloc(nmemb: c_ulong, size: c_ulong) callconv(.c) ?*anyopaque {",
+    "fn allocatorBridgeCalloc(nmemb: usize, size: usize) callconv(.c) ?*anyopaque {",
     "    const count = std.math.cast(usize, nmemb) orelse return null;",
     "    const element_size = std.math.cast(usize, size) orelse return null;",
     "    const length = std.math.mul(usize, count, element_size) catch return null;",
@@ -1086,7 +1306,7 @@ function renderAllocatorBridge(
     "    return pointer;",
     "}",
     "",
-    "fn allocatorBridgeRealloc(memory: ?*anyopaque, size: c_ulong) callconv(.c) ?*anyopaque {",
+    "fn allocatorBridgeRealloc(memory: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {",
     "    const length = std.math.cast(usize, size) orelse return null;",
     "    if (memory == null) return allocatorBridgeAllocate(length);",
     "    const header = allocatorBridgeHeader(memory.?) orelse return null;",
@@ -1115,6 +1335,11 @@ function renderAllocatorBridge(
     "    header.magic = 0;",
     "    backing.rawFree(base[0..base_len], allocator_bridge_alignment, @returnAddress());",
     "}",
+    "",
+    "const allocatorBridgeMallocFn: c.SDL_malloc_func = allocatorBridgeMalloc;",
+    "const allocatorBridgeCallocFn: c.SDL_calloc_func = allocatorBridgeCalloc;",
+    "const allocatorBridgeReallocFn: c.SDL_realloc_func = allocatorBridgeRealloc;",
+    "const allocatorBridgeFreeFn: c.SDL_free_func = allocatorBridgeFree;",
     "",
     "fn allocatorBridgeAllocate(length: usize) ?*anyopaque {",
     "    const backing = allocator_bridge_backing orelse return null;",
@@ -1154,7 +1379,9 @@ function renderAllocatorBridge(
     "    const address = @intFromPtr(memory);",
     "    if (address < @sizeOf(AllocatorBridgeHeader)) return null;",
     "    const header: *AllocatorBridgeHeader = @ptrFromInt(address - @sizeOf(AllocatorBridgeHeader));",
-    "    return if (header.magic == allocator_bridge_magic) header else null;",
+    "    if (header.magic == allocator_bridge_magic) return header;",
+    "    if (builtin.mode == .Debug) allocator_bridge_corrupt_header = true;",
+    "    return null;",
     "}",
     "",
   );
@@ -1191,9 +1418,11 @@ function renderAllocator(context: RenderContext, lines: string[]): void {
     "    .free = allocatorFree,",
     "};",
     "",
+    "const allocator_max_alignment = @min(@alignOf(std.c.max_align_t), 2 * @sizeOf(*anyopaque));",
+    "",
     "fn allocatorAlloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, _: usize) ?[*]u8 {",
     "    const bytes = alignment.toByteUnits();",
-    "    const pointer = if (bytes <= @alignOf(std.c.max_align_t))",
+    "    const pointer = if (bytes <= allocator_max_alignment)",
     `        c.${allocator.malloc}(len)`,
     "    else",
     `        c.${allocator.alignedAlloc}(bytes, len);`,
@@ -1201,13 +1430,13 @@ function renderAllocator(context: RenderContext, lines: string[]): void {
     "}",
     "",
     "fn allocatorRemap(_: *anyopaque, allocation: []u8, alignment: std.mem.Alignment, new_len: usize, _: usize) ?[*]u8 {",
-    "    if (alignment.toByteUnits() > @alignOf(std.c.max_align_t)) return null;",
+    "    if (alignment.toByteUnits() > allocator_max_alignment) return null;",
     `    const pointer = c.${allocator.realloc}(allocation.ptr, new_len) orelse return null;`,
     "    return @ptrCast(pointer);",
     "}",
     "",
     "fn allocatorFree(_: *anyopaque, allocation: []u8, alignment: std.mem.Alignment, _: usize) void {",
-    "    if (alignment.toByteUnits() <= @alignOf(std.c.max_align_t))",
+    "    if (alignment.toByteUnits() <= allocator_max_alignment)",
     `        c.${allocator.free}(allocation.ptr)`,
     "    else",
     `        c.${allocator.alignedFree}(allocation.ptr);`,
@@ -1231,35 +1460,208 @@ function renderCVarargSupport(context: RenderContext, lines: string[]): void {
     unsigned_long,
     signed_long_long,
     unsigned_long_long,
+    signed_max,
+    unsigned_max,
     signed_size,
     unsigned_size,
     float,
+    long_double,
     pointer,
     cstring,
+    scan_signed_char,
+    scan_unsigned_char,
+    scan_signed_short,
+    scan_unsigned_short,
     scan_signed_int,
     scan_unsigned_int,
     scan_signed_long,
     scan_unsigned_long,
     scan_signed_long_long,
     scan_unsigned_long_long,
+    scan_signed_max,
+    scan_unsigned_max,
     scan_signed_size,
     scan_unsigned_size,
     scan_float,
     scan_double,
+    scan_long_double,
     scan_char,
     scan_cstring,
     scan_pointer,
 };
+
+const CVarargLength = enum { none, hh, h, l, ll, j, z, t, long_double };
+
+const CVarargRule = struct {
+    specifier: u8,
+    length: CVarargLength,
+    printf: ?CVarargKind,
+    scanf: ?CVarargKind,
+};
+
+// Keep the conversion/type model in data. The parser below only recognizes the grammar and
+// looks up one of these rows, so adding a supported length does not require another switch.
+const cVarargRules = [_]CVarargRule{
+    .{ .specifier = 'd', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'd', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'd', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'd', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'd', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'd', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'd', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'd', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'i', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'i', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'i', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'i', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'i', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'i', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'u', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'u', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'u', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'u', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'u', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'u', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'u', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'u', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'o', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'o', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'o', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'o', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'o', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'o', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'x', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'x', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'x', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'x', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'x', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'x', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'X', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'X', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'X', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'X', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'X', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'X', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'f', .length = .none, .printf = .float, .scanf = .scan_float },
+    // C printf treats l with floating conversions as the default-promoted
+    // double (the modifier is significant for scanf only).
+    .{ .specifier = 'f', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'f', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'e', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'e', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'e', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'E', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'E', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'E', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'g', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'g', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'g', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'G', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'G', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'G', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'a', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'a', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'a', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'A', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'A', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'A', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'c', .length = .none, .printf = .signed_int, .scanf = .scan_char },
+    .{ .specifier = 's', .length = .none, .printf = .cstring, .scanf = .scan_cstring },
+    .{ .specifier = 'p', .length = .none, .printf = .pointer, .scanf = .scan_pointer },
+    .{ .specifier = 'n', .length = .none, .printf = .pointer, .scanf = .scan_signed_int },
+    .{ .specifier = 'n', .length = .hh, .printf = null, .scanf = .scan_signed_char },
+    .{ .specifier = 'n', .length = .h, .printf = null, .scanf = .scan_signed_short },
+    .{ .specifier = 'n', .length = .l, .printf = null, .scanf = .scan_signed_long },
+    .{ .specifier = 'n', .length = .ll, .printf = null, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'n', .length = .j, .printf = null, .scanf = .scan_signed_max },
+    .{ .specifier = 'n', .length = .z, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = 'n', .length = .t, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = '[', .length = .none, .printf = null, .scanf = .scan_cstring },
+};
+
+const CVarargGrammar = struct {
+    flags: []const u8,
+    width_star: bool,
+    precision: bool,
+    scanf_suppression: bool,
+    scanset: bool,
+};
+
+const cPrintfFlags = [_]u8{ '-', '+', '#', '0', ' ', '\\'' };
+const cScanfFlags = [_]u8{};
+const cPrintfGrammar = CVarargGrammar{
+    .flags = &cPrintfFlags,
+    .width_star = true,
+    .precision = true,
+    .scanf_suppression = false,
+    .scanset = false,
+};
+const cScanfGrammar = CVarargGrammar{
+    .flags = &cScanfFlags,
+    .width_star = false,
+    .precision = false,
+    .scanf_suppression = true,
+    .scanset = true,
+};
+
+fn cVarargFlagAllowed(comptime grammar: CVarargGrammar, byte: u8) bool {
+    inline for (grammar.flags) |flag| if (flag == byte) return true;
+    return false;
+}
+
+fn cVarargRuleFor(comptime specifier: u8, comptime length: CVarargLength, comptime scan: bool) CVarargKind {
+    inline for (cVarargRules) |rule| {
+        if (rule.specifier == specifier and rule.length == length) {
+            if (scan) {
+                if (rule.scanf) |kind| return kind;
+                @compileError("unsupported C scanf length for conversion");
+            } else {
+                if (rule.printf) |kind| return kind;
+                @compileError("unsupported C printf length for conversion");
+            }
+        }
+    }
+    @compileError("unsupported C format conversion");
+}
+
+fn cVarargScansetEnd(comptime format: [:0]const u8, comptime start: usize) usize {
+    comptime var index = start;
+    comptime var has_member = false;
+    if (index < format.len and format[index] == '^') index += 1;
+    if (index < format.len and format[index] == ']') {
+        has_member = true;
+        index += 1;
+    }
+    inline while (index < format.len and format[index] != ']') {
+        has_member = true;
+        index += 1;
+    }
+    if (index >= format.len) @compileError("malformed C scanf scanset: missing ]");
+    if (!has_member) @compileError("malformed C scanf scanset: empty set");
+    return index + 1;
+}
 
 fn cVarargKinds(
     comptime format: [:0]const u8,
     comptime argument_count: usize,
     comptime scan: bool,
 ) [argument_count]CVarargKind {
-    var kinds: [argument_count]CVarargKind = undefined;
-    var count: usize = 0;
-    var index: usize = 0;
-    while (index < format.len) {
+    // The table-driven conversion lookup is deliberately exhaustive. Keep its compile-time
+    // evaluation independent of Zig's small default branch quota; this changes no runtime code.
+    @setEvalBranchQuota(10_000);
+    comptime var kinds: [argument_count]CVarargKind = undefined;
+    comptime var count: usize = 0;
+    comptime var index: usize = 0;
+    const grammar = if (scan) cScanfGrammar else cPrintfGrammar;
+    inline while (index < format.len) {
         if (format[index] != '%') {
             index += 1;
             continue;
@@ -1271,23 +1673,35 @@ fn cVarargKinds(
             continue;
         }
 
-        var suppressed = false;
-        if (scan and format[index] == '*') {
+        // Positional arguments are not portable across SDL's supported CRTs. Reject them
+        // explicitly instead of accidentally treating the index as a field width.
+        comptime var positional = index;
+        inline while (positional < format.len and format[positional] >= '0' and format[positional] <= '9') positional += 1;
+        if (positional < format.len and format[positional] == '$') {
+            @compileError("positional C format arguments are unsupported");
+        }
+
+        comptime var suppressed = false;
+        if (scan and grammar.scanf_suppression and format[index] == '*') {
             suppressed = true;
             index += 1;
         }
-        while (index < format.len and
-            (format[index] == '-' or format[index] == '+' or format[index] == '#' or
-            format[index] == '0' or format[index] == ' ' or format[index] == '\\'')) index += 1;
-        if (!scan and index < format.len and format[index] == '*') {
+        inline while (index < format.len and cVarargFlagAllowed(grammar, format[index])) index += 1;
+        if (!scan and grammar.width_star and index < format.len and format[index] == '*') {
             if (count >= argument_count) @compileError("C format has too few arguments");
             kinds[count] = .signed_int;
             count += 1;
             index += 1;
+            comptime var star_position = index;
+            inline while (star_position < format.len and format[star_position] >= '0' and format[star_position] <= '9') star_position += 1;
+            if (star_position < format.len and format[star_position] == '$') {
+                @compileError("positional C format arguments are unsupported");
+            }
         } else {
-            while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+            inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
         }
         if (index < format.len and format[index] == '.') {
+            if (!grammar.precision) @compileError("scanf C formats do not support precision");
             index += 1;
             if (!scan and index < format.len and format[index] == '*') {
                 if (count >= argument_count) @compileError("C format has too few arguments");
@@ -1295,92 +1709,50 @@ fn cVarargKinds(
                 count += 1;
                 index += 1;
             } else {
-                while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                const precision_start = comptime index;
+                inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                if (precision_start == index) @compileError("C format precision requires digits or *");
             }
         }
 
-        var length: u8 = 0;
+        comptime var length: CVarargLength = .none;
         if (index < format.len and format[index] == 'h') {
-            length = 1;
+            length = .h;
             index += 1;
-            if (index < format.len and format[index] == 'h') index += 1;
+            if (index < format.len and format[index] == 'h') {
+                length = .hh;
+                index += 1;
+            }
         } else if (index < format.len and format[index] == 'l') {
-            length = 2;
+            length = .l;
             index += 1;
             if (index < format.len and format[index] == 'l') {
-                length = 3;
+                length = .ll;
                 index += 1;
             }
         } else if (index < format.len and format[index] == 'j') {
-            length = 3;
+            length = .j;
             index += 1;
         } else if (index < format.len and format[index] == 'z') {
-            length = 4;
+            length = .z;
             index += 1;
         } else if (index < format.len and format[index] == 't') {
-            length = 5;
+            length = .t;
             index += 1;
         } else if (index < format.len and format[index] == 'L') {
-            length = 6;
+            length = .long_double;
             index += 1;
         }
         if (index >= format.len) @compileError("unterminated C format specifier");
         const specifier = format[index];
         index += 1;
         if (specifier == '[') {
-            while (index < format.len and format[index] != ']') index += 1;
-            if (index >= format.len) @compileError("unterminated C scanf character set");
-            index += 1;
+            if (!scan or !grammar.scanset) @compileError("scanf scansets are not valid in printf formats");
+            index = cVarargScansetEnd(format, index);
         }
         if (suppressed) continue;
         if (count >= argument_count) @compileError("C format has too few arguments");
-        kinds[count] = if (scan) switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .scan_signed_int,
-                2 => .scan_signed_long,
-                3 => .scan_signed_long_long,
-                4, 5 => .scan_signed_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .scan_unsigned_int,
-                2 => .scan_unsigned_long,
-                3 => .scan_unsigned_long_long,
-                4, 5 => .scan_unsigned_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'f' => if (length == 0) .scan_float else if (length == 2) .scan_double
-                else @compileError("unsupported C scanf floating-point length"),
-            'e', 'E', 'g', 'G', 'a', 'A' => if (length == 2) .scan_double
-                else if (length == 0) .scan_float
-                else @compileError("unsupported C scanf floating-point length"),
-            'c' => .scan_char,
-            's', '[' => .scan_cstring,
-            'p' => .scan_pointer,
-            'n' => .scan_signed_int,
-            else => @compileError("unsupported C scanf conversion"),
-        } else switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .signed_int,
-                2 => .signed_long,
-                3 => .signed_long_long,
-                4, 5 => .signed_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .unsigned_int,
-                2 => .unsigned_long,
-                3 => .unsigned_long_long,
-                4, 5 => .unsigned_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A' => if (length == 0) .float
-                else @compileError("unsupported C printf floating-point length"),
-            'c' => .signed_int,
-            's' => .cstring,
-            'p', 'n' => .pointer,
-            else => @compileError("unsupported C printf conversion"),
-        };
+        kinds[count] = cVarargRuleFor(specifier, length, scan);
         count += 1;
     }
     if (count != argument_count) @compileError("C format argument count does not match tuple");
@@ -1404,9 +1776,13 @@ function renderCVarargSupportTypes(lines: string[]): void {
             .unsigned_long => c_ulong,
             .signed_long_long => c_longlong,
             .unsigned_long_long => c_ulonglong,
+            .signed_max => std.c.intmax_t,
+            .unsigned_max => std.c.uintmax_t,
             .signed_size => isize,
             .unsigned_size => usize,
             .float => f64,
+            .long_double => c_longdouble,
+            .cstring => [*:0]const u8,
             else => fields[index].type,
         };
         break :blk result;
@@ -1425,7 +1801,7 @@ fn cVarargIsPointer(comptime argument_type: type) bool {
 fn cVarargIsCString(comptime argument_type: type) bool {
     return switch (@typeInfo(argument_type)) {
         .optional => |info| cVarargIsCString(info.child),
-        .pointer => |info| info.child == u8 and (info.sentinel != null or info.size == .c),
+        .pointer => |info| info.child == u8 and (info.sentinel_ptr != null or info.size == .c),
         else => false,
     };
 }
@@ -1447,9 +1823,12 @@ fn cVarargIsPointerToPointer(comptime argument_type: type) bool {
 }
 
 fn cVarargIsDefaultInt(comptime argument_type: type) bool {
-    return argument_type == bool or argument_type == i8 or argument_type == u8 or
-        argument_type == i16 or argument_type == u16 or argument_type == c_int or
-        argument_type == c_uint or argument_type == comptime_int;
+    return switch (@typeInfo(argument_type)) {
+        .bool, .comptime_int => true,
+        .int => |info| info.bits <= @bitSizeOf(c_int),
+        .optional => |info| cVarargIsDefaultInt(info.child),
+        else => argument_type == c_int or argument_type == c_uint,
+    };
 }
 
 fn cVarargPromoteInt(comptime target: type, value: anytype) target {
@@ -1462,53 +1841,73 @@ fn cVarargPromoteFloat(value: anytype) f64 {
 
 fn cVarargValidate(comptime kind: CVarargKind, comptime argument_type: type) void {
     switch (kind) {
-        .signed_int => if (!cVarargIsDefaultInt(argument_type))
+        .signed_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_int"),
-        .unsigned_int => if (!cVarargIsDefaultInt(argument_type))
+        .unsigned_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_uint"),
-        .signed_long => if (argument_type != c_long and argument_type != comptime_int)
+        .signed_long => if (comptime argument_type != c_long and argument_type != comptime_int)
             @compileError("C printf %ld requires c_long"),
-        .unsigned_long => if (argument_type != c_ulong and argument_type != comptime_int)
+        .unsigned_long => if (comptime argument_type != c_ulong and argument_type != comptime_int)
             @compileError("C printf %lu requires c_ulong"),
-        .signed_long_long => if (argument_type != c_longlong and argument_type != comptime_int)
+        .signed_long_long => if (comptime argument_type != c_longlong and argument_type != comptime_int)
             @compileError("C printf %lld requires c_longlong"),
-        .unsigned_long_long => if (argument_type != c_ulonglong and argument_type != comptime_int)
+        .unsigned_long_long => if (comptime argument_type != c_ulonglong and argument_type != comptime_int)
             @compileError("C printf %llu requires c_ulonglong"),
-        .signed_size => if (argument_type != isize and argument_type != comptime_int)
+        .signed_max => if (comptime argument_type != std.c.intmax_t and argument_type != comptime_int)
+            @compileError("C printf %jd requires intmax_t"),
+        .unsigned_max => if (comptime argument_type != std.c.uintmax_t and argument_type != comptime_int)
+            @compileError("C printf %ju requires uintmax_t"),
+        .signed_size => if (comptime argument_type != isize and argument_type != comptime_int)
             @compileError("C printf %zd requires isize"),
-        .unsigned_size => if (argument_type != usize and argument_type != comptime_int)
+        .unsigned_size => if (comptime argument_type != usize and argument_type != comptime_int)
             @compileError("C printf %zu requires usize"),
-        .float => if (argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
+        .float => if (comptime argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
             @compileError("C printf floating-point arguments must be default-promoted to f64"),
-        .pointer => if (!cVarargIsPointer(argument_type))
+        .long_double => if (comptime argument_type != c_longdouble)
+            @compileError("C printf %Lf requires c_longdouble"),
+        .pointer => if (comptime !cVarargIsPointer(argument_type))
             @compileError("C printf pointer arguments must be pointers"),
-        .cstring => if (!cVarargIsCString(argument_type))
+        .cstring => if (comptime !cVarargIsCString(argument_type))
             @compileError("C printf %s arguments must be sentinel-terminated C strings"),
-        .scan_signed_int => if (argument_type != *c_int)
+        .scan_signed_char => if (comptime argument_type != *i8)
+            @compileError("C scanf %hhd requires *i8"),
+        .scan_unsigned_char => if (comptime argument_type != *u8)
+            @compileError("C scanf %hhu requires *u8"),
+        .scan_signed_short => if (comptime argument_type != *c_short)
+            @compileError("C scanf %hd requires *c_short"),
+        .scan_unsigned_short => if (comptime argument_type != *c_ushort)
+            @compileError("C scanf %hu requires *c_ushort"),
+        .scan_signed_int => if (comptime argument_type != *c_int)
             @compileError("C scanf %d requires *c_int"),
-        .scan_unsigned_int => if (argument_type != *c_uint)
+        .scan_unsigned_int => if (comptime argument_type != *c_uint)
             @compileError("C scanf %u requires *c_uint"),
-        .scan_signed_long => if (argument_type != *c_long)
+        .scan_signed_long => if (comptime argument_type != *c_long)
             @compileError("C scanf %ld requires *c_long"),
-        .scan_unsigned_long => if (argument_type != *c_ulong)
+        .scan_unsigned_long => if (comptime argument_type != *c_ulong)
             @compileError("C scanf %lu requires *c_ulong"),
-        .scan_signed_long_long => if (argument_type != *c_longlong)
+        .scan_signed_long_long => if (comptime argument_type != *c_longlong)
             @compileError("C scanf %lld requires *c_longlong"),
-        .scan_unsigned_long_long => if (argument_type != *c_ulonglong)
+        .scan_unsigned_long_long => if (comptime argument_type != *c_ulonglong)
             @compileError("C scanf %llu requires *c_ulonglong"),
-        .scan_signed_size => if (argument_type != *isize)
+        .scan_signed_max => if (comptime argument_type != *std.c.intmax_t)
+            @compileError("C scanf %jd requires *intmax_t"),
+        .scan_unsigned_max => if (comptime argument_type != *std.c.uintmax_t)
+            @compileError("C scanf %ju requires *uintmax_t"),
+        .scan_signed_size => if (comptime argument_type != *isize)
             @compileError("C scanf %zd requires *isize"),
-        .scan_unsigned_size => if (argument_type != *usize)
+        .scan_unsigned_size => if (comptime argument_type != *usize)
             @compileError("C scanf %zu requires *usize"),
-        .scan_float => if (argument_type != *f32)
+        .scan_float => if (comptime argument_type != *f32)
             @compileError("C scanf %f requires *f32"),
-        .scan_double => if (argument_type != *f64)
+        .scan_double => if (comptime argument_type != *f64)
             @compileError("C scanf %lf requires *f64"),
-        .scan_char => if (argument_type != *u8)
+        .scan_long_double => if (comptime argument_type != *c_longdouble)
+            @compileError("C scanf %Lf requires *c_longdouble"),
+        .scan_char => if (comptime argument_type != *u8)
             @compileError("C scanf %c requires *u8"),
-        .scan_cstring => if (!cVarargIsWritableCString(argument_type))
+        .scan_cstring => if (comptime !cVarargIsWritableCString(argument_type))
             @compileError("C scanf string arguments must be writable pointers"),
-        .scan_pointer => if (!cVarargIsPointerToPointer(argument_type))
+        .scan_pointer => if (comptime !cVarargIsPointerToPointer(argument_type))
             @compileError("C scanf %p arguments must be pointer-to-pointer values"),
     }
 }
@@ -1520,7 +1919,7 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
     const info = @typeInfo(@TypeOf(args));
     if (info != .@"struct" or !info.@"struct".is_tuple)
         @compileError("C variadic arguments must be a tuple literal");
-    const kinds = cVarargKinds(format, args.len, scan);
+    const kinds = comptime cVarargKinds(format, args.len, scan);
     const Result = cVarargArgsType(@TypeOf(args), kinds);
     var result: Result = undefined;
     inline for (args, 0..) |argument, index| {
@@ -1532,9 +1931,13 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
             .unsigned_long => @as(c_ulong, argument),
             .signed_long_long => @as(c_longlong, argument),
             .unsigned_long_long => @as(c_ulonglong, argument),
+            .signed_max => @as(std.c.intmax_t, argument),
+            .unsigned_max => @as(std.c.uintmax_t, argument),
             .signed_size => @as(isize, argument),
             .unsigned_size => @as(usize, argument),
             .float => cVarargPromoteFloat(argument),
+            .long_double => @as(c_longdouble, argument),
+            .cstring => argument.ptr,
             else => argument,
         };
     }
@@ -1671,6 +2074,9 @@ function planFunction(node: XmlAstNode, context: RenderContext): FunctionPlan {
       typeContainsResourceBehindPointers(returnId, context) ||
       (failure === "bool" && outputs.some((output) => output.kind === "resource"))
     );
+  const semantics = node.attributes.name
+    ? context.model.declarationSemantics?.[node.attributes.name]
+    : undefined;
 
   return createFunctionPlan({
     arguments: argumentsList,
@@ -1696,6 +2102,8 @@ function planFunction(node: XmlAstNode, context: RenderContext): FunctionPlan {
     borrowedSlice: borrowedSliceInfo(node, returnId, argumentsList, context),
     borrowedResourceResult,
     variadic,
+    format: semantics?.format,
+    semantics,
   });
 }
 
@@ -1713,6 +2121,14 @@ function plannedReturn(
   const returnId = plan.returnId;
   const baseType = returnId ? renderPublicReturnType(node, returnId, context) : "void";
   const failure = plan.failure;
+  if (plan.semantics?.returnFlow === "no_return") {
+    return {
+      returnId,
+      failure,
+      requiredReturn: false,
+      returnType: "noreturn",
+    };
+  }
   return {
     returnId,
     failure,
@@ -2236,6 +2652,7 @@ function renderResourceMethods(
         returnType,
         failure,
         requiredReturn,
+        noReturn: plan.semantics?.returnFlow === "no_return",
         parentExpression,
         indentation: "        ",
       },
@@ -2760,7 +3177,10 @@ function renderPublicFunctionMacros(
       moduleNames.has(baseName) ? baseName + "Macro" : baseName,
       moduleNames,
     );
-    const utility = renderGenericUtilityMacro(macro.name, name);
+    const manual = context.profile.manualFunctionMacros?.find((manual) =>
+      manual.cName === macro.name
+    );
+    const utility = renderGenericUtilityMacro(macro.name, name, manual);
     if (utility) {
       lines.push(...documentationLines(
         macro.name,
@@ -2814,7 +3234,12 @@ function renderPublicFunctionMacros(
   }
 }
 
-function renderGenericUtilityMacro(name: string, publicName: string): string[] | undefined {
+function renderGenericUtilityMacro(
+  name: string,
+  publicName: string,
+  manual?: ManualFunctionMacro,
+): string[] | undefined {
+  if (manual) return renderManualFunctionMacro(manual.kind, publicName);
   switch (name) {
     case "SDL_COMPILE_TIME_ASSERT":
       return [
@@ -2956,34 +3381,44 @@ function renderGenericUtilityMacro(name: string, publicName: string): string[] |
         "    memoryBarrierReleaseFunction();",
         "}",
       ];
-    case "SDL_iconv_utf8_locale":
+    default:
+      return undefined;
+  }
+}
+
+function renderManualFunctionMacro(
+  kind: ManualFunctionMacro["kind"],
+  publicName: string,
+): string[] | undefined {
+  switch (kind) {
+    case "iconv_utf8_locale":
       return [
         `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u8 {`,
         '    return iconvString(allocator_, "", "UTF-8", source, strlen(source) + 1);',
         "}",
       ];
-    case "SDL_iconv_utf8_ucs2":
+    case "iconv_utf8_ucs2":
       return [
         `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u16 {`,
         '    const bytes = try iconvString(allocator_, "UCS-2", "UTF-8", source, strlen(source) + 1);',
         "    return @as([*:0]u16, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u16) :0];",
         "}",
       ];
-    case "SDL_iconv_utf8_ucs4":
+    case "iconv_utf8_ucs4":
       return [
         `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [:0]const u8) Error![:0]u32 {`,
         '    const bytes = try iconvString(allocator_, "UCS-4", "UTF-8", source, strlen(source) + 1);',
         "    return @as([*:0]u32, @ptrCast(@alignCast(bytes.ptr)))[0 .. bytes.len / @sizeOf(u32) :0];",
         "}",
       ];
-    case "SDL_iconv_wchar_utf8":
+    case "iconv_wchar_utf8":
       return [
         `pub inline fn ${publicName}(allocator_: std.mem.Allocator, source: [*:0]const std.c.wchar_t) Error![:0]u8 {`,
-        '    return iconvString(allocator_, "UTF-8", "WCHAR_T", @ptrCast(source), (wcslen(@ptrCast(source)) + 1) * @sizeOf(std.c.wchar_t));',
+        "    const byte_length = (std.mem.len(source) + 1) * @sizeOf(std.c.wchar_t);",
+        "    const source_bytes = @as([*:0]const u8, @ptrCast(source))[0 .. byte_length - 1 :0];",
+        '    return iconvString(allocator_, "UTF-8", "WCHAR_T", source_bytes, byte_length);',
         "}",
       ];
-    default:
-      return undefined;
   }
 }
 
@@ -3537,9 +3972,31 @@ function renderPublicFunctions(
     if (!cName || isResourceDestructor(cName, context)) continue;
     const plan = functionPlan(node, context);
     if (
-      plan.variadic &&
-      !isConstCharPointerType(plan.arguments.at(-1)?.type ?? "", context) &&
-      !isConstWcharPointerType(plan.arguments.at(-1)?.type ?? "", context)
+      plan.semantics?.returnFlow === "no_return" &&
+      plan.transformation.kind !== "direct"
+    ) {
+      throw new Error(
+        `No-return declaration ${cName}${formatSourceSuffix(node, context)} ` +
+          `cannot use ${plan.transformation.kind} convenience transformation; ` +
+          "keep the raw C declaration or use a direct wrapper",
+      );
+    }
+    // An unannotated variadic declaration remains available through `sdl.c`; a
+    // convenience wrapper is emitted only when the typed Clang format contract
+    // identifies its format and variadic boundary.
+    if (plan.variadic && !plan.format) continue;
+    // SDL's wide-format annotations intentionally retain raw C access. The C
+    // wide printf grammar and `wchar_t` varargs ABI differ between targets, so
+    // a tuple adapter cannot promise the same call contract as the declaration.
+    // Keep the declaration available through `sdl.c` and omit only this
+    // convenience surface when a future frontend supplies such a contract.
+    if (
+      plan.variadic && plan.format &&
+      plan.format.firstVariadicParameter !== "va_list" &&
+      isConstWcharPointerType(
+        plan.arguments[plan.format.formatParameter]?.type ?? "",
+        context,
+      )
     ) continue;
     context.coverageNames.add(cName);
     const baseName = context.naming.functionName(cName);
@@ -3575,7 +4032,7 @@ function renderPublicFunctions(
 
     switch (plan.transformation.kind) {
       case "owned_variadic_string":
-        renderOwnedVariadicStringFunction(node, name, context, lines);
+        renderOwnedVariadicStringFunction(node, name, plan, context, lines);
         continue;
       case "owned_string":
         renderOwnedStringFunction(
@@ -3642,6 +4099,7 @@ function renderPublicFunctions(
         returnType,
         failure,
         requiredReturn,
+        noReturn: plan.semantics?.returnFlow === "no_return",
         parentExpression,
         indentation: "    ",
       },
@@ -3659,6 +4117,7 @@ interface FunctionCallBody {
   returnType: string;
   failure: FailureMode | undefined;
   requiredReturn: boolean;
+  noReturn: boolean;
   parentExpression: string | undefined;
   indentation: string;
 }
@@ -3668,9 +4127,20 @@ function renderFunctionCallBody(
   context: RenderContext,
   lines: string[],
 ): void {
-  const { call, returnId, returnType, failure, requiredReturn, parentExpression, indentation } =
-    body;
-  if (failure === "bool") {
+  const {
+    call,
+    returnId,
+    returnType,
+    failure,
+    requiredReturn,
+    noReturn,
+    parentExpression,
+    indentation,
+  } = body;
+  if (noReturn) {
+    lines.push(`${indentation}${call};`);
+    lines.push(`${indentation}unreachable;`);
+  } else if (failure === "bool") {
     lines.push(`${indentation}if (!${call}) return error.SdlFailure;`);
   } else if (failure === "null") {
     lines.push(`${indentation}const result = ${call};`);
@@ -4044,24 +4514,61 @@ function renderVariadicFunction(
   lines: string[],
 ): void {
   const argumentsList = plan.arguments;
-  if (argumentsList.length === 0) {
-    throw new Error(`Variadic function ${node.attributes.name} has no fixed format parameter`);
+  const contract = requireFormatContract(node, plan, context);
+  if (contract.firstVariadicParameter === "va_list") {
+    throw new Error(
+      `Variadic function ${node.attributes.name}${
+        formatSourceSuffix(node, context)
+      } has a va_list format contract; ` +
+        "use its direct VaList wrapper",
+    );
   }
-  const formatArgument = argumentsList.at(-1)!;
+  const firstVariadic = contract.firstVariadicParameter;
+  if (firstVariadic > argumentsList.length) {
+    throw new Error(
+      `Invalid ${contract.dialect} format contract for ${node.attributes.name}${
+        formatSourceSuffix(node, context)
+      }: ` +
+        `first variadic index ${firstVariadic} exceeds ${argumentsList.length} fixed arguments`,
+    );
+  }
+  const formatArgument = argumentsList[contract.formatParameter];
+  if (!formatArgument) {
+    throw new Error(
+      `Invalid ${contract.dialect} format contract for ${node.attributes.name}${
+        formatSourceSuffix(node, context)
+      }: ` +
+        `format index ${contract.formatParameter} is outside ${argumentsList.length} fixed arguments`,
+    );
+  }
   const charFormat = isConstCharPointerType(formatArgument.type, context);
   const wideFormat = isConstWcharPointerType(formatArgument.type, context);
   if (!charFormat && !wideFormat) {
-    throw new Error(`Unsupported variadic format for ${node.attributes.name}`);
+    throw new Error(
+      `Invalid ${contract.dialect} format contract for ${node.attributes.name}${
+        formatSourceSuffix(node, context)
+      }: ` +
+        `format index ${contract.formatParameter} is not a narrow or wide string`,
+    );
   }
-  const fixedArguments = argumentsList.slice(0, -1);
+  if (firstVariadic <= contract.formatParameter) {
+    throw new Error(
+      `Invalid ${contract.dialect} format contract for ${node.attributes.name}${
+        formatSourceSuffix(node, context)
+      }: ` +
+        `format index ${contract.formatParameter} must precede variadic index ${firstVariadic}`,
+    );
+  }
+  const fixedArguments = argumentsList.slice(0, firstVariadic);
   const fixedNames = publicParameterNames(fixedArguments, context);
   const parameters = [
-    ...fixedArguments.map((argument, index) =>
-      `${fixedNames[index]}: ${renderPublicParameterType(node, argument, context)}`
-    ),
-    charFormat
-      ? "comptime format: [:0]const u8"
-      : `format: ${renderPublicParameterType(node, formatArgument, context)}`,
+    ...fixedArguments.map((argument, index) => {
+      if (index === contract.formatParameter && charFormat) return "comptime format: [:0]const u8";
+      if (index === contract.formatParameter) {
+        return `format: ${renderPublicParameterType(node, argument, context)}`;
+      }
+      return `${fixedNames[index]}: ${renderPublicParameterType(node, argument, context)}`;
+    }),
     "args: anytype",
   ];
   const returnId = plan.returnId;
@@ -4069,21 +4576,18 @@ function renderVariadicFunction(
   lines.push(`pub inline fn ${name}(${parameters.join(", ")}) ${returnType} {`);
   const abiParameterType = (index: number) =>
     `@typeInfo(@TypeOf(c.${node.attributes.name})).@"fn".params[${index}].type.?`;
-  const fixedValues = fixedArguments.map((argument, index) =>
-    `@as(${abiParameterType(index)}, ${
-      toAbiParameterExpression(node, argument, fixedNames[index], context)
-    })`
-  );
-  const untypedFormatValue = charFormat
-    ? "format.ptr"
-    : toAbiParameterExpression(node, formatArgument, "format", context);
-  const formatValue = `@as(${abiParameterType(fixedArguments.length)}, ${untypedFormatValue})`;
-  const tuple = fixedValues.length > 0
-    ? `.{ ${fixedValues.join(", ")}, ${formatValue} }`
-    : `.{${formatValue}}`;
-  const scan = node.attributes.name.toLowerCase().includes("scanf");
-  const checkedArguments = charFormat ? `validateCVarargs(format, args, ${scan})` : "args";
-  const call = `@call(.auto, c.${node.attributes.name}, ${tuple} ++ ${checkedArguments})`;
+  const fixedValues = fixedArguments.map((argument, index) => {
+    const value = index === contract.formatParameter
+      ? charFormat ? "format.ptr" : "format"
+      : toAbiParameterExpression(node, argument, fixedNames[index], context);
+    return `@as(${abiParameterType(index)}, ${value})`;
+  });
+  const checkedArguments = charFormat
+    ? `validateCVarargs(format, args, ${contract.dialect === "scanf"})`
+    : "args";
+  const call = `@call(.auto, c.${node.attributes.name}, .{ ${
+    fixedValues.join(", ")
+  } } ++ ${checkedArguments})`;
   if (!returnId || returnType === "void") {
     lines.push(`    ${call};`);
   } else if (conversionKind(returnId, context) === "direct") {
@@ -4094,6 +4598,32 @@ function renderVariadicFunction(
   }
   lines.push("}");
   lines.push("");
+}
+
+function requireFormatContract(
+  node: XmlAstNode,
+  plan: FunctionPlan,
+  _context: RenderContext,
+): NonNullable<FunctionPlan["format"]> {
+  if (!plan.format) {
+    throw new Error(
+      `Variadic function ${node.attributes.name}${
+        formatSourceSuffix(node, _context)
+      } has no typed format contract; ` +
+        "use its direct C declaration",
+    );
+  }
+  return plan.format;
+}
+
+function formatSourceSuffix(node: XmlAstNode, context: RenderContext): string {
+  const location = node.attributes.location
+    ? context.model.locations[node.attributes.location]
+    : undefined;
+  if (!location?.file || location.line === undefined) return "";
+  return ` at ${location.file}:${location.line}${
+    location.column === undefined ? "" : `:${location.column}`
+  }`;
 }
 
 function renderOwnedOutputByteSliceFunction(
@@ -5036,11 +5566,22 @@ function ownedStringElementType(id: string, context: RenderContext): string | un
 function renderOwnedVariadicStringFunction(
   node: XmlAstNode,
   name: string,
+  plan: FunctionPlan,
   context: RenderContext,
   lines: string[],
 ): void {
   const abiParameterType = (index: number) =>
     `@typeInfo(@TypeOf(c.${node.attributes.name})).@"fn".params[${index}].type.?`;
+  const contract = requireFormatContract(node, plan, context);
+  if (
+    contract.dialect !== "printf" || contract.formatParameter !== 1 ||
+    contract.firstVariadicParameter !== 2
+  ) {
+    throw new Error(
+      `Unsupported owned variadic format contract for ${node.attributes.name}: ` +
+        `${JSON.stringify(contract)}`,
+    );
+  }
   lines.push(
     `pub inline fn ${name}(allocator_: std.mem.Allocator, comptime format: [:0]const u8, args: anytype) ${
       errorUnion("[:0]u8", context)
@@ -5131,6 +5672,9 @@ function renderTargetSelectedNamespace(
   if (!hasTargetSpecificMembers) {
     lines.push(`pub const ${namespace} = struct {`);
     renderNamespaceMembers(members, "    ", lines);
+    if (namespace === "log" && context.profile.moduleName === "sdl") {
+      lines.push("    pub const messageFmt = root.logMessageFmt;");
+    }
     lines.push("};");
     return;
   }
@@ -5144,6 +5688,9 @@ function renderTargetSelectedNamespace(
       "    ",
       lines,
     );
+    if (namespace === "log" && context.profile.moduleName === "sdl") {
+      lines.push("    pub const messageFmt = root.logMessageFmt;");
+    }
   }
   lines.push("} else struct {");
   renderNamespaceMembers(
@@ -5151,6 +5698,9 @@ function renderTargetSelectedNamespace(
     "    ",
     lines,
   );
+  if (namespace === "log" && context.profile.moduleName === "sdl") {
+    lines.push("    pub const messageFmt = root.logMessageFmt;");
+  }
   lines.push("};");
 }
 
@@ -5229,6 +5779,40 @@ function collectPublicSymbols(context: RenderContext): PublicSymbol[] {
     left.path.localeCompare(right.path) ||
     left.kind.localeCompare(right.kind)
   );
+}
+
+function collectOwnershipSymbols(
+  context: RenderContext,
+  symbols: PublicSymbol[],
+): OwnershipSymbol[] {
+  const paths = new Map(symbols.map((symbol) => [symbol.cName, symbol.path]));
+  const planned = context.publicFunctions.flatMap((node) => {
+    const cName = node.attributes.name;
+    if (!cName) return [];
+    const path = paths.get(cName);
+    const plan = context.functionPlans.get(node.id);
+    if (!path || !plan?.ownership) return [];
+    return [{
+      cName,
+      path,
+      transformation: plan.transformation.kind,
+      retainsAllocator: plan.ownership.retainsAllocator,
+      releasesSourceBeforeReturn: plan.ownership.releasesSourceBeforeReturn,
+    }];
+  });
+  const manual = (context.profile.manualFunctionMacros ?? []).flatMap((manual) => {
+    if (!manual.ownership) return [];
+    const path = paths.get(manual.cName);
+    if (!path) return [];
+    return [{
+      cName: manual.cName,
+      path,
+      transformation: manual.ownership.transformation,
+      retainsAllocator: manual.ownership.retainsAllocator,
+      releasesSourceBeforeReturn: manual.ownership.releasesSourceBeforeReturn,
+    }];
+  });
+  return [...planned, ...manual].sort((left, right) => left.cName.localeCompare(right.cName));
 }
 
 function collectNamespaceMembers(context: RenderContext): Map<string, Map<string, string>> {
@@ -5579,6 +6163,8 @@ function renderPublicType(id: string, context: RenderContext): string {
       return publicFundamentalType(node);
     case "Typedef": {
       if (node.attributes.name === "wchar_t") return "std.c.wchar_t";
+      if (node.attributes.name === "size_t") return "usize";
+      if (node.attributes.name === "ptrdiff_t") return "isize";
       const name = context.publicTypeNames.get(node.id);
       if (name && !isPrimitiveTypedef(node)) return name;
       const primitive = primitiveTypedefType(node);
@@ -6508,6 +7094,10 @@ function documentationLines(
     .replace(/\*\*Parameters:\*\*\n(?=\*\*[A-Z][^*]*:\*\*)/g, "")
     .replace(/\*\*Parameters:\*\*\s*$/g, "")
     .trim();
+  const semantics = declaration?.attributes.name
+    ? context.model.declarationSemantics?.[declaration.attributes.name]
+    : undefined;
+  source = appendDeclarationSemanticsDocumentation(source, semantics);
   let rewritten = rewriteDocumentation(source, context);
   const functionNode = context.nodesByName.get(cName)?.find((node) =>
     context.publicIds.has(node.id) && node.kind === "Function"

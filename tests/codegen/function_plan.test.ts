@@ -75,4 +75,51 @@ Deno.test("function plans preserve ownership before applying slice ergonomics", 
     },
   });
   assertEquals(plan.hiddenParameterIndexes, [0]);
+  assertEquals(plan.ownership, {
+    allocatorParameterIndex: 0,
+    retainsAllocator: false,
+    releasesSourceBeforeReturn: true,
+  });
+});
+
+Deno.test("function plans retain the allocator for copied string collections", () => {
+  const plan = createFunctionPlan(facts({
+    arguments: [{ name: "count", type: "usize" }],
+    ownedArray: {
+      kind: "string_records",
+      countIndex: 0,
+      elementId: "locale",
+      record: {
+        recordId: "locale",
+        sourceCName: "SDL_Locale",
+        valueName: "Locale",
+        collectionName: "OwnedLocaleList",
+        fields: [{ kind: "string", sourceName: "language", publicName: "language" }],
+      },
+    },
+  }));
+
+  assertEquals(plan.hiddenParameterIndexes, [0]);
+  assertEquals(plan.ownership, {
+    allocatorParameterIndex: 0,
+    retainsAllocator: true,
+    releasesSourceBeforeReturn: true,
+  });
+});
+
+Deno.test("function plans carry typed format indexes without using C names", () => {
+  const plan = createFunctionPlan(facts({
+    arguments: [
+      { name: "prefix", type: "prefix" },
+      { name: "format", type: "format" },
+    ],
+    variadic: true,
+    format: { dialect: "scanf", formatParameter: 1, firstVariadicParameter: 2 },
+  }));
+
+  assertEquals(plan.format, {
+    dialect: "scanf",
+    formatParameter: 1,
+    firstVariadicParameter: 2,
+  });
 });

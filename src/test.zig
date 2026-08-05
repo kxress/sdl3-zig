@@ -13,35 +13,208 @@ const CVarargKind = enum {
     unsigned_long,
     signed_long_long,
     unsigned_long_long,
+    signed_max,
+    unsigned_max,
     signed_size,
     unsigned_size,
     float,
+    long_double,
     pointer,
     cstring,
+    scan_signed_char,
+    scan_unsigned_char,
+    scan_signed_short,
+    scan_unsigned_short,
     scan_signed_int,
     scan_unsigned_int,
     scan_signed_long,
     scan_unsigned_long,
     scan_signed_long_long,
     scan_unsigned_long_long,
+    scan_signed_max,
+    scan_unsigned_max,
     scan_signed_size,
     scan_unsigned_size,
     scan_float,
     scan_double,
+    scan_long_double,
     scan_char,
     scan_cstring,
     scan_pointer,
 };
+
+const CVarargLength = enum { none, hh, h, l, ll, j, z, t, long_double };
+
+const CVarargRule = struct {
+    specifier: u8,
+    length: CVarargLength,
+    printf: ?CVarargKind,
+    scanf: ?CVarargKind,
+};
+
+// Keep the conversion/type model in data. The parser below only recognizes the grammar and
+// looks up one of these rows, so adding a supported length does not require another switch.
+const cVarargRules = [_]CVarargRule{
+    .{ .specifier = 'd', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'd', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'd', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'd', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'd', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'd', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'd', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'd', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'i', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'i', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'i', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'i', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'i', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'i', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'u', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'u', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'u', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'u', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'u', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'u', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'u', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'u', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'o', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'o', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'o', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'o', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'o', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'o', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'x', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'x', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'x', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'x', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'x', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'x', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'X', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'X', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'X', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'X', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'X', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'X', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'f', .length = .none, .printf = .float, .scanf = .scan_float },
+    // C printf treats l with floating conversions as the default-promoted
+    // double (the modifier is significant for scanf only).
+    .{ .specifier = 'f', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'f', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'e', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'e', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'e', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'E', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'E', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'E', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'g', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'g', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'g', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'G', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'G', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'G', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'a', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'a', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'a', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'A', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'A', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'A', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'c', .length = .none, .printf = .signed_int, .scanf = .scan_char },
+    .{ .specifier = 's', .length = .none, .printf = .cstring, .scanf = .scan_cstring },
+    .{ .specifier = 'p', .length = .none, .printf = .pointer, .scanf = .scan_pointer },
+    .{ .specifier = 'n', .length = .none, .printf = .pointer, .scanf = .scan_signed_int },
+    .{ .specifier = 'n', .length = .hh, .printf = null, .scanf = .scan_signed_char },
+    .{ .specifier = 'n', .length = .h, .printf = null, .scanf = .scan_signed_short },
+    .{ .specifier = 'n', .length = .l, .printf = null, .scanf = .scan_signed_long },
+    .{ .specifier = 'n', .length = .ll, .printf = null, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'n', .length = .j, .printf = null, .scanf = .scan_signed_max },
+    .{ .specifier = 'n', .length = .z, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = 'n', .length = .t, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = '[', .length = .none, .printf = null, .scanf = .scan_cstring },
+};
+
+const CVarargGrammar = struct {
+    flags: []const u8,
+    width_star: bool,
+    precision: bool,
+    scanf_suppression: bool,
+    scanset: bool,
+};
+
+const cPrintfFlags = [_]u8{ '-', '+', '#', '0', ' ', '\'' };
+const cScanfFlags = [_]u8{};
+const cPrintfGrammar = CVarargGrammar{
+    .flags = &cPrintfFlags,
+    .width_star = true,
+    .precision = true,
+    .scanf_suppression = false,
+    .scanset = false,
+};
+const cScanfGrammar = CVarargGrammar{
+    .flags = &cScanfFlags,
+    .width_star = false,
+    .precision = false,
+    .scanf_suppression = true,
+    .scanset = true,
+};
+
+fn cVarargFlagAllowed(comptime grammar: CVarargGrammar, byte: u8) bool {
+    inline for (grammar.flags) |flag| if (flag == byte) return true;
+    return false;
+}
+
+fn cVarargRuleFor(comptime specifier: u8, comptime length: CVarargLength, comptime scan: bool) CVarargKind {
+    inline for (cVarargRules) |rule| {
+        if (rule.specifier == specifier and rule.length == length) {
+            if (scan) {
+                if (rule.scanf) |kind| return kind;
+                @compileError("unsupported C scanf length for conversion");
+            } else {
+                if (rule.printf) |kind| return kind;
+                @compileError("unsupported C printf length for conversion");
+            }
+        }
+    }
+    @compileError("unsupported C format conversion");
+}
+
+fn cVarargScansetEnd(comptime format: [:0]const u8, comptime start: usize) usize {
+    comptime var index = start;
+    comptime var has_member = false;
+    if (index < format.len and format[index] == '^') index += 1;
+    if (index < format.len and format[index] == ']') {
+        has_member = true;
+        index += 1;
+    }
+    inline while (index < format.len and format[index] != ']') {
+        has_member = true;
+        index += 1;
+    }
+    if (index >= format.len) @compileError("malformed C scanf scanset: missing ]");
+    if (!has_member) @compileError("malformed C scanf scanset: empty set");
+    return index + 1;
+}
 
 fn cVarargKinds(
     comptime format: [:0]const u8,
     comptime argument_count: usize,
     comptime scan: bool,
 ) [argument_count]CVarargKind {
-    var kinds: [argument_count]CVarargKind = undefined;
-    var count: usize = 0;
-    var index: usize = 0;
-    while (index < format.len) {
+    // The table-driven conversion lookup is deliberately exhaustive. Keep its compile-time
+    // evaluation independent of Zig's small default branch quota; this changes no runtime code.
+    @setEvalBranchQuota(10_000);
+    comptime var kinds: [argument_count]CVarargKind = undefined;
+    comptime var count: usize = 0;
+    comptime var index: usize = 0;
+    const grammar = if (scan) cScanfGrammar else cPrintfGrammar;
+    inline while (index < format.len) {
         if (format[index] != '%') {
             index += 1;
             continue;
@@ -53,23 +226,35 @@ fn cVarargKinds(
             continue;
         }
 
-        var suppressed = false;
-        if (scan and format[index] == '*') {
+        // Positional arguments are not portable across SDL's supported CRTs. Reject them
+        // explicitly instead of accidentally treating the index as a field width.
+        comptime var positional = index;
+        inline while (positional < format.len and format[positional] >= '0' and format[positional] <= '9') positional += 1;
+        if (positional < format.len and format[positional] == '$') {
+            @compileError("positional C format arguments are unsupported");
+        }
+
+        comptime var suppressed = false;
+        if (scan and grammar.scanf_suppression and format[index] == '*') {
             suppressed = true;
             index += 1;
         }
-        while (index < format.len and
-            (format[index] == '-' or format[index] == '+' or format[index] == '#' or
-                format[index] == '0' or format[index] == ' ' or format[index] == '\'')) index += 1;
-        if (!scan and index < format.len and format[index] == '*') {
+        inline while (index < format.len and cVarargFlagAllowed(grammar, format[index])) index += 1;
+        if (!scan and grammar.width_star and index < format.len and format[index] == '*') {
             if (count >= argument_count) @compileError("C format has too few arguments");
             kinds[count] = .signed_int;
             count += 1;
             index += 1;
+            comptime var star_position = index;
+            inline while (star_position < format.len and format[star_position] >= '0' and format[star_position] <= '9') star_position += 1;
+            if (star_position < format.len and format[star_position] == '$') {
+                @compileError("positional C format arguments are unsupported");
+            }
         } else {
-            while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+            inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
         }
         if (index < format.len and format[index] == '.') {
+            if (!grammar.precision) @compileError("scanf C formats do not support precision");
             index += 1;
             if (!scan and index < format.len and format[index] == '*') {
                 if (count >= argument_count) @compileError("C format has too few arguments");
@@ -77,88 +262,50 @@ fn cVarargKinds(
                 count += 1;
                 index += 1;
             } else {
-                while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                const precision_start = comptime index;
+                inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                if (precision_start == index) @compileError("C format precision requires digits or *");
             }
         }
 
-        var length: u8 = 0;
+        comptime var length: CVarargLength = .none;
         if (index < format.len and format[index] == 'h') {
-            length = 1;
+            length = .h;
             index += 1;
-            if (index < format.len and format[index] == 'h') index += 1;
+            if (index < format.len and format[index] == 'h') {
+                length = .hh;
+                index += 1;
+            }
         } else if (index < format.len and format[index] == 'l') {
-            length = 2;
+            length = .l;
             index += 1;
             if (index < format.len and format[index] == 'l') {
-                length = 3;
+                length = .ll;
                 index += 1;
             }
         } else if (index < format.len and format[index] == 'j') {
-            length = 3;
+            length = .j;
             index += 1;
         } else if (index < format.len and format[index] == 'z') {
-            length = 4;
+            length = .z;
             index += 1;
         } else if (index < format.len and format[index] == 't') {
-            length = 5;
+            length = .t;
             index += 1;
         } else if (index < format.len and format[index] == 'L') {
-            length = 6;
+            length = .long_double;
             index += 1;
         }
         if (index >= format.len) @compileError("unterminated C format specifier");
         const specifier = format[index];
         index += 1;
         if (specifier == '[') {
-            while (index < format.len and format[index] != ']') index += 1;
-            if (index >= format.len) @compileError("unterminated C scanf character set");
-            index += 1;
+            if (!scan or !grammar.scanset) @compileError("scanf scansets are not valid in printf formats");
+            index = cVarargScansetEnd(format, index);
         }
         if (suppressed) continue;
         if (count >= argument_count) @compileError("C format has too few arguments");
-        kinds[count] = if (scan) switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .scan_signed_int,
-                2 => .scan_signed_long,
-                3 => .scan_signed_long_long,
-                4, 5 => .scan_signed_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .scan_unsigned_int,
-                2 => .scan_unsigned_long,
-                3 => .scan_unsigned_long_long,
-                4, 5 => .scan_unsigned_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'f' => if (length == 0) .scan_float else if (length == 2) .scan_double else @compileError("unsupported C scanf floating-point length"),
-            'e', 'E', 'g', 'G', 'a', 'A' => if (length == 2) .scan_double else if (length == 0) .scan_float else @compileError("unsupported C scanf floating-point length"),
-            'c' => .scan_char,
-            's', '[' => .scan_cstring,
-            'p' => .scan_pointer,
-            'n' => .scan_signed_int,
-            else => @compileError("unsupported C scanf conversion"),
-        } else switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .signed_int,
-                2 => .signed_long,
-                3 => .signed_long_long,
-                4, 5 => .signed_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .unsigned_int,
-                2 => .unsigned_long,
-                3 => .unsigned_long_long,
-                4, 5 => .unsigned_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A' => if (length == 0) .float else @compileError("unsupported C printf floating-point length"),
-            'c' => .signed_int,
-            's' => .cstring,
-            'p', 'n' => .pointer,
-            else => @compileError("unsupported C printf conversion"),
-        };
+        kinds[count] = cVarargRuleFor(specifier, length, scan);
         count += 1;
     }
     if (count != argument_count) @compileError("C format argument count does not match tuple");
@@ -176,9 +323,13 @@ fn cVarargArgsType(comptime argument_type: type, comptime kinds: anytype) type {
             .unsigned_long => c_ulong,
             .signed_long_long => c_longlong,
             .unsigned_long_long => c_ulonglong,
+            .signed_max => std.c.intmax_t,
+            .unsigned_max => std.c.uintmax_t,
             .signed_size => isize,
             .unsigned_size => usize,
             .float => f64,
+            .long_double => c_longdouble,
+            .cstring => [*:0]const u8,
             else => fields[index].type,
         };
         break :blk result;
@@ -197,7 +348,7 @@ fn cVarargIsPointer(comptime argument_type: type) bool {
 fn cVarargIsCString(comptime argument_type: type) bool {
     return switch (@typeInfo(argument_type)) {
         .optional => |info| cVarargIsCString(info.child),
-        .pointer => |info| info.child == u8 and (info.sentinel != null or info.size == .c),
+        .pointer => |info| info.child == u8 and (info.sentinel_ptr != null or info.size == .c),
         else => false,
     };
 }
@@ -219,9 +370,12 @@ fn cVarargIsPointerToPointer(comptime argument_type: type) bool {
 }
 
 fn cVarargIsDefaultInt(comptime argument_type: type) bool {
-    return argument_type == bool or argument_type == i8 or argument_type == u8 or
-        argument_type == i16 or argument_type == u16 or argument_type == c_int or
-        argument_type == c_uint or argument_type == comptime_int;
+    return switch (@typeInfo(argument_type)) {
+        .bool, .comptime_int => true,
+        .int => |info| info.bits <= @bitSizeOf(c_int),
+        .optional => |info| cVarargIsDefaultInt(info.child),
+        else => argument_type == c_int or argument_type == c_uint,
+    };
 }
 
 fn cVarargPromoteInt(comptime target: type, value: anytype) target {
@@ -234,53 +388,73 @@ fn cVarargPromoteFloat(value: anytype) f64 {
 
 fn cVarargValidate(comptime kind: CVarargKind, comptime argument_type: type) void {
     switch (kind) {
-        .signed_int => if (!cVarargIsDefaultInt(argument_type))
+        .signed_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_int"),
-        .unsigned_int => if (!cVarargIsDefaultInt(argument_type))
+        .unsigned_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_uint"),
-        .signed_long => if (argument_type != c_long and argument_type != comptime_int)
+        .signed_long => if (comptime argument_type != c_long and argument_type != comptime_int)
             @compileError("C printf %ld requires c_long"),
-        .unsigned_long => if (argument_type != c_ulong and argument_type != comptime_int)
+        .unsigned_long => if (comptime argument_type != c_ulong and argument_type != comptime_int)
             @compileError("C printf %lu requires c_ulong"),
-        .signed_long_long => if (argument_type != c_longlong and argument_type != comptime_int)
+        .signed_long_long => if (comptime argument_type != c_longlong and argument_type != comptime_int)
             @compileError("C printf %lld requires c_longlong"),
-        .unsigned_long_long => if (argument_type != c_ulonglong and argument_type != comptime_int)
+        .unsigned_long_long => if (comptime argument_type != c_ulonglong and argument_type != comptime_int)
             @compileError("C printf %llu requires c_ulonglong"),
-        .signed_size => if (argument_type != isize and argument_type != comptime_int)
+        .signed_max => if (comptime argument_type != std.c.intmax_t and argument_type != comptime_int)
+            @compileError("C printf %jd requires intmax_t"),
+        .unsigned_max => if (comptime argument_type != std.c.uintmax_t and argument_type != comptime_int)
+            @compileError("C printf %ju requires uintmax_t"),
+        .signed_size => if (comptime argument_type != isize and argument_type != comptime_int)
             @compileError("C printf %zd requires isize"),
-        .unsigned_size => if (argument_type != usize and argument_type != comptime_int)
+        .unsigned_size => if (comptime argument_type != usize and argument_type != comptime_int)
             @compileError("C printf %zu requires usize"),
-        .float => if (argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
+        .float => if (comptime argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
             @compileError("C printf floating-point arguments must be default-promoted to f64"),
-        .pointer => if (!cVarargIsPointer(argument_type))
+        .long_double => if (comptime argument_type != c_longdouble)
+            @compileError("C printf %Lf requires c_longdouble"),
+        .pointer => if (comptime !cVarargIsPointer(argument_type))
             @compileError("C printf pointer arguments must be pointers"),
-        .cstring => if (!cVarargIsCString(argument_type))
+        .cstring => if (comptime !cVarargIsCString(argument_type))
             @compileError("C printf %s arguments must be sentinel-terminated C strings"),
-        .scan_signed_int => if (argument_type != *c_int)
+        .scan_signed_char => if (comptime argument_type != *i8)
+            @compileError("C scanf %hhd requires *i8"),
+        .scan_unsigned_char => if (comptime argument_type != *u8)
+            @compileError("C scanf %hhu requires *u8"),
+        .scan_signed_short => if (comptime argument_type != *c_short)
+            @compileError("C scanf %hd requires *c_short"),
+        .scan_unsigned_short => if (comptime argument_type != *c_ushort)
+            @compileError("C scanf %hu requires *c_ushort"),
+        .scan_signed_int => if (comptime argument_type != *c_int)
             @compileError("C scanf %d requires *c_int"),
-        .scan_unsigned_int => if (argument_type != *c_uint)
+        .scan_unsigned_int => if (comptime argument_type != *c_uint)
             @compileError("C scanf %u requires *c_uint"),
-        .scan_signed_long => if (argument_type != *c_long)
+        .scan_signed_long => if (comptime argument_type != *c_long)
             @compileError("C scanf %ld requires *c_long"),
-        .scan_unsigned_long => if (argument_type != *c_ulong)
+        .scan_unsigned_long => if (comptime argument_type != *c_ulong)
             @compileError("C scanf %lu requires *c_ulong"),
-        .scan_signed_long_long => if (argument_type != *c_longlong)
+        .scan_signed_long_long => if (comptime argument_type != *c_longlong)
             @compileError("C scanf %lld requires *c_longlong"),
-        .scan_unsigned_long_long => if (argument_type != *c_ulonglong)
+        .scan_unsigned_long_long => if (comptime argument_type != *c_ulonglong)
             @compileError("C scanf %llu requires *c_ulonglong"),
-        .scan_signed_size => if (argument_type != *isize)
+        .scan_signed_max => if (comptime argument_type != *std.c.intmax_t)
+            @compileError("C scanf %jd requires *intmax_t"),
+        .scan_unsigned_max => if (comptime argument_type != *std.c.uintmax_t)
+            @compileError("C scanf %ju requires *uintmax_t"),
+        .scan_signed_size => if (comptime argument_type != *isize)
             @compileError("C scanf %zd requires *isize"),
-        .scan_unsigned_size => if (argument_type != *usize)
+        .scan_unsigned_size => if (comptime argument_type != *usize)
             @compileError("C scanf %zu requires *usize"),
-        .scan_float => if (argument_type != *f32)
+        .scan_float => if (comptime argument_type != *f32)
             @compileError("C scanf %f requires *f32"),
-        .scan_double => if (argument_type != *f64)
+        .scan_double => if (comptime argument_type != *f64)
             @compileError("C scanf %lf requires *f64"),
-        .scan_char => if (argument_type != *u8)
+        .scan_long_double => if (comptime argument_type != *c_longdouble)
+            @compileError("C scanf %Lf requires *c_longdouble"),
+        .scan_char => if (comptime argument_type != *u8)
             @compileError("C scanf %c requires *u8"),
-        .scan_cstring => if (!cVarargIsWritableCString(argument_type))
+        .scan_cstring => if (comptime !cVarargIsWritableCString(argument_type))
             @compileError("C scanf string arguments must be writable pointers"),
-        .scan_pointer => if (!cVarargIsPointerToPointer(argument_type))
+        .scan_pointer => if (comptime !cVarargIsPointerToPointer(argument_type))
             @compileError("C scanf %p arguments must be pointer-to-pointer values"),
     }
 }
@@ -292,7 +466,7 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
     const info = @typeInfo(@TypeOf(args));
     if (info != .@"struct" or !info.@"struct".is_tuple)
         @compileError("C variadic arguments must be a tuple literal");
-    const kinds = cVarargKinds(format, args.len, scan);
+    const kinds = comptime cVarargKinds(format, args.len, scan);
     const Result = cVarargArgsType(@TypeOf(args), kinds);
     var result: Result = undefined;
     inline for (args, 0..) |argument, index| {
@@ -304,9 +478,13 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
             .unsigned_long => @as(c_ulong, argument),
             .signed_long_long => @as(c_longlong, argument),
             .unsigned_long_long => @as(c_ulonglong, argument),
+            .signed_max => @as(std.c.intmax_t, argument),
+            .unsigned_max => @as(std.c.uintmax_t, argument),
             .signed_size => @as(isize, argument),
             .unsigned_size => @as(usize, argument),
             .float => cVarargPromoteFloat(argument),
+            .long_double => @as(c_longdouble, argument),
+            .cstring => argument.ptr,
             else => argument,
         };
     }
@@ -634,7 +812,7 @@ pub inline fn commonQuit(state: ?*CommonState) void {
 ///
 /// - **Returns:** 0 if the left and right memory block are equal, non-zero if they are non-equal.
 /// - **Since:** This function is available since SDL 3.2.0.
-pub inline fn compareMemory(actual: ?*const anyopaque, size_actual: c_ulong, reference: ?*const anyopaque, size_reference: c_ulong) c_int {
+pub inline fn compareMemory(actual: ?*const anyopaque, size_actual: usize, reference: ?*const anyopaque, size_reference: usize) c_int {
     return c.SDLTest_CompareMemory(@ptrCast(actual), size_actual, @ptrCast(reference), size_reference);
 }
 
@@ -766,17 +944,6 @@ pub inline fn logError(comptime format: [:0]const u8, args: anytype) void {
 ///   - `buffer`: Raw data to be escaped.
 pub inline fn logEscapedString(prefix: ?[:0]const u8, buffer: []const u8) void {
     c.SDLTest_LogEscapedString(if (prefix != null) @ptrCast(prefix.?.ptr) else null, @ptrCast(buffer.ptr), @intCast(buffer.len));
-}
-
-/// Logging related functions of SDL test framework.
-///
-/// This code is a part of the SDL test library, not the main SDL library. Prints given message with a timestamp in the TEST category and given priority.
-///
-/// - **Parameters:**
-///   - `priority`: Priority of the message
-///   - `fmt`: Message to be logged
-pub inline fn logMessage(priority: sdl.log.Priority, comptime format: [:0]const u8, args: anytype) void {
-    @call(.auto, c.SDLTest_LogMessage, .{ @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[0].type.?, @intCast(@intFromEnum(priority))), @as(@typeInfo(@TypeOf(c.SDLTest_LogMessage)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
 /// complete digest computation
@@ -1074,7 +1241,7 @@ pub inline fn textWindowAddText(textwin: ?*TextWindow, comptime format: [:0]cons
 }
 
 /// SDL operation `textWindowAddTextWithLength`.
-pub inline fn textWindowAddTextWithLength(textwin: ?*TextWindow, text: ?[:0]const u8, len: c_ulong) void {
+pub inline fn textWindowAddTextWithLength(textwin: ?*TextWindow, text: ?[:0]const u8, len: usize) void {
     c.SDLTest_TextWindowAddTextWithLength(@ptrCast(textwin), if (text != null) @ptrCast(text.?.ptr) else null, len);
 }
 

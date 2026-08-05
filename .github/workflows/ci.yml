@@ -23,6 +23,8 @@ jobs:
           version: 2026.7.15
           install: true
           cache: false
+      - name: Fetch verified SDL sources
+        run: deno task fetch
       - name: Run release checks
         run: deno task release-check
 
@@ -38,6 +40,8 @@ jobs:
           version: 2026.7.15
           install: true
           cache: false
+      - name: Fetch verified SDL sources
+        run: deno task fetch
       - name: Validate native MinGW and MSVC distributions
         run: deno task test:windows-build
 
@@ -53,6 +57,8 @@ jobs:
           version: 2026.7.15
           install: true
           cache: false
+      - name: Fetch verified SDL sources
+        run: deno task fetch
       - name: Report macOS SDK availability
         shell: bash
         run: |
@@ -64,3 +70,59 @@ jobs:
         run: deno task test:macos-build
       - name: Validate Apple mobile binding and XCFramework slices
         run: deno task test:apple-mobile
+
+  android-consumer:
+    name: Android consumer and APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.1
+            ndk;28.2.13676358
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Fetch verified SDL sources
+        run: deno task fetch
+      - name: Validate Android consumers and APK packaging
+        run: deno task test:android
+
+  emscripten-consumer:
+    name: Emscripten consumer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Emscripten SDK
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 5.0.1
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Fetch verified SDL sources
+        run: deno task fetch
+      - name: Verify Emscripten SDK environment
+        shell: bash
+        run: |
+          test -n "${EMSDK:-}"
+          test -x "$EMSDK/upstream/emscripten/emcc"
+      - name: Validate Emscripten consumer and runtime
+        run: deno task test:emscripten

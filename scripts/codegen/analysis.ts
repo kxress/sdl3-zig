@@ -6,6 +6,7 @@ import {
   type HeaderDocumentation,
 } from "./doxygen.ts";
 import { attribute, numberAttribute, object, objects, type XmlObject } from "./xml.ts";
+import { type DeclarationSemantics, parseClangAttributeJson } from "./clang-attributes.ts";
 
 export interface AnalyzeOptions {
   translationUnit: string;
@@ -79,6 +80,7 @@ export interface ApiModel {
   functionMacros?: FunctionMacro[];
   functionMacroTargets?: Record<string, string[]>;
   objectMacros?: ObjectMacro[];
+  declarationSemantics?: Record<string, DeclarationSemantics>;
 }
 
 const declarationKinds = new Set([
@@ -236,6 +238,30 @@ function buildMacroCommand(
   return { command: "clang", args };
 }
 
+function buildClangAttributeCommand(
+  options: TargetAnalyzeOptions,
+  input: string,
+): ExternalCommand {
+  return {
+    command: "clang",
+    args: [
+      "-Xclang",
+      "-ast-dump=json",
+      "-fsyntax-only",
+      "-x",
+      "c",
+      "-target",
+      // Attribute extraction is syntax-only. Keep the host GNU ABI so Clang can resolve
+      // libc headers without a platform SDK; target identity macros above still select SDL's
+      // platform-gated declarations for each matrix entry.
+      "x86_64-linux-gnu",
+      ...targetIdentityArguments(options.target),
+      ...includeAndDefineArguments(options),
+      input,
+    ],
+  };
+}
+
 function includeAndDefineArguments(options: TargetAnalyzeOptions): string[] {
   return [
     ...options.includeDirectories.map((directory) => `-I${directory}`),
@@ -368,6 +394,23 @@ const doxygenCache = new Map<
   }>
 >();
 
+// A complete Clang JSON AST is large (SDL's core header is tens of megabytes). Keep
+// extraction serialized across libraries and targets so generation remains bounded by one
+// AST at a time even though CastXML and documentation analysis stay concurrent.
+let clangAttributeQueue: Promise<void> = Promise.resolve();
+
+async function withClangAttributeExtraction<T>(operation: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const previous = clangAttributeQueue;
+  clangAttributeQueue = new Promise<void>((resolve) => release = resolve);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
+}
+
 export async function analyzeTargets(
   options: AnalyzeOptions,
 ): Promise<ApiModel[]> {
@@ -416,6 +459,67 @@ export async function analyzeTargets(
       const castXml = buildCastXmlCommand(targetOptions, shim, xml);
       await runCommand(castXml.command, castXml.args);
       const model = parseCastXml(await Deno.readTextFile(xml), targetOptions);
+
+      await withClangAttributeExtraction(async () => {
+        const clangAttributes = buildClangAttributeCommand(targetOptions, shim);
+        const clangAttributeResult = await runCommand(
+          clangAttributes.command,
+          clangAttributes.args,
+        );
+        const sourceTextByFile: Record<string, string> = {};
+        for (const file of new Set(Object.values(model.files))) {
+          try {
+            sourceTextByFile[file.replaceAll("\\", "/")] = await Deno.readTextFile(
+              resolvePath(file),
+            );
+          } catch {
+            // Clang's AST can mention system or virtual files that are not present in the
+            // repository. They cannot contribute public SDL declaration provenance.
+          }
+        }
+        const publicNames = new Set(
+          model.publicNodeIds.map((id) =>
+            model.nodes.find((node) => node.id === id)?.attributes.name
+          )
+            .filter((name): name is string => name !== undefined),
+        );
+        for (
+          const record of parseClangAttributeJson(clangAttributeResult.stdout, {
+            publicFilePrefixes: [
+              ...resolvedOptions.publicIncludeDirectories,
+              ...options.publicIncludeDirectories,
+            ],
+            sourceTextByFile,
+          })
+        ) {
+          if (publicNames.has(record.cName)) {
+            const candidates = model.publicNodeIds.filter((id) => {
+              const node = model.nodes.find((candidate) => candidate.id === id);
+              if (node?.attributes.name !== record.cName) return false;
+              const location = model.locations[node.attributes.location];
+              const fileReference = node.attributes.file || location?.file;
+              const file = fileReference ? model.files[fileReference] ?? fileReference : undefined;
+              return file !== undefined && sameSourceFile(file, record.source.file);
+            });
+            const matches = candidates.filter((id) =>
+              model.locations[model.nodes.find((node) => node.id === id)?.attributes.location ?? ""]
+                ?.line === record.source.line
+            );
+            const selected = matches.length === 1
+              ? matches
+              : candidates.length === 1
+              ? candidates
+              : [];
+            if (selected.length !== 1) {
+              throw new Error(
+                `Supplemental attribute for ${record.cName} at ${record.source.file}:` +
+                  `${record.source.line} matched ${selected.length} CastXML declarations`,
+              );
+            }
+            (model.declarationSemantics ??= {})[record.cName] = record.semantics;
+          }
+        }
+      });
 
       const macroCommand = buildMacroCommand(targetOptions, shim);
       const macroResult = await runCommand(macroCommand.command, macroCommand.args);
@@ -483,6 +587,13 @@ export async function analyzeTargets(
   }
 }
 
+function sameSourceFile(left: string, right: string): boolean {
+  const normalize = (value: string) => value.replaceAll("\\", "/");
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
 export function mergeApiModels(models: ApiModel[]): ApiModel {
   if (models.length === 0) throw new Error("Cannot merge an empty analysis matrix");
   const targets = models.map((model) => model.target);
@@ -518,6 +629,7 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
       ) => [name, [...targets]]),
     ),
     objectMacros: (first.objectMacros ?? []).map((macro) => ({ ...macro })),
+    declarationSemantics: structuredClone(first.declarationSemantics ?? {}),
   };
   const publicIds = new Set(merged.publicNodeIds);
   const mergedNodeIds = new Set(merged.nodes.map((node) => node.id));
@@ -616,9 +728,51 @@ export function mergeApiModels(models: ApiModel[]): ApiModel {
         merged.objectMacros?.push({ ...macro });
       }
     }
+    for (const [cName, semantics] of Object.entries(model.declarationSemantics ?? {})) {
+      const existing = merged.declarationSemantics?.[cName];
+      if (existing && !sameDeclarationSemantics(existing, semantics)) {
+        if (
+          sameDeclarationSemantics({ ...existing, linkage: "default" }, {
+            ...semantics,
+            linkage: "default",
+          })
+        ) {
+          (merged.declarationSemantics ??= {})[cName] = {
+            ...existing,
+            linkage: strongerLinkage(existing.linkage, semantics.linkage),
+          };
+          continue;
+        }
+        throw new Error(
+          `Contradictory declaration semantics for ${cName}: ` +
+            `${JSON.stringify(existing)} vs ${JSON.stringify(semantics)} in ${model.target}`,
+        );
+      }
+      (merged.declarationSemantics ??= {})[cName] = structuredClone(semantics);
+    }
   }
 
   return merged;
+}
+
+function sameDeclarationSemantics(
+  left: DeclarationSemantics,
+  right: DeclarationSemantics,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function strongerLinkage(
+  left: DeclarationSemantics["linkage"],
+  right: DeclarationSemantics["linkage"],
+): DeclarationSemantics["linkage"] {
+  const rank: Record<DeclarationSemantics["linkage"], number> = {
+    default: 0,
+    hidden: 1,
+    imported: 2,
+    exported: 3,
+  };
+  return rank[right] > rank[left] ? right : left;
 }
 
 function mergeableNodeIdentity(node: XmlAstNode, model: ApiModel): string | undefined {

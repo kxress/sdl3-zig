@@ -1,4 +1,4 @@
-import { assertStringIncludes } from "@std/assert";
+import { assertStringIncludes, assertThrows } from "@std/assert";
 import {
   analyzeTargets,
   type ApiModel,
@@ -222,6 +222,15 @@ function semanticFixture(): ApiModel {
       ]),
     ),
     constantTargets: {},
+    declarationSemantics: {
+      PATTERN_Print: {
+        linkage: "default",
+        inline: "none",
+        returnFlow: "normal",
+        resultUse: "ordinary",
+        format: { dialect: "printf", formatParameter: 0, firstVariadicParameter: 1 },
+      },
+    },
     functionMacros: [
       {
         name: "PATTERN_Mask",
@@ -304,6 +313,26 @@ Deno.test("semantic fixtures preserve independent pointer, slice, callback, and 
   assertStringIncludes(source, "pub const StyleFlags = packed struct(u32)");
   assertStringIncludes(source, "bold: bool = false,");
   assertStringIncludes(source, "pub const mask: @This() = fromInt(@intCast(c.PSTYLE_MASK));");
+});
+
+Deno.test("real no-return semantics render a noreturn Zig wrapper", () => {
+  const fixture = semanticFixture();
+  const stop = fn("stop", "PATTERN_Stop", "void", []);
+  fixture.nodes.push(stop);
+  fixture.publicNodeIds.push(stop.id);
+  fixture.publicNodeTargets[stop.id] = ["x86_64-linux-gnu", "aarch64-macos"];
+  fixture.locations[stop.attributes.location!] = { file: "include/pattern.h", line: 90 };
+  fixture.documentation.push(documentation("PATTERN_Stop", "Terminates the process."));
+  fixture.declarationSemantics!.PATTERN_Stop = {
+    linkage: "exported",
+    inline: "none",
+    returnFlow: "no_return",
+    resultUse: "ordinary",
+  };
+
+  const { source } = renderSemanticBindings(fixture, profile, new Map());
+  assertStringIncludes(source, "pub inline fn stop() noreturn {");
+  assertStringIncludes(source, "c.PATTERN_Stop();\n    unreachable;");
 });
 
 Deno.test("header and Doxygen fixtures drive semantic translation", async () => {
@@ -432,4 +461,207 @@ Deno.test("open integer typedefs own configured constant families", () => {
   assertStringIncludes(source, "pub const keycode_expression = c.PKEY_EXPRESSION;");
   assertStringIncludes(source, "pub const keycode_printable = c.PKEY_PRINTABLE;");
   assertStringIncludes(source, "pub inline fn useKey(key: Keycode) void {");
+});
+
+Deno.test("release result retains the direct SDL macro port surface", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  for (
+    const declaration of [
+      "inline fn compileTimeAssert",
+      "inline fn constCast",
+      "inline fn reinterpretCast",
+      "inline fn staticCast",
+      "inline fn sint64c",
+      "inline fn uint64c",
+      "inline fn prilLd",
+      "inline fn prilLu",
+      "inline fn prilLx",
+      "inline fn prillx",
+      "inline fn triggerBreakpoint",
+      "inline fn assertBreakpoint",
+      "inline fn compilerBarrier",
+    ]
+  ) {
+    assertStringIncludes(source, declaration);
+  }
+  assertStringIncludes(source, "std.builtin.VaList");
+  assertStringIncludes(source, "c.SDL_BeginThreadFunction");
+  assertStringIncludes(source, "c.SDL_EndThreadFunction");
+});
+
+Deno.test("manual function macro policy must match the analyzed macro inventory", () => {
+  assertThrows(
+    () =>
+      renderSemanticBindings(
+        semanticFixture(),
+        {
+          ...profile,
+          manualFunctionMacros: [{
+            cName: "PATTERN_missing",
+            kind: "iconv_utf8_locale",
+          }],
+        },
+        new Map(),
+      ),
+    Error,
+    "Manual function macro PATTERN_missing is not present",
+  );
+  assertThrows(
+    () =>
+      renderSemanticBindings(
+        semanticFixture(),
+        {
+          ...profile,
+          manualFunctionMacros: [{
+            cName: "PATTERN_Mask",
+            kind: "unknown" as never,
+          }],
+        },
+        new Map(),
+      ),
+    Error,
+    "Manual function macro PATTERN_Mask has no renderer for kind unknown",
+  );
+});
+
+Deno.test("release format wrappers preserve non-final format positions", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  assertStringIncludes(
+    source,
+    "inline fn renderDebugTextFormat(renderer: ?Renderer, x: f32, y: f32, comptime format: [:0]const u8, args: anytype)",
+  );
+  assertStringIncludes(source, "validateCVarargs(format, args, false)");
+});
+
+Deno.test("generated C-format grammar retains the promoted %lf rule", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  assertStringIncludes(
+    source,
+    ".{ .specifier = 'f', .length = .l, .printf = .float, .scanf = .scan_double },",
+  );
+  assertStringIncludes(source, "@setEvalBranchQuota(10_000);");
+  assertStringIncludes(source, ".long_double => c_longdouble,");
+});
+
+Deno.test("builtin-backed SDL helpers retain operation-specific Zig implementations", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  for (
+    const declaration of [
+      "inline fn triggerBreakpoint",
+      "inline fn assertBreakpoint",
+      "inline fn compilerBarrier",
+      "inline fn sizeAddCheckOverflow",
+      "inline fn sizeMulCheckOverflow",
+      "inline fn swap16",
+      "inline fn swap32",
+      "inline fn swap64",
+    ]
+  ) {
+    assertStringIncludes(source, declaration);
+  }
+});
+
+Deno.test("memory barrier helpers preserve SDL acquire/release ordering contract", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  assertStringIncludes(
+    source,
+    "inline fn memoryBarrierAcquire() void {\n    memoryBarrierAcquireFunction();",
+  );
+  assertStringIncludes(
+    source,
+    "inline fn memoryBarrierRelease() void {\n    memoryBarrierReleaseFunction();",
+  );
+  assertStringIncludes(
+    source,
+    "Memory barriers are designed to prevent reads and writes from being reordered by the compiler",
+  );
+  assertStringIncludes(
+    source,
+    "insert a release barrier between writing the data and the flag",
+  );
+  assertStringIncludes(
+    source,
+    "insert an acquire barrier between reading the flag and reading the data",
+  );
+});
+
+Deno.test("prefetch remains an internal SDL implementation detail", async () => {
+  const source = await Deno.readTextFile("src/sdl.zig");
+  assertStringIncludes(source, "inline fn compilerBarrier");
+  if (source.includes("@prefetch")) {
+    throw new Error("generated public bindings must not expose an internal prefetch operation");
+  }
+  for (
+    const header of [
+      "vendor/SDL3/include/SDL3/SDL_endian.h",
+      "vendor/SDL3/include/SDL3/SDL_intrin.h",
+    ]
+  ) {
+    const lines = (await Deno.readTextFile(header)).split(/\r?\n/);
+    const applications = lines.filter((line) =>
+      /prefetch/i.test(line) && !line.includes("_m_prefetch") &&
+      !/^\s*(?:#|\/\*|\*|\/\/|static\b|__builtin_prefetch)/.test(line)
+    );
+    if (applications.length > 0) {
+      throw new Error(`unexpected public prefetch application in ${header}`);
+    }
+  }
+});
+
+Deno.test("allocation contract mismatches stop generation with C source context", () => {
+  const fixture = semanticFixture();
+  fixture.locations.PATTERN_AllocName = { file: "include/pattern.h", line: 99 };
+  fixture.declarationSemantics = {
+    ...fixture.declarationSemantics,
+    PATTERN_AllocName: {
+      linkage: "default",
+      inline: "none",
+      returnFlow: "normal",
+      resultUse: "ordinary",
+      mallocLike: false,
+    },
+  };
+  const invalidProfile: LibraryProfile = {
+    ...profile,
+    allocationContracts: [{ cName: "PATTERN_AllocName", mallocLike: true }],
+  };
+  assertThrows(
+    () => renderSemanticBindings(fixture, invalidProfile, new Map()),
+    Error,
+    "Contradictory allocator metadata for PATTERN_AllocName at include/pattern.h:99",
+  );
+});
+
+Deno.test("format contract failures identify the C declaration and source location", () => {
+  const invalidIndex = semanticFixture();
+  invalidIndex.declarationSemantics = {
+    ...invalidIndex.declarationSemantics,
+    PATTERN_Print: {
+      ...invalidIndex.declarationSemantics!.PATTERN_Print,
+      format: { dialect: "printf", formatParameter: 4, firstVariadicParameter: 1 },
+    },
+  };
+  invalidIndex.locations = {
+    ...invalidIndex.locations,
+    PATTERN_Print: { file: "include/pattern.h", line: 1 },
+  };
+  assertThrows(
+    () => renderSemanticBindings(invalidIndex, profile, new Map()),
+    Error,
+    "PATTERN_Print at include/pattern.h:1",
+  );
+
+  const invalidOrder = semanticFixture();
+  invalidOrder.declarationSemantics = {
+    ...invalidOrder.declarationSemantics,
+    PATTERN_Print: {
+      ...invalidOrder.declarationSemantics!.PATTERN_Print,
+      format: { dialect: "scanf", formatParameter: 0, firstVariadicParameter: 0 },
+    },
+  };
+  assertThrows(
+    () => renderSemanticBindings(invalidOrder, profile, new Map()),
+    Error,
+    "must precede variadic index 0",
+  );
 });

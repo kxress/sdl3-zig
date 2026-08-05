@@ -10,6 +10,7 @@
         "build.zig",
         "build.zig.zon",
         "main.zig",
+        "long_double_probe.c",
         "assets",
     },
 }

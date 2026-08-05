@@ -7,7 +7,7 @@ import { runCommand } from "./utils/command.ts";
 
 export async function generateRepositoryBindings(
   options: { outputRoot?: string; coverageOutput?: string } = {},
-): Promise<void> {
+): Promise<ReadonlyMap<string, GeneratedBinding>> {
   const outputRoot = options.outputRoot ?? resolve(repositoryRoot, "src");
   const coverageOutput = options.coverageOutput ??
     (options.outputRoot === undefined ? resolve(repositoryRoot, "COVERAGE.md") : undefined);
@@ -63,6 +63,11 @@ export async function generateRepositoryBindings(
     );
     console.log(`Wrote ${coverageOutput}`);
   }
+  return new Map(
+    await Promise.all(
+      [...apiPromises.entries()].map(async ([moduleName, api]) => [moduleName, await api] as const),
+    ),
+  );
 }
 
 function resolveRepositoryPath(path: string): string {

@@ -619,7 +619,7 @@ pub const Font = struct {
     /// - **Thread safety:** This function should be called on the thread that created the font.
     /// - **Since:** This function is available since SDL_ttf 3.0.0.
     /// Returns `error.SdlFailure` when SDL_ttf reports failure.
-    pub inline fn measureString(self: @This(), text: []const u8, max_width: c_int, measured_length: []c_ulong) sdl.Error!root.MeasureStringResult {
+    pub inline fn measureString(self: @This(), text: []const u8, max_width: c_int, measured_length: []usize) sdl.Error!root.MeasureStringResult {
         var measured_width_raw: @typeInfo(@typeInfo(@TypeOf(c.TTF_MeasureString)).@"fn".params[4].type.?).pointer.child = undefined;
         if (!c.TTF_MeasureString(@ptrCast(self.value), @ptrCast(text.ptr), @intCast(if (measured_length.len == text.len) text.len else @panic("related slices must have equal lengths")), max_width, &measured_width_raw, @ptrCast(measured_length.ptr))) return error.SdlFailure;
         return root.MeasureStringResult{
@@ -917,7 +917,7 @@ pub const Font = struct {
     /// - **See also:** Font.renderTextLcdWrapped
     /// - **See also:** Font.renderTextShadedWrapped
     /// - **See also:** Font.renderTextSolid
-    pub inline fn renderTextSolidWrapped(self: @This(), text: ?[:0]const u8, length: c_ulong, fg: sdl.pixels.Color, wrap_length: c_int) ?*sdl.surface.Surface {
+    pub inline fn renderTextSolidWrapped(self: @This(), text: ?[:0]const u8, length: usize, fg: sdl.pixels.Color, wrap_length: c_int) ?*sdl.surface.Surface {
         const result = c.TTF_RenderText_Solid_Wrapped(@ptrCast(self.value), if (text != null) @ptrCast(text.?.ptr) else null, length, @bitCast(fg), wrap_length);
         return if (result == null) null else @ptrCast(result);
     }
@@ -2793,7 +2793,7 @@ pub const MeasureStringResult = struct {
 /// - **Thread safety:** This function should be called on the thread that created the font.
 /// - **Since:** This function is available since SDL_ttf 3.0.0.
 /// Returns named output values.
-pub inline fn measureString(font: ?Font, text: []const u8, max_width: c_int, measured_length: []c_ulong) sdl.Error!MeasureStringResult {
+pub inline fn measureString(font: ?Font, text: []const u8, max_width: c_int, measured_length: []usize) sdl.Error!MeasureStringResult {
     var measured_width_raw: @typeInfo(@typeInfo(@TypeOf(c.TTF_MeasureString)).@"fn".params[4].type.?).pointer.child = undefined;
     if (!c.TTF_MeasureString(if (font) |resource| @ptrCast(resource.value) else null, @ptrCast(text.ptr), @intCast(if (measured_length.len == text.len) text.len else @panic("related slices must have equal lengths")), max_width, &measured_width_raw, @ptrCast(measured_length.ptr))) return error.SdlFailure;
     return MeasureStringResult{
@@ -3190,7 +3190,7 @@ pub inline fn renderTextSolid(font: ?Font, text: []const u8, fg: sdl.pixels.Colo
 /// - **See also:** Font.renderTextLcdWrapped
 /// - **See also:** Font.renderTextShadedWrapped
 /// - **See also:** Font.renderTextSolid
-pub inline fn renderTextSolidWrapped(font: ?Font, text: ?[:0]const u8, length: c_ulong, fg: sdl.pixels.Color, wrap_length: c_int) ?*sdl.surface.Surface {
+pub inline fn renderTextSolidWrapped(font: ?Font, text: ?[:0]const u8, length: usize, fg: sdl.pixels.Color, wrap_length: c_int) ?*sdl.surface.Surface {
     const result = c.TTF_RenderText_Solid_Wrapped(if (font) |resource| @ptrCast(resource.value) else null, if (text != null) @ptrCast(text.?.ptr) else null, length, @bitCast(fg), wrap_length);
     return if (result == null) null else @ptrCast(result);
 }

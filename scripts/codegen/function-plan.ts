@@ -1,3 +1,5 @@
+import type { DeclarationSemantics, FormatContract } from "./clang-attributes.ts";
+
 export interface FunctionArgument {
   name: string;
   type: string;
@@ -113,6 +115,8 @@ export interface FunctionFacts {
   borrowedSlice?: BorrowedSliceInfo;
   borrowedResourceResult: boolean;
   variadic: boolean;
+  format?: FormatContract;
+  semantics?: DeclarationSemantics;
 }
 
 export type FunctionTransformation =
@@ -126,9 +130,20 @@ export type FunctionTransformation =
   | { kind: "variadic" }
   | { kind: "direct" };
 
+/** The ownership invariants the renderer must preserve for allocator-backed transforms. */
+export interface OwnershipPlan {
+  /** Public allocator parameter is inserted before every visible C parameter. */
+  allocatorParameterIndex: 0;
+  /** Owning collections retain the allocator for their later deinit call. */
+  retainsAllocator: boolean;
+  /** SDL's source allocation is released before the caller-owned result escapes. */
+  releasesSourceBeforeReturn: true;
+}
+
 export interface FunctionPlan extends FunctionFacts {
   transformation: FunctionTransformation;
   hiddenParameterIndexes: number[];
+  ownership?: OwnershipPlan;
 }
 
 export function createFunctionPlan(facts: FunctionFacts): FunctionPlan {
@@ -165,9 +180,24 @@ export function createFunctionPlan(facts: FunctionFacts): FunctionPlan {
   if (facts.borrowedSlice) hidden.add(facts.borrowedSlice.countIndex);
   if (facts.ownedVariadicString) hidden.add(0);
 
+  const owningTransform = transformation.kind === "owned_output_byte_slice" ||
+    transformation.kind === "owned_variadic_string" ||
+    transformation.kind === "owned_string" ||
+    transformation.kind === "owned_byte_slice" ||
+    transformation.kind === "owned_slice";
+
   return {
     ...facts,
     transformation,
     hiddenParameterIndexes: [...hidden],
+    ownership: owningTransform
+      ? {
+        allocatorParameterIndex: 0,
+        retainsAllocator: transformation.kind === "owned_slice" &&
+          (transformation.info.kind === "strings" ||
+            transformation.info.kind === "string_records"),
+        releasesSourceBeforeReturn: true,
+      }
+      : undefined,
   };
 }

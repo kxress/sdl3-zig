@@ -37,6 +37,45 @@ export async function run(
   throw new Error(`${executable} ${args.join(" ")} exited with code ${result.code}:\n${stderr}`);
 }
 
+/**
+ * Run a temporary executable through a child Deno process with a path-scoped run grant.
+ *
+ * Deno's run permission is checked when the test process creates a subprocess, so a binary
+ * produced under a random temporary directory cannot be added to the test task's static
+ * allowlist. The child receives only that exact executable path and inherits the caller's cwd,
+ * environment, and stdio. This keeps the test task's allowlist bounded while working on every
+ * platform that supports Deno's path-scoped run permissions.
+ */
+export async function runScopedExecutable(
+  executable: string,
+  args: string[],
+  options: CommandOptions = {},
+): Promise<void> {
+  const scriptPath = await Deno.makeTempFile({ prefix: "sdl-scoped-run-", suffix: ".ts" });
+  try {
+    await Deno.writeTextFile(
+      scriptPath,
+      [
+        "const result = await new Deno.Command(Deno.args[0], {",
+        "  args: Deno.args.slice(1),",
+        '  stdout: "inherit",',
+        '  stderr: "inherit",',
+        "}).output();",
+        "Deno.exit(result.code);",
+      ].join("\n"),
+    );
+    await run(Deno.execPath(), [
+      "run",
+      `--allow-run=${executable}`,
+      scriptPath,
+      executable,
+      ...args,
+    ], options);
+  } finally {
+    await Deno.remove(scriptPath);
+  }
+}
+
 export function relativePath(fromDirectory: string, destination: string): string {
   return relative(fromDirectory, destination).replaceAll("\\", "/") || ".";
 }

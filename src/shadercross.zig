@@ -135,7 +135,7 @@ const SpirvInfo = extern struct {
     /// Field `bytecode`.
     bytecode: ?*const u8,
     /// Field `bytecode_size`.
-    bytecode_size: c_ulong,
+    bytecode_size: usize,
     /// Field `entrypoint`.
     entrypoint: ?*const u8,
     /// Field `shader_stage`.
@@ -193,7 +193,7 @@ inline fn compileComputePipelineFromSpirv(device: ?*sdl.gpu.Device, info: ?*cons
 ///
 /// - **Returns:** an SDL_malloc'd buffer containing DXBC bytecode.
 /// - **Thread safety:** It is safe to call this function from any thread.
-inline fn compileDxbcFromHlsl(info: ?*const HlslInfo, size: ?*c_ulong) ?*anyopaque {
+inline fn compileDxbcFromHlsl(info: ?*const HlslInfo, size: ?*usize) ?*anyopaque {
     const result = c.SDL_ShaderCross_CompileDXBCFromHLSL(@ptrCast(info), @ptrCast(size));
     return if (result == null) null else @ptrCast(result);
 }
@@ -207,7 +207,7 @@ inline fn compileDxbcFromHlsl(info: ?*const HlslInfo, size: ?*c_ulong) ?*anyopaq
 ///   - `size`: filled in with the bytecode buffer size.
 ///
 /// - **Returns:** an SDL_malloc'd buffer containing DXBC bytecode.
-inline fn compileDxbcFromSpirv(info: ?*const SpirvInfo, size: ?*c_ulong) ?*anyopaque {
+inline fn compileDxbcFromSpirv(info: ?*const SpirvInfo, size: ?*usize) ?*anyopaque {
     const result = c.SDL_ShaderCross_CompileDXBCFromSPIRV(@ptrCast(info), @ptrCast(size));
     return if (result == null) null else @ptrCast(result);
 }
@@ -227,7 +227,7 @@ inline fn compileDxbcFromSpirv(info: ?*const SpirvInfo, size: ?*c_ulong) ?*anyop
 ///
 /// - **Returns:** an SDL_malloc'd buffer containing DXIL bytecode.
 /// - **Thread safety:** It is safe to call this function from any thread.
-inline fn compileDxilFromHlsl(info: ?*const HlslInfo, size: ?*c_ulong) ?*anyopaque {
+inline fn compileDxilFromHlsl(info: ?*const HlslInfo, size: ?*usize) ?*anyopaque {
     const result = c.SDL_ShaderCross_CompileDXILFromHLSL(@ptrCast(info), @ptrCast(size));
     return if (result == null) null else @ptrCast(result);
 }
@@ -241,7 +241,7 @@ inline fn compileDxilFromHlsl(info: ?*const HlslInfo, size: ?*c_ulong) ?*anyopaq
 ///   - `size`: filled in with the bytecode buffer size.
 ///
 /// - **Returns:** an SDL_malloc'd buffer containing DXIL bytecode.
-inline fn compileDxilFromSpirv(info: ?*const SpirvInfo, size: ?*c_ulong) ?*anyopaque {
+inline fn compileDxilFromSpirv(info: ?*const SpirvInfo, size: ?*usize) ?*anyopaque {
     const result = c.SDL_ShaderCross_CompileDXILFromSPIRV(@ptrCast(info), @ptrCast(size));
     return if (result == null) null else @ptrCast(result);
 }
@@ -275,7 +275,7 @@ inline fn compileGraphicsShaderFromSpirv(device: ?*sdl.gpu.Device, info: ?*const
 ///
 /// - **Returns:** an SDL_malloc'd buffer containing SPIRV bytecode.
 /// - **Thread safety:** It is safe to call this function from any thread.
-inline fn compileSpirvFromHlsl(info: ?*const HlslInfo, size: ?*c_ulong) ?*anyopaque {
+inline fn compileSpirvFromHlsl(info: ?*const HlslInfo, size: ?*usize) ?*anyopaque {
     const result = c.SDL_ShaderCross_CompileSPIRVFromHLSL(@ptrCast(info), @ptrCast(size));
     return if (result == null) null else @ptrCast(result);
 }

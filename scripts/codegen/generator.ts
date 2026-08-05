@@ -49,6 +49,7 @@ export async function generateBindings(options: GenerateOptions): Promise<Genera
     symbolPrefixes: [...options.profile.symbolPrefixes],
     symbols: rendered.symbols,
     references: collectPublicReferences(mergedModel, rendered.symbols, options.profile),
+    ownership: rendered.ownership,
     coverage: collectLibraryCoverage(
       mergedModel,
       options.profile,

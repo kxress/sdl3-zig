@@ -15,6 +15,11 @@ fn threadEntry(data: ?*anyopaque) callconv(.c) c_int {
     return 37;
 }
 
+fn countedRect(counter: *usize, rect: *const sdl.rect.Rect) ?*const sdl.rect.Rect {
+    counter.* += 1;
+    return rect;
+}
+
 const shadercross_spirv = [_]u32{
     0x07230203, 0x00010000, 0,          6,          0,
     0x00020011, 1,          0x0003000e, 0,          1,
@@ -32,6 +37,14 @@ const decoder_gif = [_]u8{
 };
 
 pub fn main() !void {
+    // SDL_RectEmpty is SDL_FORCE_INLINE in the pinned headers. A side-effecting argument
+    // producer proves the generated wrapper and the C helper observe C's one-evaluation call
+    // contract without adding any production bookkeeping.
+    var rect_evaluation_count: usize = 0;
+    const non_empty_rect = sdl.rect.Rect{ .x = 0, .y = 0, .w = 1, .h = 1 };
+    std.debug.assert(!sdl.rect.empty(countedRect(&rect_evaluation_count, &non_empty_rect)));
+    std.debug.assert(rect_evaluation_count == 1);
+
     if (build_options.source_feature_smoke) {
         try sdl.init.default(.{
             .audio = true,
@@ -109,7 +122,7 @@ pub fn main() !void {
         @panic("SDL_image did not decode the built-in GIF fixture");
     defer sdl.surface.destroy(decoded);
     std.debug.assert(decoded.w == 1 and decoded.h == 1);
-    std.debug.assert(image.version() > 0);
+    std.debug.assert(image.versionDefault() > 0);
 
     try mixer.init();
     defer mixer.quit();
@@ -135,5 +148,5 @@ pub fn main() !void {
     var datagram: ?*net.Datagram = null;
     std.debug.assert(datagram_socket.receive(&datagram));
     std.debug.assert(datagram == null);
-    std.debug.assert(net.version() > 0);
+    std.debug.assert(net.versionDefault() > 0);
 }

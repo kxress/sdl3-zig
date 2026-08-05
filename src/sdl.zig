@@ -28,9 +28,11 @@ const allocator_vtable: std.mem.Allocator.VTable = .{
     .free = allocatorFree,
 };
 
+const allocator_max_alignment = @min(@alignOf(std.c.max_align_t), 2 * @sizeOf(*anyopaque));
+
 fn allocatorAlloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, _: usize) ?[*]u8 {
     const bytes = alignment.toByteUnits();
-    const pointer = if (bytes <= @alignOf(std.c.max_align_t))
+    const pointer = if (bytes <= allocator_max_alignment)
         c.SDL_malloc(len)
     else
         c.SDL_aligned_alloc(bytes, len);
@@ -38,13 +40,13 @@ fn allocatorAlloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, _: us
 }
 
 fn allocatorRemap(_: *anyopaque, allocation: []u8, alignment: std.mem.Alignment, new_len: usize, _: usize) ?[*]u8 {
-    if (alignment.toByteUnits() > @alignOf(std.c.max_align_t)) return null;
+    if (alignment.toByteUnits() > allocator_max_alignment) return null;
     const pointer = c.SDL_realloc(allocation.ptr, new_len) orelse return null;
     return @ptrCast(pointer);
 }
 
 fn allocatorFree(_: *anyopaque, allocation: []u8, alignment: std.mem.Alignment, _: usize) void {
-    if (alignment.toByteUnits() <= @alignOf(std.c.max_align_t))
+    if (alignment.toByteUnits() <= allocator_max_alignment)
         c.SDL_free(allocation.ptr)
     else
         c.SDL_aligned_free(allocation.ptr);
@@ -57,21 +59,26 @@ fn allocatorFree(_: *anyopaque, allocation: []u8, alignment: std.mem.Alignment, 
 /// deinitialized; a second install returns error.AlreadyInstalled.
 pub const AllocatorBridge = struct {
     /// Failures reported by the allocator bridge.
-    pub const Error = error{ AlreadyInstalled, AllocationsAlreadyMade, SdlFailure };
+    pub const Error = error{ AlreadyInstalled, AllocationsAlreadyMade, AllocationCountUnavailable, InvalidBackingAllocator, SdlFailure };
 
     /// Installs `backing` as SDL's process-wide allocator.
     ///
-    /// The allocator value is copied, but its backing state is borrowed indefinitely. This
-    /// function must run before any SDL allocation or initialization call.
+    /// The allocator value is copied, but its backing state is borrowed indefinitely. The
+    /// backing allocator must be process-lifetime and callable from every SDL thread;
+    /// scoped, fixed-buffer, and non-thread-safe backing allocators are invalid.
+    /// This function must run before any SDL allocation or initialization call.
     pub fn install(backing: std.mem.Allocator) @This().Error!void {
         if (allocator_bridge_installed) return error.AlreadyInstalled;
-        if (c.SDL_GetNumAllocations() > 0) return error.AllocationsAlreadyMade;
+        if (backing.ptr == allocator.ptr and backing.vtable == allocator.vtable) return error.InvalidBackingAllocator;
+        const existing_allocations = c.SDL_GetNumAllocations();
+        if (existing_allocations < 0) return error.AllocationCountUnavailable;
+        if (existing_allocations > 0) return error.AllocationsAlreadyMade;
         allocator_bridge_backing = backing;
         if (!c.SDL_SetMemoryFunctions(
-            @ptrCast(&allocatorBridgeMalloc),
-            @ptrCast(&allocatorBridgeCalloc),
-            @ptrCast(&allocatorBridgeRealloc),
-            @ptrCast(&allocatorBridgeFree),
+            allocatorBridgeMallocFn,
+            allocatorBridgeCallocFn,
+            allocatorBridgeReallocFn,
+            allocatorBridgeFreeFn,
         )) {
             allocator_bridge_backing = null;
             return error.SdlFailure;
@@ -83,6 +90,11 @@ pub const AllocatorBridge = struct {
     pub fn isInstalled() bool {
         return allocator_bridge_installed;
     }
+
+    /// Returns whether a safety-build callback rejected a foreign or corrupt allocation header.
+    pub fn hadSafetyFault() bool {
+        return allocator_bridge_corrupt_header;
+    }
 };
 
 const AllocatorBridgeHeader = struct {
@@ -91,18 +103,23 @@ const AllocatorBridgeHeader = struct {
     base_len: usize,
     requested_len: usize,
 };
+comptime {
+    if (@alignOf(AllocatorBridgeHeader) != @alignOf(usize)) @compileError("allocator bridge header alignment changed");
+    if (@sizeOf(AllocatorBridgeHeader) < 3 * @sizeOf(usize)) @compileError("allocator bridge header layout changed");
+}
 
 const allocator_bridge_magic: usize = @bitCast(@as(isize, -0x53444c));
 const allocator_bridge_alignment = std.mem.Alignment.of(std.c.max_align_t);
 var allocator_bridge_backing: ?std.mem.Allocator = null;
 var allocator_bridge_installed = false;
+var allocator_bridge_corrupt_header = false;
 
-fn allocatorBridgeMalloc(size: c_ulong) callconv(.c) ?*anyopaque {
+fn allocatorBridgeMalloc(size: usize) callconv(.c) ?*anyopaque {
     const length = std.math.cast(usize, size) orelse return null;
     return allocatorBridgeAllocate(length);
 }
 
-fn allocatorBridgeCalloc(nmemb: c_ulong, size: c_ulong) callconv(.c) ?*anyopaque {
+fn allocatorBridgeCalloc(nmemb: usize, size: usize) callconv(.c) ?*anyopaque {
     const count = std.math.cast(usize, nmemb) orelse return null;
     const element_size = std.math.cast(usize, size) orelse return null;
     const length = std.math.mul(usize, count, element_size) catch return null;
@@ -111,7 +128,7 @@ fn allocatorBridgeCalloc(nmemb: c_ulong, size: c_ulong) callconv(.c) ?*anyopaque
     return pointer;
 }
 
-fn allocatorBridgeRealloc(memory: ?*anyopaque, size: c_ulong) callconv(.c) ?*anyopaque {
+fn allocatorBridgeRealloc(memory: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
     const length = std.math.cast(usize, size) orelse return null;
     if (memory == null) return allocatorBridgeAllocate(length);
     const header = allocatorBridgeHeader(memory.?) orelse return null;
@@ -140,6 +157,11 @@ fn allocatorBridgeFree(memory: ?*anyopaque) callconv(.c) void {
     header.magic = 0;
     backing.rawFree(base[0..base_len], allocator_bridge_alignment, @returnAddress());
 }
+
+const allocatorBridgeMallocFn: c.SDL_malloc_func = allocatorBridgeMalloc;
+const allocatorBridgeCallocFn: c.SDL_calloc_func = allocatorBridgeCalloc;
+const allocatorBridgeReallocFn: c.SDL_realloc_func = allocatorBridgeRealloc;
+const allocatorBridgeFreeFn: c.SDL_free_func = allocatorBridgeFree;
 
 fn allocatorBridgeAllocate(length: usize) ?*anyopaque {
     const backing = allocator_bridge_backing orelse return null;
@@ -179,7 +201,9 @@ fn allocatorBridgeHeader(memory: *anyopaque) ?*AllocatorBridgeHeader {
     const address = @intFromPtr(memory);
     if (address < @sizeOf(AllocatorBridgeHeader)) return null;
     const header: *AllocatorBridgeHeader = @ptrFromInt(address - @sizeOf(AllocatorBridgeHeader));
-    return if (header.magic == allocator_bridge_magic) header else null;
+    if (header.magic == allocator_bridge_magic) return header;
+    if (builtin.mode == .Debug) allocator_bridge_corrupt_header = true;
+    return null;
 }
 
 /// Allocator-backed copies of SDL strings.
@@ -229,35 +253,208 @@ const CVarargKind = enum {
     unsigned_long,
     signed_long_long,
     unsigned_long_long,
+    signed_max,
+    unsigned_max,
     signed_size,
     unsigned_size,
     float,
+    long_double,
     pointer,
     cstring,
+    scan_signed_char,
+    scan_unsigned_char,
+    scan_signed_short,
+    scan_unsigned_short,
     scan_signed_int,
     scan_unsigned_int,
     scan_signed_long,
     scan_unsigned_long,
     scan_signed_long_long,
     scan_unsigned_long_long,
+    scan_signed_max,
+    scan_unsigned_max,
     scan_signed_size,
     scan_unsigned_size,
     scan_float,
     scan_double,
+    scan_long_double,
     scan_char,
     scan_cstring,
     scan_pointer,
 };
+
+const CVarargLength = enum { none, hh, h, l, ll, j, z, t, long_double };
+
+const CVarargRule = struct {
+    specifier: u8,
+    length: CVarargLength,
+    printf: ?CVarargKind,
+    scanf: ?CVarargKind,
+};
+
+// Keep the conversion/type model in data. The parser below only recognizes the grammar and
+// looks up one of these rows, so adding a supported length does not require another switch.
+const cVarargRules = [_]CVarargRule{
+    .{ .specifier = 'd', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'd', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'd', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'd', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'd', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'd', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'd', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'd', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .none, .printf = .signed_int, .scanf = .scan_signed_int },
+    .{ .specifier = 'i', .length = .hh, .printf = .signed_int, .scanf = .scan_signed_char },
+    .{ .specifier = 'i', .length = .h, .printf = .signed_int, .scanf = .scan_signed_short },
+    .{ .specifier = 'i', .length = .l, .printf = .signed_long, .scanf = .scan_signed_long },
+    .{ .specifier = 'i', .length = .ll, .printf = .signed_long_long, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'i', .length = .j, .printf = .signed_max, .scanf = .scan_signed_max },
+    .{ .specifier = 'i', .length = .z, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'i', .length = .t, .printf = .signed_size, .scanf = .scan_signed_size },
+    .{ .specifier = 'u', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'u', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'u', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'u', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'u', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'u', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'u', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'u', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'o', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'o', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'o', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'o', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'o', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'o', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'o', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'x', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'x', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'x', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'x', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'x', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'x', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'x', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .none, .printf = .unsigned_int, .scanf = .scan_unsigned_int },
+    .{ .specifier = 'X', .length = .hh, .printf = .unsigned_int, .scanf = .scan_unsigned_char },
+    .{ .specifier = 'X', .length = .h, .printf = .unsigned_int, .scanf = .scan_unsigned_short },
+    .{ .specifier = 'X', .length = .l, .printf = .unsigned_long, .scanf = .scan_unsigned_long },
+    .{ .specifier = 'X', .length = .ll, .printf = .unsigned_long_long, .scanf = .scan_unsigned_long_long },
+    .{ .specifier = 'X', .length = .j, .printf = .unsigned_max, .scanf = .scan_unsigned_max },
+    .{ .specifier = 'X', .length = .z, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'X', .length = .t, .printf = .unsigned_size, .scanf = .scan_unsigned_size },
+    .{ .specifier = 'f', .length = .none, .printf = .float, .scanf = .scan_float },
+    // C printf treats l with floating conversions as the default-promoted
+    // double (the modifier is significant for scanf only).
+    .{ .specifier = 'f', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'f', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'e', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'e', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'e', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'E', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'E', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'E', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'g', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'g', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'g', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'G', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'G', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'G', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'a', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'a', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'a', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'A', .length = .none, .printf = .float, .scanf = .scan_float },
+    .{ .specifier = 'A', .length = .l, .printf = .float, .scanf = .scan_double },
+    .{ .specifier = 'A', .length = .long_double, .printf = .long_double, .scanf = .scan_long_double },
+    .{ .specifier = 'c', .length = .none, .printf = .signed_int, .scanf = .scan_char },
+    .{ .specifier = 's', .length = .none, .printf = .cstring, .scanf = .scan_cstring },
+    .{ .specifier = 'p', .length = .none, .printf = .pointer, .scanf = .scan_pointer },
+    .{ .specifier = 'n', .length = .none, .printf = .pointer, .scanf = .scan_signed_int },
+    .{ .specifier = 'n', .length = .hh, .printf = null, .scanf = .scan_signed_char },
+    .{ .specifier = 'n', .length = .h, .printf = null, .scanf = .scan_signed_short },
+    .{ .specifier = 'n', .length = .l, .printf = null, .scanf = .scan_signed_long },
+    .{ .specifier = 'n', .length = .ll, .printf = null, .scanf = .scan_signed_long_long },
+    .{ .specifier = 'n', .length = .j, .printf = null, .scanf = .scan_signed_max },
+    .{ .specifier = 'n', .length = .z, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = 'n', .length = .t, .printf = null, .scanf = .scan_signed_size },
+    .{ .specifier = '[', .length = .none, .printf = null, .scanf = .scan_cstring },
+};
+
+const CVarargGrammar = struct {
+    flags: []const u8,
+    width_star: bool,
+    precision: bool,
+    scanf_suppression: bool,
+    scanset: bool,
+};
+
+const cPrintfFlags = [_]u8{ '-', '+', '#', '0', ' ', '\'' };
+const cScanfFlags = [_]u8{};
+const cPrintfGrammar = CVarargGrammar{
+    .flags = &cPrintfFlags,
+    .width_star = true,
+    .precision = true,
+    .scanf_suppression = false,
+    .scanset = false,
+};
+const cScanfGrammar = CVarargGrammar{
+    .flags = &cScanfFlags,
+    .width_star = false,
+    .precision = false,
+    .scanf_suppression = true,
+    .scanset = true,
+};
+
+fn cVarargFlagAllowed(comptime grammar: CVarargGrammar, byte: u8) bool {
+    inline for (grammar.flags) |flag| if (flag == byte) return true;
+    return false;
+}
+
+fn cVarargRuleFor(comptime specifier: u8, comptime length: CVarargLength, comptime scan: bool) CVarargKind {
+    inline for (cVarargRules) |rule| {
+        if (rule.specifier == specifier and rule.length == length) {
+            if (scan) {
+                if (rule.scanf) |kind| return kind;
+                @compileError("unsupported C scanf length for conversion");
+            } else {
+                if (rule.printf) |kind| return kind;
+                @compileError("unsupported C printf length for conversion");
+            }
+        }
+    }
+    @compileError("unsupported C format conversion");
+}
+
+fn cVarargScansetEnd(comptime format: [:0]const u8, comptime start: usize) usize {
+    comptime var index = start;
+    comptime var has_member = false;
+    if (index < format.len and format[index] == '^') index += 1;
+    if (index < format.len and format[index] == ']') {
+        has_member = true;
+        index += 1;
+    }
+    inline while (index < format.len and format[index] != ']') {
+        has_member = true;
+        index += 1;
+    }
+    if (index >= format.len) @compileError("malformed C scanf scanset: missing ]");
+    if (!has_member) @compileError("malformed C scanf scanset: empty set");
+    return index + 1;
+}
 
 fn cVarargKinds(
     comptime format: [:0]const u8,
     comptime argument_count: usize,
     comptime scan: bool,
 ) [argument_count]CVarargKind {
-    var kinds: [argument_count]CVarargKind = undefined;
-    var count: usize = 0;
-    var index: usize = 0;
-    while (index < format.len) {
+    // The table-driven conversion lookup is deliberately exhaustive. Keep its compile-time
+    // evaluation independent of Zig's small default branch quota; this changes no runtime code.
+    @setEvalBranchQuota(10_000);
+    comptime var kinds: [argument_count]CVarargKind = undefined;
+    comptime var count: usize = 0;
+    comptime var index: usize = 0;
+    const grammar = if (scan) cScanfGrammar else cPrintfGrammar;
+    inline while (index < format.len) {
         if (format[index] != '%') {
             index += 1;
             continue;
@@ -269,23 +466,35 @@ fn cVarargKinds(
             continue;
         }
 
-        var suppressed = false;
-        if (scan and format[index] == '*') {
+        // Positional arguments are not portable across SDL's supported CRTs. Reject them
+        // explicitly instead of accidentally treating the index as a field width.
+        comptime var positional = index;
+        inline while (positional < format.len and format[positional] >= '0' and format[positional] <= '9') positional += 1;
+        if (positional < format.len and format[positional] == '$') {
+            @compileError("positional C format arguments are unsupported");
+        }
+
+        comptime var suppressed = false;
+        if (scan and grammar.scanf_suppression and format[index] == '*') {
             suppressed = true;
             index += 1;
         }
-        while (index < format.len and
-            (format[index] == '-' or format[index] == '+' or format[index] == '#' or
-                format[index] == '0' or format[index] == ' ' or format[index] == '\'')) index += 1;
-        if (!scan and index < format.len and format[index] == '*') {
+        inline while (index < format.len and cVarargFlagAllowed(grammar, format[index])) index += 1;
+        if (!scan and grammar.width_star and index < format.len and format[index] == '*') {
             if (count >= argument_count) @compileError("C format has too few arguments");
             kinds[count] = .signed_int;
             count += 1;
             index += 1;
+            comptime var star_position = index;
+            inline while (star_position < format.len and format[star_position] >= '0' and format[star_position] <= '9') star_position += 1;
+            if (star_position < format.len and format[star_position] == '$') {
+                @compileError("positional C format arguments are unsupported");
+            }
         } else {
-            while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+            inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
         }
         if (index < format.len and format[index] == '.') {
+            if (!grammar.precision) @compileError("scanf C formats do not support precision");
             index += 1;
             if (!scan and index < format.len and format[index] == '*') {
                 if (count >= argument_count) @compileError("C format has too few arguments");
@@ -293,88 +502,50 @@ fn cVarargKinds(
                 count += 1;
                 index += 1;
             } else {
-                while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                const precision_start = comptime index;
+                inline while (index < format.len and format[index] >= '0' and format[index] <= '9') index += 1;
+                if (precision_start == index) @compileError("C format precision requires digits or *");
             }
         }
 
-        var length: u8 = 0;
+        comptime var length: CVarargLength = .none;
         if (index < format.len and format[index] == 'h') {
-            length = 1;
+            length = .h;
             index += 1;
-            if (index < format.len and format[index] == 'h') index += 1;
+            if (index < format.len and format[index] == 'h') {
+                length = .hh;
+                index += 1;
+            }
         } else if (index < format.len and format[index] == 'l') {
-            length = 2;
+            length = .l;
             index += 1;
             if (index < format.len and format[index] == 'l') {
-                length = 3;
+                length = .ll;
                 index += 1;
             }
         } else if (index < format.len and format[index] == 'j') {
-            length = 3;
+            length = .j;
             index += 1;
         } else if (index < format.len and format[index] == 'z') {
-            length = 4;
+            length = .z;
             index += 1;
         } else if (index < format.len and format[index] == 't') {
-            length = 5;
+            length = .t;
             index += 1;
         } else if (index < format.len and format[index] == 'L') {
-            length = 6;
+            length = .long_double;
             index += 1;
         }
         if (index >= format.len) @compileError("unterminated C format specifier");
         const specifier = format[index];
         index += 1;
         if (specifier == '[') {
-            while (index < format.len and format[index] != ']') index += 1;
-            if (index >= format.len) @compileError("unterminated C scanf character set");
-            index += 1;
+            if (!scan or !grammar.scanset) @compileError("scanf scansets are not valid in printf formats");
+            index = cVarargScansetEnd(format, index);
         }
         if (suppressed) continue;
         if (count >= argument_count) @compileError("C format has too few arguments");
-        kinds[count] = if (scan) switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .scan_signed_int,
-                2 => .scan_signed_long,
-                3 => .scan_signed_long_long,
-                4, 5 => .scan_signed_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .scan_unsigned_int,
-                2 => .scan_unsigned_long,
-                3 => .scan_unsigned_long_long,
-                4, 5 => .scan_unsigned_size,
-                else => @compileError("unsupported C scanf integer length"),
-            },
-            'f' => if (length == 0) .scan_float else if (length == 2) .scan_double else @compileError("unsupported C scanf floating-point length"),
-            'e', 'E', 'g', 'G', 'a', 'A' => if (length == 2) .scan_double else if (length == 0) .scan_float else @compileError("unsupported C scanf floating-point length"),
-            'c' => .scan_char,
-            's', '[' => .scan_cstring,
-            'p' => .scan_pointer,
-            'n' => .scan_signed_int,
-            else => @compileError("unsupported C scanf conversion"),
-        } else switch (specifier) {
-            'd', 'i' => switch (length) {
-                0, 1 => .signed_int,
-                2 => .signed_long,
-                3 => .signed_long_long,
-                4, 5 => .signed_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'o', 'u', 'x', 'X' => switch (length) {
-                0, 1 => .unsigned_int,
-                2 => .unsigned_long,
-                3 => .unsigned_long_long,
-                4, 5 => .unsigned_size,
-                else => @compileError("unsupported C printf integer length"),
-            },
-            'f', 'F', 'e', 'E', 'g', 'G', 'a', 'A' => if (length == 0) .float else @compileError("unsupported C printf floating-point length"),
-            'c' => .signed_int,
-            's' => .cstring,
-            'p', 'n' => .pointer,
-            else => @compileError("unsupported C printf conversion"),
-        };
+        kinds[count] = cVarargRuleFor(specifier, length, scan);
         count += 1;
     }
     if (count != argument_count) @compileError("C format argument count does not match tuple");
@@ -392,9 +563,13 @@ fn cVarargArgsType(comptime argument_type: type, comptime kinds: anytype) type {
             .unsigned_long => c_ulong,
             .signed_long_long => c_longlong,
             .unsigned_long_long => c_ulonglong,
+            .signed_max => std.c.intmax_t,
+            .unsigned_max => std.c.uintmax_t,
             .signed_size => isize,
             .unsigned_size => usize,
             .float => f64,
+            .long_double => c_longdouble,
+            .cstring => [*:0]const u8,
             else => fields[index].type,
         };
         break :blk result;
@@ -413,7 +588,7 @@ fn cVarargIsPointer(comptime argument_type: type) bool {
 fn cVarargIsCString(comptime argument_type: type) bool {
     return switch (@typeInfo(argument_type)) {
         .optional => |info| cVarargIsCString(info.child),
-        .pointer => |info| info.child == u8 and (info.sentinel != null or info.size == .c),
+        .pointer => |info| info.child == u8 and (info.sentinel_ptr != null or info.size == .c),
         else => false,
     };
 }
@@ -435,9 +610,12 @@ fn cVarargIsPointerToPointer(comptime argument_type: type) bool {
 }
 
 fn cVarargIsDefaultInt(comptime argument_type: type) bool {
-    return argument_type == bool or argument_type == i8 or argument_type == u8 or
-        argument_type == i16 or argument_type == u16 or argument_type == c_int or
-        argument_type == c_uint or argument_type == comptime_int;
+    return switch (@typeInfo(argument_type)) {
+        .bool, .comptime_int => true,
+        .int => |info| info.bits <= @bitSizeOf(c_int),
+        .optional => |info| cVarargIsDefaultInt(info.child),
+        else => argument_type == c_int or argument_type == c_uint,
+    };
 }
 
 fn cVarargPromoteInt(comptime target: type, value: anytype) target {
@@ -450,53 +628,73 @@ fn cVarargPromoteFloat(value: anytype) f64 {
 
 fn cVarargValidate(comptime kind: CVarargKind, comptime argument_type: type) void {
     switch (kind) {
-        .signed_int => if (!cVarargIsDefaultInt(argument_type))
+        .signed_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_int"),
-        .unsigned_int => if (!cVarargIsDefaultInt(argument_type))
+        .unsigned_int => if (comptime !cVarargIsDefaultInt(argument_type))
             @compileError("C printf integer arguments must be default-promoted to c_uint"),
-        .signed_long => if (argument_type != c_long and argument_type != comptime_int)
+        .signed_long => if (comptime argument_type != c_long and argument_type != comptime_int)
             @compileError("C printf %ld requires c_long"),
-        .unsigned_long => if (argument_type != c_ulong and argument_type != comptime_int)
+        .unsigned_long => if (comptime argument_type != c_ulong and argument_type != comptime_int)
             @compileError("C printf %lu requires c_ulong"),
-        .signed_long_long => if (argument_type != c_longlong and argument_type != comptime_int)
+        .signed_long_long => if (comptime argument_type != c_longlong and argument_type != comptime_int)
             @compileError("C printf %lld requires c_longlong"),
-        .unsigned_long_long => if (argument_type != c_ulonglong and argument_type != comptime_int)
+        .unsigned_long_long => if (comptime argument_type != c_ulonglong and argument_type != comptime_int)
             @compileError("C printf %llu requires c_ulonglong"),
-        .signed_size => if (argument_type != isize and argument_type != comptime_int)
+        .signed_max => if (comptime argument_type != std.c.intmax_t and argument_type != comptime_int)
+            @compileError("C printf %jd requires intmax_t"),
+        .unsigned_max => if (comptime argument_type != std.c.uintmax_t and argument_type != comptime_int)
+            @compileError("C printf %ju requires uintmax_t"),
+        .signed_size => if (comptime argument_type != isize and argument_type != comptime_int)
             @compileError("C printf %zd requires isize"),
-        .unsigned_size => if (argument_type != usize and argument_type != comptime_int)
+        .unsigned_size => if (comptime argument_type != usize and argument_type != comptime_int)
             @compileError("C printf %zu requires usize"),
-        .float => if (argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
+        .float => if (comptime argument_type != f32 and argument_type != f64 and argument_type != comptime_float)
             @compileError("C printf floating-point arguments must be default-promoted to f64"),
-        .pointer => if (!cVarargIsPointer(argument_type))
+        .long_double => if (comptime argument_type != c_longdouble)
+            @compileError("C printf %Lf requires c_longdouble"),
+        .pointer => if (comptime !cVarargIsPointer(argument_type))
             @compileError("C printf pointer arguments must be pointers"),
-        .cstring => if (!cVarargIsCString(argument_type))
+        .cstring => if (comptime !cVarargIsCString(argument_type))
             @compileError("C printf %s arguments must be sentinel-terminated C strings"),
-        .scan_signed_int => if (argument_type != *c_int)
+        .scan_signed_char => if (comptime argument_type != *i8)
+            @compileError("C scanf %hhd requires *i8"),
+        .scan_unsigned_char => if (comptime argument_type != *u8)
+            @compileError("C scanf %hhu requires *u8"),
+        .scan_signed_short => if (comptime argument_type != *c_short)
+            @compileError("C scanf %hd requires *c_short"),
+        .scan_unsigned_short => if (comptime argument_type != *c_ushort)
+            @compileError("C scanf %hu requires *c_ushort"),
+        .scan_signed_int => if (comptime argument_type != *c_int)
             @compileError("C scanf %d requires *c_int"),
-        .scan_unsigned_int => if (argument_type != *c_uint)
+        .scan_unsigned_int => if (comptime argument_type != *c_uint)
             @compileError("C scanf %u requires *c_uint"),
-        .scan_signed_long => if (argument_type != *c_long)
+        .scan_signed_long => if (comptime argument_type != *c_long)
             @compileError("C scanf %ld requires *c_long"),
-        .scan_unsigned_long => if (argument_type != *c_ulong)
+        .scan_unsigned_long => if (comptime argument_type != *c_ulong)
             @compileError("C scanf %lu requires *c_ulong"),
-        .scan_signed_long_long => if (argument_type != *c_longlong)
+        .scan_signed_long_long => if (comptime argument_type != *c_longlong)
             @compileError("C scanf %lld requires *c_longlong"),
-        .scan_unsigned_long_long => if (argument_type != *c_ulonglong)
+        .scan_unsigned_long_long => if (comptime argument_type != *c_ulonglong)
             @compileError("C scanf %llu requires *c_ulonglong"),
-        .scan_signed_size => if (argument_type != *isize)
+        .scan_signed_max => if (comptime argument_type != *std.c.intmax_t)
+            @compileError("C scanf %jd requires *intmax_t"),
+        .scan_unsigned_max => if (comptime argument_type != *std.c.uintmax_t)
+            @compileError("C scanf %ju requires *uintmax_t"),
+        .scan_signed_size => if (comptime argument_type != *isize)
             @compileError("C scanf %zd requires *isize"),
-        .scan_unsigned_size => if (argument_type != *usize)
+        .scan_unsigned_size => if (comptime argument_type != *usize)
             @compileError("C scanf %zu requires *usize"),
-        .scan_float => if (argument_type != *f32)
+        .scan_float => if (comptime argument_type != *f32)
             @compileError("C scanf %f requires *f32"),
-        .scan_double => if (argument_type != *f64)
+        .scan_double => if (comptime argument_type != *f64)
             @compileError("C scanf %lf requires *f64"),
-        .scan_char => if (argument_type != *u8)
+        .scan_long_double => if (comptime argument_type != *c_longdouble)
+            @compileError("C scanf %Lf requires *c_longdouble"),
+        .scan_char => if (comptime argument_type != *u8)
             @compileError("C scanf %c requires *u8"),
-        .scan_cstring => if (!cVarargIsWritableCString(argument_type))
+        .scan_cstring => if (comptime !cVarargIsWritableCString(argument_type))
             @compileError("C scanf string arguments must be writable pointers"),
-        .scan_pointer => if (!cVarargIsPointerToPointer(argument_type))
+        .scan_pointer => if (comptime !cVarargIsPointerToPointer(argument_type))
             @compileError("C scanf %p arguments must be pointer-to-pointer values"),
     }
 }
@@ -508,7 +706,7 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
     const info = @typeInfo(@TypeOf(args));
     if (info != .@"struct" or !info.@"struct".is_tuple)
         @compileError("C variadic arguments must be a tuple literal");
-    const kinds = cVarargKinds(format, args.len, scan);
+    const kinds = comptime cVarargKinds(format, args.len, scan);
     const Result = cVarargArgsType(@TypeOf(args), kinds);
     var result: Result = undefined;
     inline for (args, 0..) |argument, index| {
@@ -520,9 +718,13 @@ fn validateCVarargs(comptime format: [:0]const u8, args: anytype, comptime scan:
             .unsigned_long => @as(c_ulong, argument),
             .signed_long_long => @as(c_longlong, argument),
             .unsigned_long_long => @as(c_ulonglong, argument),
+            .signed_max => @as(std.c.intmax_t, argument),
+            .unsigned_max => @as(std.c.uintmax_t, argument),
             .signed_size => @as(isize, argument),
             .unsigned_size => @as(usize, argument),
             .float => cVarargPromoteFloat(argument),
+            .long_double => @as(c_longdouble, argument),
+            .cstring => argument.ptr,
             else => argument,
         };
     }
@@ -6279,7 +6481,7 @@ const GpuComputePipeline = struct {
 /// - **See also:** gpu.ShaderFormat
 const GpuComputePipelineCreateInfo = extern struct {
     /// Field `code_size`.
-    code_size: c_ulong,
+    code_size: usize,
     /// Field `code`.
     code: ?*const u8,
     /// Field `entrypoint`.
@@ -7050,7 +7252,7 @@ const GpuShader = struct {
 /// - **See also:** gpu.ShaderStage
 const GpuShaderCreateInfo = extern struct {
     /// Field `code_size`.
-    code_size: c_ulong,
+    code_size: usize,
     /// Field `code`.
     code: ?*const u8,
     /// Field `entrypoint`.
@@ -8101,7 +8303,7 @@ const HidDevice = struct {
     /// - **Returns:** 0 on success or a negative error code on failure; call error_.get() for more information.
     /// - **Since:** This function is available since SDL 3.2.0.
     /// Returns `error.SdlFailure` when SDL reports failure.
-    pub inline fn getIndexedString(self: @This(), string_index: c_int, string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+    pub inline fn getIndexedString(self: @This(), string_index: c_int, string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
         const result = c.SDL_hid_get_indexed_string(@ptrCast(self.value), string_index, @ptrCast(string), maxlen);
         if (result < 0) return error.SdlFailure;
         return result;
@@ -8132,7 +8334,7 @@ const HidDevice = struct {
     /// - **Returns:** 0 on success or a negative error code on failure; call error_.get() for more information.
     /// - **Since:** This function is available since SDL 3.2.0.
     /// Returns `error.SdlFailure` when SDL reports failure.
-    pub inline fn getManufacturerString(self: @This(), string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+    pub inline fn getManufacturerString(self: @This(), string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
         const result = c.SDL_hid_get_manufacturer_string(@ptrCast(self.value), @ptrCast(string), maxlen);
         if (result < 0) return error.SdlFailure;
         return result;
@@ -8147,7 +8349,7 @@ const HidDevice = struct {
     /// - **Returns:** 0 on success or a negative error code on failure; call error_.get() for more information.
     /// - **Since:** This function is available since SDL 3.2.0.
     /// Returns `error.SdlFailure` when SDL reports failure.
-    pub inline fn getProductString(self: @This(), string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+    pub inline fn getProductString(self: @This(), string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
         const result = c.SDL_hid_get_product_string(@ptrCast(self.value), @ptrCast(string), maxlen);
         if (result < 0) return error.SdlFailure;
         return result;
@@ -8192,7 +8394,7 @@ const HidDevice = struct {
     /// - **Returns:** 0 on success or a negative error code on failure; call error_.get() for more information.
     /// - **Since:** This function is available since SDL 3.2.0.
     /// Returns `error.SdlFailure` when SDL reports failure.
-    pub inline fn getSerialNumberString(self: @This(), string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+    pub inline fn getSerialNumberString(self: @This(), string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
         const result = c.SDL_hid_get_serial_number_string(@ptrCast(self.value), @ptrCast(string), maxlen);
         if (result < 0) return error.SdlFailure;
         return result;
@@ -8360,7 +8562,7 @@ const IconvDataT = struct {
     /// - **See also:** stdinc.IconvDataT.close
     /// - **See also:** stdinc.iconvString
     /// Returns `error.SdlFailure` when SDL reports failure.
-    pub inline fn iconv(self: @This(), inbuf: ?*?[*:0]const u8, inbytesleft: ?*c_ulong, outbuf: ?*?[*]u8, outbytesleft: ?*c_ulong) Error!c_ulong {
+    pub inline fn iconv(self: @This(), inbuf: ?*?[*:0]const u8, inbytesleft: ?*usize, outbuf: ?*?[*]u8, outbytesleft: ?*usize) Error!usize {
         const result = c.SDL_iconv(@ptrCast(self.value), @ptrCast(inbuf), @ptrCast(inbytesleft), @ptrCast(outbuf), @ptrCast(outbytesleft));
         if (result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_E2BIG)) or result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_EILSEQ)) or result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_EINVAL))) return error.SdlFailure;
         return result;
@@ -8541,7 +8743,7 @@ const IoStream = struct {
     /// - **Since:** This function is available since SDL 3.2.0.
     /// - **See also:** ioStream.iOprintf
     /// - **See also:** ioStream.IoStream.write
-    pub inline fn iOvprintf(self: @This(), fmt: ?[:0]const u8, ap: std.builtin.VaList) c_ulong {
+    pub inline fn iOvprintf(self: @This(), fmt: ?[:0]const u8, ap: std.builtin.VaList) usize {
         return c.SDL_IOvprintf(@ptrCast(self.value), if (fmt != null) @ptrCast(fmt.?.ptr) else null, if (@typeInfo(std.builtin.VaList) == .pointer) @ptrCast(ap) else @ptrCast(&ap));
     }
 
@@ -8600,7 +8802,7 @@ const IoStream = struct {
     /// - **Since:** This function is available since SDL 3.2.0.
     /// - **See also:** ioStream.IoStream.write
     /// - **See also:** ioStream.IoStream.getStatus
-    pub inline fn read(self: @This(), ptr: []u8) c_ulong {
+    pub inline fn read(self: @This(), ptr: []u8) usize {
         return c.SDL_ReadIO(@ptrCast(self.value), @ptrCast(ptr.ptr), @intCast(ptr.len));
     }
 
@@ -8898,7 +9100,7 @@ const IoStream = struct {
     /// - **See also:** ioStream.IoStream.seek
     /// - **See also:** ioStream.IoStream.flush
     /// - **See also:** ioStream.IoStream.getStatus
-    pub inline fn write(self: @This(), ptr: []const u8) c_ulong {
+    pub inline fn write(self: @This(), ptr: []const u8) usize {
         return c.SDL_WriteIO(@ptrCast(self.value), @ptrCast(ptr.ptr), @intCast(ptr.len));
     }
 
@@ -9110,9 +9312,9 @@ const IoStreamInterface = extern struct {
     /// Field `seek`.
     seek: ?*const fn (arg0: ?*anyopaque, arg1: i64, arg2: IoWhence) callconv(.c) i64,
     /// Field `read`.
-    read: ?*const fn (arg0: ?*anyopaque, arg1: ?*anyopaque, arg2: c_ulong, arg3: ?*IoStatus) callconv(.c) c_ulong,
+    read: ?*const fn (arg0: ?*anyopaque, arg1: ?*anyopaque, arg2: usize, arg3: ?*IoStatus) callconv(.c) usize,
     /// Field `write`.
-    write: ?*const fn (arg0: ?*anyopaque, arg1: ?*const anyopaque, arg2: c_ulong, arg3: ?*IoStatus) callconv(.c) c_ulong,
+    write: ?*const fn (arg0: ?*anyopaque, arg1: ?*const anyopaque, arg2: usize, arg3: ?*IoStatus) callconv(.c) usize,
     /// Field `flush`.
     flush: ?*const fn (arg0: ?*anyopaque, arg1: ?*IoStatus) callconv(.c) bool,
     /// Field `close`.
@@ -14288,7 +14490,7 @@ const BlendMode = u32;
 /// - **See also:** stdinc.getOriginalMemoryFunctions
 /// - **See also:** stdinc.getMemoryFunctions
 /// - **See also:** stdinc.setMemoryFunctions
-const CallocFunc = ?*const fn (arg0: c_ulong, arg1: c_ulong) callconv(.c) ?*anyopaque;
+const CallocFunc = ?*const fn (arg0: usize, arg1: usize) callconv(.c) ?*anyopaque;
 
 /// SDL type `Uint32`.
 const CameraId = u32;
@@ -14329,7 +14531,7 @@ const ClipboardCleanupCallback = ?*const fn (arg0: ?*anyopaque) callconv(.c) voi
 /// - **Returns:** a pointer to the data for the provided mime-type. Returning NULL or setting the length to 0 will cause zero length data to be sent to the "receiver", which should be able to handle this. The returned data will not be freed, so it needs to be retained and dealt with internally.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** clipboard.setData
-const ClipboardDataCallback = ?*const fn (arg0: ?*anyopaque, arg1: ?[*:0]const u8, arg2: ?*c_ulong) callconv(.c) ?*const anyopaque;
+const ClipboardDataCallback = ?*const fn (arg0: ?*anyopaque, arg1: ?[*:0]const u8, arg2: ?*usize) callconv(.c) ?*const anyopaque;
 
 /// A callback used with SDL sorting and binary search functions.
 ///
@@ -14740,7 +14942,7 @@ const MainThreadCallback = ?*const fn (arg0: ?*anyopaque) callconv(.c) void;
 /// - **See also:** stdinc.getOriginalMemoryFunctions
 /// - **See also:** stdinc.getMemoryFunctions
 /// - **See also:** stdinc.setMemoryFunctions
-const MallocFunc = ?*const fn (arg0: c_ulong) callconv(.c) ?*anyopaque;
+const MallocFunc = ?*const fn (arg0: usize) callconv(.c) ?*anyopaque;
 
 /// messagebox.MessageBoxButtonData flags.
 ///
@@ -14869,7 +15071,7 @@ const PropertiesId = u32;
 /// - **See also:** stdinc.getOriginalMemoryFunctions
 /// - **See also:** stdinc.getMemoryFunctions
 /// - **See also:** stdinc.setMemoryFunctions
-const ReallocFunc = ?*const fn (arg0: ?*anyopaque, arg1: c_ulong) callconv(.c) ?*anyopaque;
+const ReallocFunc = ?*const fn (arg0: ?*anyopaque, arg1: usize) callconv(.c) ?*anyopaque;
 
 /// This is a unique ID for a sensor for the time it is connected to the system, and is never reused for the lifetime of the application.
 ///
@@ -20560,7 +20762,9 @@ inline fn iconvUtf8Ucs4(allocator_: std.mem.Allocator, source: [:0]const u8) Err
 /// - **Thread safety:** It is safe to call this macro from any thread.
 /// - **Since:** This macro is available since SDL 3.2.0.
 inline fn iconvWcharUtf8(allocator_: std.mem.Allocator, source: [*:0]const std.c.wchar_t) Error![:0]u8 {
-    return iconvString(allocator_, "UTF-8", "WCHAR_T", @ptrCast(source), (wcslen(@ptrCast(source)) + 1) * @sizeOf(std.c.wchar_t));
+    const byte_length = (std.mem.len(source) + 1) * @sizeOf(std.c.wchar_t);
+    const source_bytes = @as([*:0]const u8, @ptrCast(source))[0 .. byte_length - 1 :0];
+    return iconvString(allocator_, "UTF-8", "WCHAR_T", source_bytes, byte_length);
 }
 
 /// A macro to initialize an SDL interface.
@@ -21846,7 +22050,7 @@ inline fn addVulkanRenderSemaphores(renderer: ?Renderer, wait_stage_mask: u32, w
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.alignedFree
-inline fn alignedAlloc(alignment: c_ulong, size: c_ulong) ?*anyopaque {
+inline fn alignedAlloc(alignment: usize, size: usize) ?*anyopaque {
     const result = c.SDL_aligned_alloc(alignment, size);
     return if (result == null) null else @ptrCast(result);
 }
@@ -22707,7 +22911,7 @@ inline fn broadcastCondition(cond: ?Condition) void {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.bsearchR
 /// - **See also:** stdinc.qsort
-inline fn bsearch(key: ?*const anyopaque, base: ?*const anyopaque, nmemb: c_ulong, size: c_ulong, compare: CompareCallback) ?*anyopaque {
+inline fn bsearch(key: ?*const anyopaque, base: ?*const anyopaque, nmemb: usize, size: usize, compare: CompareCallback) ?*anyopaque {
     const result = c.SDL_bsearch(@ptrCast(key), @ptrCast(base), nmemb, size, @ptrCast(compare));
     return if (result == null) null else @ptrCast(result);
 }
@@ -22762,7 +22966,7 @@ inline fn bsearch(key: ?*const anyopaque, base: ?*const anyopaque, nmemb: c_ulon
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.bsearch
 /// - **See also:** stdinc.qsortR
-inline fn bsearchR(key: ?*const anyopaque, base: ?*const anyopaque, nmemb: c_ulong, size: c_ulong, compare: CompareCallbackR, userdata: ?*anyopaque) ?*anyopaque {
+inline fn bsearchR(key: ?*const anyopaque, base: ?*const anyopaque, nmemb: usize, size: usize, compare: CompareCallbackR, userdata: ?*anyopaque) ?*anyopaque {
     const result = c.SDL_bsearch_r(@ptrCast(key), @ptrCast(base), nmemb, size, @ptrCast(compare), @ptrCast(userdata));
     return if (result == null) null else @ptrCast(result);
 }
@@ -22782,7 +22986,7 @@ inline fn calculateGpuTextureFormatSize(format: GpuTextureFormat, width: u32, he
 }
 
 /// SDL operation `stdinc.calloc`.
-inline fn calloc(nmemb: c_ulong, size: c_ulong) ?*anyopaque {
+inline fn calloc(nmemb: usize, size: usize) ?*anyopaque {
     const result = c.SDL_calloc(nmemb, size);
     return if (result == null) null else @ptrCast(result);
 }
@@ -31328,7 +31532,7 @@ inline fn getSilenceValueForFormat(format: AudioFormat) c_int {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.alignedAlloc
 /// - **See also:** stdinc.alignedFree
-inline fn getSimdAlignment() c_ulong {
+inline fn getSimdAlignment() usize {
     return c.SDL_GetSIMDAlignment();
 }
 
@@ -33840,7 +34044,7 @@ inline fn hidGetFeatureReport(dev: ?HidDevice, data: []u8) Error!c_int {
 /// - **Since:** This function is available since SDL 3.2.0.
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn hidGetIndexedString(dev: ?HidDevice, string_index: c_int, string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+inline fn hidGetIndexedString(dev: ?HidDevice, string_index: c_int, string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
     const result = c.SDL_hid_get_indexed_string(if (dev) |resource| @ptrCast(resource.value) else null, string_index, @ptrCast(string), maxlen);
     if (result < 0) return error.SdlFailure;
     return result;
@@ -33875,7 +34079,7 @@ inline fn hidGetInputReport(dev: ?HidDevice, data: []u8) Error!c_int {
 /// - **Since:** This function is available since SDL 3.2.0.
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn hidGetManufacturerString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+inline fn hidGetManufacturerString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
     const result = c.SDL_hid_get_manufacturer_string(if (dev) |resource| @ptrCast(resource.value) else null, @ptrCast(string), maxlen);
     if (result < 0) return error.SdlFailure;
     return result;
@@ -33892,7 +34096,7 @@ inline fn hidGetManufacturerString(dev: ?HidDevice, string: ?*std.c.wchar_t, max
 /// - **Since:** This function is available since SDL 3.2.0.
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn hidGetProductString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+inline fn hidGetProductString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
     const result = c.SDL_hid_get_product_string(if (dev) |resource| @ptrCast(resource.value) else null, @ptrCast(string), maxlen);
     if (result < 0) return error.SdlFailure;
     return result;
@@ -33945,7 +34149,7 @@ inline fn hidGetReportDescriptor(dev: ?HidDevice, buf: []u8) Error!c_int {
 /// - **Since:** This function is available since SDL 3.2.0.
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn hidGetSerialNumberString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: c_ulong) Error!c_int {
+inline fn hidGetSerialNumberString(dev: ?HidDevice, string: ?*std.c.wchar_t, maxlen: usize) Error!c_int {
     const result = c.SDL_hid_get_serial_number_string(if (dev) |resource| @ptrCast(resource.value) else null, @ptrCast(string), maxlen);
     if (result < 0) return error.SdlFailure;
     return result;
@@ -34149,7 +34353,7 @@ inline fn hideWindow(window: ?Window) Error!void {
 /// - **See also:** stdinc.iconvString
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn iconv(cd: IconvT, inbuf: ?*?[*:0]const u8, inbytesleft: ?*c_ulong, outbuf: ?*?[*]u8, outbytesleft: ?*c_ulong) Error!c_ulong {
+inline fn iconv(cd: IconvT, inbuf: ?*?[*:0]const u8, inbytesleft: ?*usize, outbuf: ?*?[*]u8, outbytesleft: ?*usize) Error!usize {
     const result = c.SDL_iconv(if (cd) |resource| @ptrCast(resource.value) else null, @ptrCast(inbuf), @ptrCast(inbytesleft), @ptrCast(outbuf), @ptrCast(outbytesleft));
     if (result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_E2BIG)) or result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_EILSEQ)) or result == @as(@TypeOf(result), @intCast(c.SDL_ICONV_EINVAL))) return error.SdlFailure;
     return result;
@@ -34190,7 +34394,7 @@ inline fn iconvOpen(tocode: [:0]const u8, fromcode: [:0]const u8) IconvT {
 /// - **See also:** stdinc.iconvOpen
 /// - **See also:** stdinc.IconvDataT.close
 /// - **See also:** stdinc.IconvDataT.iconv
-inline fn iconvString(allocator_: std.mem.Allocator, tocode: ?[:0]const u8, fromcode: ?[:0]const u8, inbuf: ?[:0]const u8, inbytesleft: c_ulong) Error![:0]u8 {
+inline fn iconvString(allocator_: std.mem.Allocator, tocode: ?[:0]const u8, fromcode: ?[:0]const u8, inbuf: ?[:0]const u8, inbytesleft: usize) Error![:0]u8 {
     const result = c.SDL_iconv_string(if (tocode != null) @ptrCast(tocode.?.ptr) else null, if (fromcode != null) @ptrCast(fromcode.?.ptr) else null, if (inbuf != null) @ptrCast(inbuf.?.ptr) else null, inbytesleft) orelse return error.SdlFailure;
     defer c.SDL_free(result);
     const source = std.mem.span(@as([*:0]const u8, @ptrCast(result)));
@@ -34448,7 +34652,7 @@ inline fn ioFromMem(mem: []u8) Error!IoStream {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** ioStream.IoStream.iOvprintf
 /// - **See also:** ioStream.IoStream.write
-inline fn iOprintf(context: ?IoStream, comptime format: [:0]const u8, args: anytype) c_ulong {
+inline fn iOprintf(context: ?IoStream, comptime format: [:0]const u8, args: anytype) usize {
     return @call(.auto, c.SDL_IOprintf, .{ @as(@typeInfo(@TypeOf(c.SDL_IOprintf)).@"fn".params[0].type.?, if (context) |resource| @ptrCast(resource.value) else null), @as(@typeInfo(@TypeOf(c.SDL_IOprintf)).@"fn".params[1].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
@@ -34466,7 +34670,7 @@ inline fn iOprintf(context: ?IoStream, comptime format: [:0]const u8, args: anyt
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** ioStream.iOprintf
 /// - **See also:** ioStream.IoStream.write
-inline fn iOvprintf(context: ?IoStream, fmt: ?[:0]const u8, ap: std.builtin.VaList) c_ulong {
+inline fn iOvprintf(context: ?IoStream, fmt: ?[:0]const u8, ap: std.builtin.VaList) usize {
     return c.SDL_IOvprintf(if (context) |resource| @ptrCast(resource.value) else null, if (fmt != null) @ptrCast(fmt.?.ptr) else null, if (@typeInfo(std.builtin.VaList) == .pointer) @ptrCast(ap) else @ptrCast(&ap));
 }
 
@@ -35845,7 +36049,7 @@ pub inline fn main(argc: c_int, argv: ?*?[*]u8) c_int {
 /// - **See also:** stdinc.calloc
 /// - **See also:** stdinc.realloc
 /// - **See also:** stdinc.alignedAlloc
-inline fn malloc(size: c_ulong) ?*anyopaque {
+inline fn malloc(size: usize) ?*anyopaque {
     const result = c.SDL_malloc(size);
     return if (result == null) null else @ptrCast(result);
 }
@@ -36084,7 +36288,7 @@ inline fn memset(dst: []u8, c_2: c_int) *anyopaque {
 /// - **Returns:** `dst`.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn memset4(dst: *anyopaque, val: u32, dwords: c_ulong) *anyopaque {
+inline fn memset4(dst: *anyopaque, val: u32, dwords: usize) *anyopaque {
     const result = c.SDL_memset4(@ptrCast(dst), val, dwords);
     return @ptrCast(result.?);
 }
@@ -37142,7 +37346,7 @@ inline fn putAudioStreamPlanarData(stream: ?AudioStream, channel_buffers: ?*cons
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.bsearch
 /// - **See also:** stdinc.qsortR
-inline fn qsort(base: ?*anyopaque, nmemb: c_ulong, size: c_ulong, compare: CompareCallback) void {
+inline fn qsort(base: ?*anyopaque, nmemb: usize, size: usize, compare: CompareCallback) void {
     c.SDL_qsort(@ptrCast(base), nmemb, size, @ptrCast(compare));
 }
 
@@ -37193,7 +37397,7 @@ inline fn qsort(base: ?*anyopaque, nmemb: c_ulong, size: c_ulong, compare: Compa
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.bsearchR
 /// - **See also:** stdinc.qsort
-inline fn qsortR(base: ?*anyopaque, nmemb: c_ulong, size: c_ulong, compare: CompareCallbackR, userdata: ?*anyopaque) void {
+inline fn qsortR(base: ?*anyopaque, nmemb: usize, size: usize, compare: CompareCallbackR, userdata: ?*anyopaque) void {
     c.SDL_qsort_r(@ptrCast(base), nmemb, size, @ptrCast(compare), @ptrCast(userdata));
 }
 
@@ -37400,7 +37604,7 @@ inline fn readAsyncIo(asyncio: ?AsyncIo, ptr: ?*anyopaque, offset: u64, size: u6
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** ioStream.IoStream.write
 /// - **See also:** ioStream.IoStream.getStatus
-inline fn readIo(context: ?IoStream, ptr: []u8) c_ulong {
+inline fn readIo(context: ?IoStream, ptr: []u8) usize {
     return c.SDL_ReadIO(if (context) |resource| @ptrCast(resource.value) else null, @ptrCast(ptr.ptr), @intCast(ptr.len));
 }
 
@@ -37890,7 +38094,7 @@ inline fn readU8(src: ?IoStream) Error!ReadU8Result {
 }
 
 /// SDL operation `stdinc.realloc`.
-inline fn realloc(mem: ?*anyopaque, size: c_ulong) ?*anyopaque {
+inline fn realloc(mem: ?*anyopaque, size: usize) ?*anyopaque {
     const result = c.SDL_realloc(@ptrCast(mem), size);
     return if (result == null) null else @ptrCast(result);
 }
@@ -38744,6 +38948,8 @@ inline fn renderViewportSet(renderer: ?Renderer) bool {
 /// - **Returns:** assert state.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
+///
+/// > **Analyzer control flow:** Static analyzers may treat this function as non-returning, but it can return at runtime.
 inline fn reportAssertion(data: ?*AssertData, func: ?[:0]const u8, file: ?[:0]const u8, line: c_int) AssertState {
     const result = c.SDL_ReportAssertion(@ptrCast(data), if (func != null) @ptrCast(func.?.ptr) else null, if (file != null) @ptrCast(file.?.ptr) else null, line);
     return @enumFromInt(result);
@@ -39748,7 +39954,7 @@ inline fn setBooleanProperty(props: PropertiesId, name: ?[:0]const u8, value: bo
 /// - **See also:** clipboard.hasData
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn setClipboardData(callback: ClipboardDataCallback, cleanup: ClipboardCleanupCallback, userdata: ?*anyopaque, mime_types: ?*const ?[*:0]const u8, num_mime_types: c_ulong) Error!void {
+inline fn setClipboardData(callback: ClipboardDataCallback, cleanup: ClipboardCleanupCallback, userdata: ?*anyopaque, mime_types: ?*const ?[*:0]const u8, num_mime_types: usize) Error!void {
     if (!c.SDL_SetClipboardData(@ptrCast(callback), @ptrCast(cleanup), @ptrCast(userdata), @ptrCast(mime_types), num_mime_types)) return error.SdlFailure;
 }
 
@@ -42251,7 +42457,7 @@ inline fn sinf(x: f32) f32 {
 /// - **Returns:** false on overflow, true if result is added without overflow.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn sizeAddCheckOverflowDefault(a: c_ulong, b: c_ulong, ret: *c_ulong) bool {
+inline fn sizeAddCheckOverflowDefault(a: usize, b: usize, ret: *usize) bool {
     return c.SDL_size_add_check_overflow(a, b, @ptrCast(ret));
 }
 
@@ -42268,7 +42474,7 @@ inline fn sizeAddCheckOverflowDefault(a: c_ulong, b: c_ulong, ret: *c_ulong) boo
 /// - **Returns:** false on overflow, true if result is multiplied without overflow.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn sizeMulCheckOverflowDefault(a: c_ulong, b: c_ulong, ret: *c_ulong) bool {
+inline fn sizeMulCheckOverflowDefault(a: usize, b: usize, ret: *usize) bool {
     return c.SDL_size_mul_check_overflow(a, b, @ptrCast(ret));
 }
 
@@ -42287,7 +42493,7 @@ inline fn sizeMulCheckOverflowDefault(a: c_ulong, b: c_ulong, ret: *c_ulong) boo
 /// - **Returns:** the number of bytes that should be written, not counting the null-terminator char, or a negative value on error.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn snprintf(text: [*]u8, maxlen: c_ulong, comptime format: [:0]const u8, args: anytype) c_int {
+inline fn snprintf(text: [*]u8, maxlen: usize, comptime format: [:0]const u8, args: anytype) c_int {
     return @call(.auto, c.SDL_snprintf, .{ @as(@typeInfo(@TypeOf(c.SDL_snprintf)).@"fn".params[0].type.?, @ptrCast(text)), @as(@typeInfo(@TypeOf(c.SDL_snprintf)).@"fn".params[1].type.?, maxlen), @as(@typeInfo(@TypeOf(c.SDL_snprintf)).@"fn".params[2].type.?, format.ptr) } ++ validateCVarargs(format, args, false));
 }
 
@@ -42448,7 +42654,7 @@ inline fn stepBackUtf8(start: ?[:0]const u8, pstr: ?*?[*:0]const u8) u32 {
 /// - **Returns:** the first Unicode codepoint in the string.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn stepUtf8(pstr: ?*?[*:0]const u8, pslen: ?*c_ulong) u32 {
+inline fn stepUtf8(pstr: ?*?[*:0]const u8, pslen: ?*usize) u32 {
     return c.SDL_StepUTF8(@ptrCast(pstr), @ptrCast(pslen));
 }
 
@@ -42662,7 +42868,7 @@ inline fn stringToGuid(pch_guid: ?[:0]const u8) Guid {
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.strlcpy
-inline fn strlcat(dst: [*]u8, src: [:0]const u8, maxlen: c_ulong) c_ulong {
+inline fn strlcat(dst: [*]u8, src: [:0]const u8, maxlen: usize) usize {
     return c.SDL_strlcat(@ptrCast(dst), @ptrCast(src.ptr), maxlen);
 }
 
@@ -42682,7 +42888,7 @@ inline fn strlcat(dst: [*]u8, src: [:0]const u8, maxlen: c_ulong) c_ulong {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.strlcat
 /// - **See also:** stdinc.utf8Strlcpy
-inline fn strlcpy(dst: [*]u8, src: [:0]const u8, maxlen: c_ulong) c_ulong {
+inline fn strlcpy(dst: [*]u8, src: [:0]const u8, maxlen: usize) usize {
     return c.SDL_strlcpy(@ptrCast(dst), @ptrCast(src.ptr), maxlen);
 }
 
@@ -42700,7 +42906,7 @@ inline fn strlcpy(dst: [*]u8, src: [:0]const u8, maxlen: c_ulong) c_ulong {
 /// - **See also:** stdinc.strnlen
 /// - **See also:** stdinc.utf8Strlen
 /// - **See also:** stdinc.utf8Strnlen
-inline fn strlen(str: [:0]const u8) c_ulong {
+inline fn strlen(str: [:0]const u8) usize {
     return c.SDL_strlen(@ptrCast(str.ptr));
 }
 
@@ -42736,7 +42942,7 @@ inline fn strlwr(str: [*]u8) [*]u8 {
 /// - **Returns:** less than zero if str1 is "less than" str2, greater than zero if str1 is "greater than" str2, and zero if the strings match exactly.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn strncasecmp(str1: [:0]const u8, str2: [:0]const u8, maxlen: c_ulong) c_int {
+inline fn strncasecmp(str1: [:0]const u8, str2: [:0]const u8, maxlen: usize) c_int {
     return c.SDL_strncasecmp(@ptrCast(str1.ptr), @ptrCast(str2.ptr), maxlen);
 }
 
@@ -42754,7 +42960,7 @@ inline fn strncasecmp(str1: [:0]const u8, str2: [:0]const u8, maxlen: c_ulong) c
 /// - **Returns:** less than zero if str1 is "less than" str2, greater than zero if str1 is "greater than" str2, and zero if the strings match exactly.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn strncmp(str1: [:0]const u8, str2: [:0]const u8, maxlen: c_ulong) c_int {
+inline fn strncmp(str1: [:0]const u8, str2: [:0]const u8, maxlen: usize) c_int {
     return c.SDL_strncmp(@ptrCast(str1.ptr), @ptrCast(str2.ptr), maxlen);
 }
 
@@ -42793,7 +42999,7 @@ inline fn strndup(allocator_: std.mem.Allocator, str: []const u8) Error![:0]u8 {
 /// - **See also:** stdinc.strlen
 /// - **See also:** stdinc.utf8Strlen
 /// - **See also:** stdinc.utf8Strnlen
-inline fn strnlen(str: []const u8) c_ulong {
+inline fn strnlen(str: []const u8) usize {
     return c.SDL_strnlen(@ptrCast(str.ptr), @intCast(str.len));
 }
 
@@ -43211,26 +43417,6 @@ inline fn surfaceHasRle(surface_2: ?*Surface) bool {
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn swapFloat(x: f32) f32 {
     return c.SDL_SwapFloat(x);
-}
-
-/// This works exactly like swprintf() but doesn't require access to a C runtime.
-///
-/// Format a wide string of up to `maxlen`-1 wchar_t values, converting each '' item with values provided through variable arguments.
-/// While some C runtimes differ on how to deal with too-large strings, this function null-terminates the output, by treating the null-terminator as part of the `maxlen` count. Note that if `maxlen` is zero, however, no wide characters will be written at all.
-/// This function returns the number of *wide characters* (not *codepoints*) that should be written, excluding the null-terminator character. If this returns a number >= `maxlen`, it means the output string was truncated. A negative return value means an error occurred.
-/// Referencing the output string's pointer with a format item is undefined behavior.
-///
-/// - **Parameters:**
-///   - `text`: the buffer to write the wide string into. Must not be NULL.
-///   - `maxlen`: the maximum wchar_t values to write, including the null-terminator.
-///   - `fmt`: a printf-style format string. Must not be NULL.
-///   - `...`: a list of values to be used with the format string.
-///
-/// - **Returns:** the number of wide characters that should be written, not counting the null-terminator char, or a negative value on error.
-/// - **Thread safety:** It is safe to call this function from any thread.
-/// - **Since:** This function is available since SDL 3.2.0.
-inline fn swprintf(text: *std.c.wchar_t, maxlen: c_ulong, format: *const std.c.wchar_t, args: anytype) c_int {
-    return @call(.auto, c.SDL_swprintf, .{ @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[0].type.?, @ptrCast(text)), @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[1].type.?, maxlen), @as(@typeInfo(@TypeOf(c.SDL_swprintf)).@"fn".params[2].type.?, @ptrCast(format)) } ++ args);
 }
 
 /// Block until any pending window state is finalized.
@@ -44065,7 +44251,7 @@ inline fn uploadToGpuTexture(copy_pass: ?*GpuCopyPass, source: ?*const GpuTextur
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.strlcpy
-inline fn utf8Strlcpy(dst: [*]u8, src: [:0]const u8, dst_bytes: c_ulong) c_ulong {
+inline fn utf8Strlcpy(dst: [*]u8, src: [:0]const u8, dst_bytes: usize) usize {
     return c.SDL_utf8strlcpy(@ptrCast(dst), @ptrCast(src.ptr), dst_bytes);
 }
 
@@ -44083,7 +44269,7 @@ inline fn utf8Strlcpy(dst: [*]u8, src: [:0]const u8, dst_bytes: c_ulong) c_ulong
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.utf8Strnlen
 /// - **See also:** stdinc.strlen
-inline fn utf8Strlen(str: [:0]const u8) c_ulong {
+inline fn utf8Strlen(str: [:0]const u8) usize {
     return c.SDL_utf8strlen(@ptrCast(str.ptr));
 }
 
@@ -44102,7 +44288,7 @@ inline fn utf8Strlen(str: [:0]const u8) c_ulong {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.utf8Strlen
 /// - **See also:** stdinc.strnlen
-inline fn utf8Strnlen(str: []const u8) c_ulong {
+inline fn utf8Strnlen(str: []const u8) usize {
     return c.SDL_utf8strnlen(@ptrCast(str.ptr), @intCast(str.len));
 }
 
@@ -44164,7 +44350,7 @@ inline fn vsscanf(text: [:0]const u8, fmt: [:0]const u8, ap: std.builtin.VaList)
 
 /// This works exactly like vswprintf() but doesn't require access to a C runtime.
 ///
-/// Functions identically to stdinc.swprintf(), except it takes a `va_list` instead of using `...` variable arguments.
+/// Functions identically to SDL_swprintf (C API outside this module)(), except it takes a `va_list` instead of using `...` variable arguments.
 ///
 /// - **Parameters:**
 ///   - `text`: the buffer to write the string into. Must not be NULL.
@@ -44177,7 +44363,7 @@ inline fn vsscanf(text: [:0]const u8, fmt: [:0]const u8, ap: std.builtin.VaList)
 /// - **Since:** This function is available since SDL 3.2.0.
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
-inline fn vswprintf(text: *std.c.wchar_t, maxlen: c_ulong, fmt: *const std.c.wchar_t, ap: std.builtin.VaList) Error!c_int {
+inline fn vswprintf(text: *std.c.wchar_t, maxlen: usize, fmt: *const std.c.wchar_t, ap: std.builtin.VaList) Error!c_int {
     const result = c.SDL_vswprintf(@ptrCast(text), maxlen, @ptrCast(fmt), if (@typeInfo(std.builtin.VaList) == .pointer) @ptrCast(ap) else @ptrCast(&ap));
     if (result < 0) return error.SdlFailure;
     return result;
@@ -44712,7 +44898,7 @@ inline fn wcsdup(allocator_: std.mem.Allocator, wstr: ?*const std.c.wchar_t) Err
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.wcslcpy
-inline fn wcslcat(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: c_ulong) c_ulong {
+inline fn wcslcat(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: usize) usize {
     return c.SDL_wcslcat(@ptrCast(dst), @ptrCast(src), maxlen);
 }
 
@@ -44731,7 +44917,7 @@ inline fn wcslcat(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: c_ulon
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** stdinc.wcslcat
-inline fn wcslcpy(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: c_ulong) c_ulong {
+inline fn wcslcpy(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: usize) usize {
     return c.SDL_wcslcpy(@ptrCast(dst), @ptrCast(src), maxlen);
 }
 
@@ -44750,7 +44936,7 @@ inline fn wcslcpy(dst: *std.c.wchar_t, src: *const std.c.wchar_t, maxlen: c_ulon
 /// - **See also:** stdinc.wcsnlen
 /// - **See also:** stdinc.utf8Strlen
 /// - **See also:** stdinc.utf8Strnlen
-inline fn wcslen(wstr: *const std.c.wchar_t) c_ulong {
+inline fn wcslen(wstr: *const std.c.wchar_t) usize {
     return c.SDL_wcslen(@ptrCast(wstr));
 }
 
@@ -44769,7 +44955,7 @@ inline fn wcslen(wstr: *const std.c.wchar_t) c_ulong {
 /// - **Returns:** less than zero if str1 is "less than" str2, greater than zero if str1 is "greater than" str2, and zero if the strings match exactly.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn wcsncasecmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, maxlen: c_ulong) c_int {
+inline fn wcsncasecmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, maxlen: usize) c_int {
     return c.SDL_wcsncasecmp(@ptrCast(str1), @ptrCast(str2), maxlen);
 }
 
@@ -44787,7 +44973,7 @@ inline fn wcsncasecmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, ma
 /// - **Returns:** less than zero if str1 is "less than" str2, greater than zero if str1 is "greater than" str2, and zero if the strings match exactly.
 /// - **Thread safety:** It is safe to call this function from any thread.
 /// - **Since:** This function is available since SDL 3.2.0.
-inline fn wcsncmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, maxlen: c_ulong) c_int {
+inline fn wcsncmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, maxlen: usize) c_int {
     return c.SDL_wcsncmp(@ptrCast(str1), @ptrCast(str2), maxlen);
 }
 
@@ -44808,7 +44994,7 @@ inline fn wcsncmp(str1: *const std.c.wchar_t, str2: *const std.c.wchar_t, maxlen
 /// - **See also:** stdinc.wcslen
 /// - **See also:** stdinc.utf8Strlen
 /// - **See also:** stdinc.utf8Strnlen
-inline fn wcsnlen(wstr: *const std.c.wchar_t, maxlen: c_ulong) c_ulong {
+inline fn wcsnlen(wstr: *const std.c.wchar_t, maxlen: usize) usize {
     return c.SDL_wcsnlen(@ptrCast(wstr), maxlen);
 }
 
@@ -44967,7 +45153,7 @@ inline fn writeAsyncIo(asyncio: ?AsyncIo, ptr: ?*anyopaque, offset: u64, size: u
 /// - **See also:** ioStream.IoStream.seek
 /// - **See also:** ioStream.IoStream.flush
 /// - **See also:** ioStream.IoStream.getStatus
-inline fn writeIo(context: ?IoStream, ptr: []const u8) c_ulong {
+inline fn writeIo(context: ?IoStream, ptr: []const u8) usize {
     return c.SDL_WriteIO(if (context) |resource| @ptrCast(resource.value) else null, @ptrCast(ptr.ptr), @intCast(ptr.len));
 }
 
@@ -45683,6 +45869,41 @@ inline fn sendAndroidMessage(command: u32, param: c_int) Error!void {
 /// Returns `error.SdlFailure` when SDL reports failure.
 inline fn showAndroidToast(message: ?[:0]const u8, duration: c_int, gravity: c_int, xoffset: c_int, yoffset: c_int) Error!void {
     if (!c.SDL_ShowAndroidToast(if (message != null) @ptrCast(message.?.ptr) else null, duration, gravity, xoffset, yoffset)) return error.SdlFailure;
+}
+
+/// Format a Zig message and forward it to SDL without reinterpreting percent signs.
+/// Reentrant calls from an SDL output callback are ignored on the same thread.
+threadlocal var sdlLogAdapterActive = false;
+
+pub inline fn logMessageFmt(category: c_int, priority: LogPriority, comptime format: []const u8, args: anytype) void {
+    if (sdlLogAdapterActive) return;
+    sdlLogAdapterActive = true;
+    defer sdlLogAdapterActive = false;
+    var buffer: [1024]u8 = undefined;
+    const message = std.fmt.bufPrintZ(&buffer, format, args) catch {
+        c.SDL_LogMessage(category, @intCast(@intFromEnum(priority)), "%s", "SDL log formatting failed");
+        return;
+    };
+    c.SDL_LogMessage(category, @intCast(@intFromEnum(priority)), "%s", message.ptr);
+}
+
+/// Adapt Zig's standard log callback to SDL's application logging category.
+///
+/// The default scope is forwarded unchanged. Named scopes are prefixed in the already
+/// formatted message so the fixed C format remains `%s` and cannot reinterpret user text.
+pub fn stdLogFn(comptime level: std.log.Level, comptime scope: @EnumLiteral(), comptime format: []const u8, args: anytype) void {
+    const priority: LogPriority = switch (level) {
+        .debug => .debug,
+        .info => .info,
+        .warn => .warn,
+        .err => .error_,
+    };
+    if (comptime std.mem.eql(u8, @tagName(scope), "default")) {
+        logMessageFmt(c.SDL_LOG_CATEGORY_APPLICATION, priority, format, args);
+    } else {
+        const scoped_format = std.fmt.comptimePrint("[{s}] {s}", .{ @tagName(scope), format });
+        logMessageFmt(c.SDL_LOG_CATEGORY_APPLICATION, priority, scoped_format, args);
+    }
 }
 
 /// A helpful assertion macro!
@@ -49035,6 +49256,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .emscripten) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49057,6 +49279,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .ios) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49079,6 +49302,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .linux) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49102,6 +49326,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .macos) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49124,6 +49349,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .tvos) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49146,6 +49372,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else if (builtin.os.tag == .windows) struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49168,6 +49395,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 } else struct {
     pub const Category = root.LogCategory;
     pub const critical = root.logCritical;
@@ -49190,6 +49418,7 @@ pub const log = if (builtin.abi == .android or builtin.abi == .androideabi) stru
     pub const trace = root.logTrace;
     pub const verbose = root.logVerbose;
     pub const warn = root.logWarn;
+    pub const messageFmt = root.logMessageFmt;
 };
 
 /// SDL offers a simple message box API, which is useful for simple alerts,
@@ -50257,7 +50486,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50503,7 +50731,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50745,7 +50972,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -50987,7 +51213,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51233,7 +51458,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51475,7 +51699,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51721,7 +51944,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;
@@ -51963,7 +52185,6 @@ pub const stdinc = if (builtin.abi == .android or builtin.abi == .androideabi) s
     pub const StrtoullResult = root.StrtoullResult;
     pub const StrtoulResult = root.StrtoulResult;
     pub const strupr = root.strupr;
-    pub const swprintf = root.swprintf;
     pub const tan = root.tan;
     pub const tanf = root.tanf;
     pub const Time = root.Time;

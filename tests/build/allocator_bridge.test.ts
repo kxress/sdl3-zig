@@ -1,7 +1,89 @@
-import { run } from "./support.ts";
+import { command, run } from "./support.ts";
+import { codegenConfiguration } from "../../scripts/codegen/config.ts";
 
 const fixture = `${import.meta.dirname}/fixtures/allocator_bridge`;
 
+async function expectDiagnostic(step: string, fragment: string): Promise<void> {
+  const result = await command("zig", ["build", step], { cwd: fixture });
+  if (result.success) throw new Error(`expected ${step} to fail`);
+  const diagnostic = new TextDecoder().decode(result.stderr);
+  if (!diagnostic.includes(fragment)) {
+    throw new Error(`${step} diagnostic changed unexpectedly:\n${diagnostic}`);
+  }
+}
+
 Deno.test("generated allocator bridge passes its fake-ABI lifetime and pairing fixture", async () => {
   await run("zig", ["build", "--summary", "all"], { cwd: fixture });
+});
+
+Deno.test("allocator bridge preserves size_t ABI width on Windows targets", async () => {
+  await run("zig", ["build", "compile-check", "-Dtarget=x86_64-windows-gnu"], { cwd: fixture });
+});
+
+Deno.test("allocator bridge compiles for every configured analysis target", async (test) => {
+  for (const analysisTarget of codegenConfiguration.targets) {
+    await test.step(analysisTarget, async () => {
+      // Zig spells the API-level suffix in the analysis target separately from its target triple.
+      const zigTarget = analysisTarget === "aarch64-linux-android21"
+        ? "aarch64-linux-android"
+        : analysisTarget;
+      await run("zig", ["build", "matrix-check", `-Dtarget=${zigTarget}`], { cwd: fixture });
+    });
+  }
+});
+
+Deno.test("SDL_COMPILE_TIME_ASSERT preserves its supplied failure name", async () => {
+  const result = await command("zig", ["build", "negative-compile-time"], { cwd: fixture });
+  if (result.success) throw new Error("expected the negative compile-time fixture to fail");
+  const diagnostic = new TextDecoder().decode(result.stderr);
+  if (!diagnostic.includes("SDL_COMPILE_TIME_ASSERT failure")) {
+    throw new Error(`compile-time assertion diagnostic lost its name:\n${diagnostic}`);
+  }
+});
+
+Deno.test("SDL_static_cast rejects an incompatible target", async () => {
+  const result = await command("zig", ["build", "negative-cast"], { cwd: fixture });
+  if (result.success) throw new Error("expected the negative cast fixture to fail");
+  const diagnostic = new TextDecoder().decode(result.stderr);
+  if (!diagnostic.includes("type 'u8' cannot represent integer value")) {
+    throw new Error(`invalid cast diagnostic changed unexpectedly:\n${diagnostic}`);
+  }
+});
+
+Deno.test("typed scanf wrappers reject an incompatible destination width", async () => {
+  const result = await command("zig", ["build", "negative-format"], { cwd: fixture });
+  if (result.success) throw new Error("expected the negative format fixture to fail");
+  const diagnostic = new TextDecoder().decode(result.stderr);
+  if (!diagnostic.includes("C scanf %d requires *c_int")) {
+    throw new Error(`scanf destination diagnostic changed unexpectedly:\n${diagnostic}`);
+  }
+});
+
+Deno.test("C format grammar rejects positional arguments", async () => {
+  const result = await command("zig", ["build", "negative-grammar"], { cwd: fixture });
+  if (result.success) throw new Error("expected positional format fixture to fail");
+  const diagnostic = new TextDecoder().decode(result.stderr);
+  if (!diagnostic.includes("positional C format arguments are unsupported")) {
+    throw new Error(`positional format diagnostic changed unexpectedly:\n${diagnostic}`);
+  }
+});
+
+Deno.test("C scanf grammar rejects empty scansets", async () => {
+  await expectDiagnostic("negative-scanset", "malformed C scanf scanset");
+});
+
+Deno.test("C format grammar reports stable diagnostics for invalid consumers", async (test) => {
+  const cases = [
+    ["negative-argument-count", "C format has too few arguments"],
+    ["negative-promotion", "C printf integer arguments must be default-promoted to c_int"],
+    ["negative-signed-length", "C printf %lld requires c_longlong"],
+    ["negative-string", "C printf %s arguments must be sentinel-terminated C strings"],
+    ["negative-immutable-scan", "C scanf string arguments must be writable pointers"],
+    ["negative-pointer", "C printf pointer arguments must be pointers"],
+    ["negative-malformed", "unterminated C format specifier"],
+    ["negative-unsupported", "unsupported C format conversion"],
+  ] as const;
+  for (const [step, fragment] of cases) {
+    await test.step(step, () => expectDiagnostic(step, fragment));
+  }
 });
