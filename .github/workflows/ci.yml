@@ -34,7 +34,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          { grep -Ei 'error|failed|exited with code|not found|undefined' linux-release-check.log || true; } \
+          { grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined' linux-release-check.log || true; } \
             | tail -n 12 | while IFS= read -r line; do
             echo "::error title=Linux release output::$line"
           done
@@ -62,7 +62,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          { grep -Ei 'error|failed|exited with code|not found|undefined' windows-build.log || true; } \
+          { grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined' windows-build.log || true; } \
             | tail -n 12 | while IFS= read -r line; do
             echo "::error title=Windows build output::$line"
           done
@@ -97,7 +97,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          { grep -Ei 'error|failed|exited with code|not found|undefined' macos-build.log || true; } \
+          { grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined' macos-build.log || true; } \
             | tail -n 12 | while IFS= read -r line; do
             echo "::error title=macOS build output::$line"
           done
