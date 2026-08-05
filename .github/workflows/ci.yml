@@ -100,7 +100,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 80 macos-build.log | while IFS= read -r line; do
+          { grep -Ein -C 4 'error:|dependency|framework|undefined' macos-build.log || true; } \
+            | tail -n 120 | while IFS= read -r line; do
             echo "::error title=macOS build output::$line"
           done
       - name: Validate Apple mobile binding and XCFramework slices
