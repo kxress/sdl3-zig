@@ -582,6 +582,7 @@ fn linkMacosSourceDependencies(b: *std.Build, module: *std.Build.Module) void {
     // runner's selected SDK explicit when the macOS workflow provides it.
     if (b.graph.environ_map.get("SDKROOT")) |sdk_root| {
         module.addFrameworkPath(.{ .cwd_relative = b.fmt("{s}/System/Library/Frameworks", .{sdk_root}) });
+        module.addLibraryPath(.{ .cwd_relative = b.fmt("{s}/usr/lib", .{sdk_root}) });
     }
     module.linkSystemLibrary("objc", .{});
     for ([_][]const u8{
