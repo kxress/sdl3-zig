@@ -583,6 +583,7 @@ fn linkMacosSourceDependencies(b: *std.Build, module: *std.Build.Module) void {
     if (b.graph.environ_map.get("SDKROOT")) |sdk_root| {
         module.addFrameworkPath(.{ .cwd_relative = b.fmt("{s}/System/Library/Frameworks", .{sdk_root}) });
     }
+    module.linkSystemLibrary("objc", .{});
     for ([_][]const u8{
         "AudioToolbox",
         "AVFoundation",
