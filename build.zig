@@ -540,6 +540,7 @@ fn addLibraryModules(
                 ) catch @panic("OOM");
             module.addLibraryPath(.{ .cwd_relative = library_path });
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
+            if (target.result.os.tag == .macos) linkMacosSourceDependencies(module);
             if (std.mem.eql(u8, configuration.module_name, "shadercross") and source.linkage == .static) {
                 module.linkSystemLibrary("spirv-cross-c", .{});
                 module.linkSystemLibrary("spirv-cross-glsl", .{});
@@ -570,6 +571,35 @@ fn addLibraryModules(
         library_modules.append(b.allocator, .{ .configuration = configuration, .module = module }) catch @panic("OOM");
     }
     return library_modules.toOwnedSlice(b.allocator) catch @panic("OOM");
+}
+
+fn linkMacosSourceDependencies(module: *std.Build.Module) void {
+    // SDL's CMake target carries these transitive dependencies, but a Zig consumer linking the
+    // produced static archives does not inherit CMake's INTERFACE_LINK_LIBRARIES metadata.
+    // Keep the same Apple runtime/framework surface on the Zig module boundary.
+    module.linkSystemLibrary("objc", .{});
+    for ([_][]const u8{
+        "AudioToolbox",
+        "AVFoundation",
+        "Carbon",
+        "Cocoa",
+        "CoreAudio",
+        "CoreBluetooth",
+        "CoreFoundation",
+        "CoreGraphics",
+        "CoreHaptics",
+        "CoreMedia",
+        "CoreMotion",
+        "CoreVideo",
+        "ForceFeedback",
+        "Foundation",
+        "GameController",
+        "IOKit",
+        "Metal",
+        "OpenGLES",
+        "QuartzCore",
+        "UniformTypeIdentifiers",
+    }) |framework| module.linkFramework(framework, .{});
 }
 
 pub fn build(b: *std.Build) void {
