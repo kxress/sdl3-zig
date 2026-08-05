@@ -600,7 +600,6 @@ fn linkMacosSourceDependencies(b: *std.Build, module: *std.Build.Module) void {
         "GameController",
         "IOKit",
         "Metal",
-        "OpenGLES",
         "QuartzCore",
         "UniformTypeIdentifiers",
     }) |framework| module.linkFramework(framework, .{});
