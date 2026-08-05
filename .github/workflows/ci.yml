@@ -67,7 +67,17 @@ jobs:
             echo "::warning::The macOS SDK is unavailable; source and native-link tests may be skipped or fail."
           fi
       - name: Validate source and universal framework distributions
-        run: deno task test:macos-build
+        shell: bash
+        run: |
+          set -o pipefail
+          deno task test:macos-build 2>&1 | tee macos-build.log
+      - name: Surface macOS build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          tail -n 40 macos-build.log | while IFS= read -r line; do
+            echo "::error title=macOS build output::$line"
+          done
       - name: Validate Apple mobile binding and XCFramework slices
         run: deno task test:apple-mobile
 

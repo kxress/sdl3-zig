@@ -34,7 +34,13 @@ export async function run(
   const stderr = options.stderr === "inherit"
     ? "(stderr inherited by parent process)"
     : new TextDecoder().decode(result.stderr);
-  throw new Error(`${executable} ${args.join(" ")} exited with code ${result.code}:\n${stderr}`);
+  const stdout = options.stdout === "inherit"
+    ? "(stdout inherited by parent process)"
+    : new TextDecoder().decode(result.stdout);
+  const output = [stderr, stdout].filter((value) =>
+    value !== "" && !value.startsWith("(stdout") && !value.startsWith("(stderr")
+  ).join("\n");
+  throw new Error(`${executable} ${args.join(" ")} exited with code ${result.code}:\n${output}`);
 }
 
 /**
