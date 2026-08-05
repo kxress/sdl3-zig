@@ -85,9 +85,12 @@ jobs:
         shell: bash
         run: |
           sw_vers
-          if ! xcrun --sdk macosx --show-sdk-path; then
+          sdk_root="$(xcrun --sdk macosx --show-sdk-path)" || {
             echo "::warning::The macOS SDK is unavailable; source and native-link tests may be skipped or fail."
-          fi
+            exit 0
+          }
+          echo "SDKROOT=$sdk_root" >> "$GITHUB_ENV"
+          echo "Using macOS SDK at $sdk_root"
       - name: Validate source and universal framework distributions
         shell: bash
         run: |
