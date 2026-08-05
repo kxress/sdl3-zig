@@ -465,6 +465,12 @@ fn addLibraryModules(
         );
         const translation_target = if (isAndroidTarget(target))
             b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu })
+        else if (target.result.os.tag == .windows and target.result.cpu.arch == .aarch64)
+            // The Windows SDK's ARM64 UCRT headers use compiler intrinsics that Zig 0.16
+            // translate-c cannot lower. Windows ARM64 and x86_64 share the LLP64 data model,
+            // so translate declarations with the host-compatible x86_64 headers and compile
+            // the generated Zig module for the requested target below.
+            b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc })
         else
             target;
         const translate_c = b.addTranslateC(.{
@@ -474,6 +480,11 @@ fn addLibraryModules(
         });
         for (sdl_metadata.translation_defines) |definition| {
             translate_c.defineCMacroRaw(definition);
+        }
+        if (target.result.os.tag == .windows) {
+            // Zig's C frontend does not accept MSVC's `ui64` literal suffix, while SDL's
+            // headers select it whenever `_MSC_VER` is defined. Use the portable suffix.
+            translate_c.defineCMacroRaw("SDL_UINT64_C(c)=c ## ULL");
         }
         addTranslateCTargetDefines(translate_c, target);
         if (target.result.os.tag == .emscripten) {

@@ -20571,7 +20571,7 @@ inline fn cpuPauseInstruction() void {
 /// - **See also:** thread.createWithProperties
 /// - **See also:** thread.Thread.wait
 inline fn createThread(fn_: ThreadFunction, name: ?[:0]const u8, data: ?*anyopaque) ?Thread {
-    return createThreadRuntime(fn_, name, data, @ptrCast(c.SDL_BeginThreadFunction), @ptrCast(c.SDL_EndThreadFunction));
+    return createThreadRuntime(fn_, name, data, @ptrCast(@alignCast(c.SDL_BeginThreadFunction)), @ptrCast(@alignCast(c.SDL_EndThreadFunction)));
 }
 
 /// Create a new thread with with the specified properties.
@@ -20600,7 +20600,7 @@ inline fn createThread(fn_: ThreadFunction, name: ?[:0]const u8, data: ?*anyopaq
 /// - **See also:** thread.create
 /// - **See also:** thread.Thread.wait
 inline fn createThreadWithProperties(props: PropertiesId) ?Thread {
-    return createThreadWithPropertiesRuntime(props, @ptrCast(c.SDL_BeginThreadFunction), @ptrCast(c.SDL_EndThreadFunction));
+    return createThreadWithPropertiesRuntime(props, @ptrCast(@alignCast(c.SDL_BeginThreadFunction)), @ptrCast(@alignCast(c.SDL_EndThreadFunction)));
 }
 
 /// Define an audio.Format value.
