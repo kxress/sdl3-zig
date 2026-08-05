@@ -540,7 +540,7 @@ fn addLibraryModules(
                 ) catch @panic("OOM");
             module.addLibraryPath(.{ .cwd_relative = library_path });
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
-            if (target.result.os.tag == .macos) linkMacosSourceDependencies(module);
+            if (target.result.os.tag == .macos) linkMacosSourceDependencies(b, module);
             if (std.mem.eql(u8, configuration.module_name, "shadercross") and source.linkage == .static) {
                 module.linkSystemLibrary("spirv-cross-c", .{});
                 module.linkSystemLibrary("spirv-cross-glsl", .{});
@@ -573,10 +573,15 @@ fn addLibraryModules(
     return library_modules.toOwnedSlice(b.allocator) catch @panic("OOM");
 }
 
-fn linkMacosSourceDependencies(module: *std.Build.Module) void {
+fn linkMacosSourceDependencies(b: *std.Build, module: *std.Build.Module) void {
     // SDL's CMake target carries these transitive dependencies, but a Zig consumer linking the
     // produced static archives does not inherit CMake's INTERFACE_LINK_LIBRARIES metadata.
     // Keep the same Apple runtime/framework surface on the Zig module boundary.
+    // Zig does not automatically derive framework search paths from SDKROOT, so make the
+    // runner's selected SDK explicit when the macOS workflow provides it.
+    if (b.graph.environ_map.get("SDKROOT")) |sdk_root| {
+        module.addFrameworkPath(.{ .cwd_relative = b.fmt("{s}/System/Library/Frameworks", .{sdk_root}) });
+    }
     for ([_][]const u8{
         "AudioToolbox",
         "AVFoundation",
