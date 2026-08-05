@@ -460,9 +460,15 @@ fn addLibraryModules(
     const translation_units = b.addWriteFiles();
     for (configurations) |*configuration| {
         const translation_source = if (target.result.os.tag == .windows)
-            b.fmt("#ifdef SDL_UINT64_C\n#undef SDL_UINT64_C\n#endif\n#define SDL_UINT64_C(c) c ## ULL\n{s}", .{
-                configuration.translation_unit,
-            })
+            b.fmt(
+                "#ifdef SIZE_MAX\n#undef SIZE_MAX\n#endif\n#define SIZE_MAX {s}\n" ++
+                    "#ifdef SDL_UINT64_C\n#undef SDL_UINT64_C\n#endif\n" ++
+                    "#define SDL_UINT64_C(c) c ## ULL\n{s}",
+                .{
+                    if (target.result.ptrBitWidth() == 64) "0xffffffffffffffffULL" else "0xffffffffU",
+                    configuration.translation_unit,
+                },
+            )
         else
             configuration.translation_unit;
         const translation_unit = translation_units.add(
