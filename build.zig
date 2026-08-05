@@ -577,7 +577,6 @@ fn linkMacosSourceDependencies(module: *std.Build.Module) void {
     // SDL's CMake target carries these transitive dependencies, but a Zig consumer linking the
     // produced static archives does not inherit CMake's INTERFACE_LINK_LIBRARIES metadata.
     // Keep the same Apple runtime/framework surface on the Zig module boundary.
-    module.linkSystemLibrary("objc", .{});
     for ([_][]const u8{
         "AudioToolbox",
         "AVFoundation",
