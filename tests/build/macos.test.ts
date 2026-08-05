@@ -4,6 +4,7 @@ import {
   buildDistributionConsumer,
   command,
   run,
+  runScopedExecutable,
   stageDistributionConsumer,
   withTempDirectory,
 } from "./support.ts";
@@ -77,7 +78,7 @@ Deno.test({
             await Deno.stat(`${output}/lib/${framework}.framework/Versions/A/${framework}`);
           }
           await assertRpath(`${output}/bin/sdl-distribution-consumer`, "@executable_path/../lib");
-          await run(`${output}/bin/sdl-distribution-consumer`, [], { cwd: output });
+          await runScopedExecutable(`${output}/bin/sdl-distribution-consumer`, [], { cwd: output });
         });
       }
     });
