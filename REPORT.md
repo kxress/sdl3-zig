@@ -6,15 +6,43 @@ carry every useful contract into one of four honest outcomes:
 
 1. a direct Zig equivalent;
 2. semantic metadata that changes generated bindings;
-3. a clearly additive Zig-native facility; or
+3. a clearly additive Zig/SDL interoperability facility that is not already in Zig; or
 4. a documented exclusion when Zig has no corresponding contract.
 
 A no-op helper is not a port of a C declaration attribute, preprocessor query, or linker directive.
-Likewise, an additive scoped-lock, allocator, logging, or assertion API must not be counted as a
-direct macro binding merely because it was motivated by an excluded macro.
+Likewise, an additive interoperability API must not be counted as a direct macro binding merely
+because it was motivated by an excluded macro. ~~This category justifies scoped-lock, allocator,
+logging, or assertion variants of Zig facilities.~~ _Cancelled: “additive” is not permission to
+duplicate the language or standard library._
 
 The pinned baseline used for this investigation is SDL 3.4.12, Zig 0.16.0, Clang 19.1.7, and CastXML
 0.7.0. Re-run the inventory when any of those inputs change.
+
+## Zig-native cancellation audit
+
+Struck actions below are deliberately retained for later revalidation, but they are not part of the
+implementation roadmap. Each cancellation was checked against the pinned Zig 0.16.0 installation,
+not inferred from a similarly named API:
+
+When a section or slice heading is struck, every subordinate action through the next heading of the
+same or higher level is cancelled; the unstruck body is preserved only as investigation history.
+
+- `std.heap.stackFallback` already constructs caller-owned fixed-buffer storage with an arbitrary
+  fallback `std.mem.Allocator`, including `get`, `resize`, `remap`, and correctly paired `free`. A
+  Zig 0.16.0 compile/run probe constructing the state, allocating, and freeing passed during this
+  audit.
+- Zig's `defer` is the native scoped-cleanup mechanism. Zig 0.16.0's own `std.Io.Mutex` and
+  `std.Io.RwLock` tests use `lock(); defer unlock();`; they do not introduce copyable guard objects.
+- `std.debug.assert` already follows Zig build-mode runtime-safety policy, while `@panic`,
+  `@breakpoint`, `unreachable`, and `@src()` cover the native failure and source-location building
+  blocks.
+- `std.fmt` already checks Zig format strings and tuples at compile time and provides fixed-buffer,
+  allocating, and sentinel-producing output. `std.log` already provides levels, scopes, comptime
+  filtering, formatting, and the root `std_options.logFn` integration point.
+
+The surviving work is limited to contracts Zig cannot supply on SDL's behalf: raw SDL ABI access,
+allocator/callback interoperability, ownership translation, declaration and linkage metadata,
+thread-runtime hooks, and thin adapters at an actual Zig/SDL boundary.
 
 ## Rules for implementation and coverage
 
@@ -25,8 +53,9 @@ The pinned baseline used for this investigation is SDL 3.4.12, Zig 0.16.0, Clang
 - Derive behavior from recurring declaration shape, parsed attributes, and documentation. Do not
   introduce a release-specific list of SDL function names when semantic metadata can express the
   rule.
-- Keep raw operations when an additive safer operation is introduced. For example, adding a scoped
-  mutex guard must not hide the direct lock/unlock bindings.
+- Keep raw operations when an additive interoperability operation is introduced. ~~For example, add
+  a scoped mutex guard while retaining direct lock/unlock bindings.~~ _Cancelled: retain the raw
+  operations and use `defer`; no guard type is introduced._
 - Fail generation when a recognized contract is malformed or cannot be represented safely. Do not
   silently fall back to name guessing.
 - Keep direct, indirect, semantic, and additive coverage separate. An exclusion can remain a direct
@@ -43,18 +72,20 @@ numerator and denominator:
 
 The contract-handling axis records what happens after an intentional exclusion:
 
-| Handling        | Meaning                                                                          | Example                            |
-| --------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
-| Direct          | A public Zig declaration preserves the macro's consumer-visible contract.        | `SDL_UINT64_C` -> `stdinc.uint64c` |
-| Indirect        | A generated wrapper consumes the C mechanism, but no standalone value is useful. | thread begin/end hooks             |
-| Semantic        | An attribute changes analysis, planning, rendering, or validation.               | a format or lock effect            |
-| Additive        | A Zig-native API provides related value without claiming macro compatibility.    | scoped lock guards                 |
-| Unrepresentable | No honest consumer-facing or generator operation exists.                         | token stringification              |
+| Handling        | Meaning                                                                                | Example                            |
+| --------------- | -------------------------------------------------------------------------------------- | ---------------------------------- |
+| Direct          | A public Zig declaration preserves the macro's consumer-visible contract.              | `SDL_UINT64_C` -> `stdinc.uint64c` |
+| Indirect        | A generated wrapper consumes the C mechanism, but no standalone value is useful.       | thread begin/end hooks             |
+| Semantic        | An attribute changes analysis, planning, rendering, or validation.                     | a format contract                  |
+| Additive        | A Zig/SDL adapter provides value absent from Zig without claiming macro compatibility. | ~~scoped lock guards~~ _Cancelled_ |
+| Unrepresentable | No honest consumer-facing or generator operation exists.                               | token stringification              |
 
-These axes are deliberately not interchangeable. For example, `SDL_ACQUIRE` remains **Intentional**
-in the inventory while its applications can have **Semantic** handling and its generated guards can
-have an **Additive** relation. The report may show all three facts, but only a genuine direct
-declaration changes the direct coverage percentage.
+These axes are deliberately not interchangeable. ~~For example, `SDL_ACQUIRE` remains
+**Intentional** in the inventory while its applications can have **Semantic** handling and its
+generated guards can have an **Additive** relation.~~ _Cancelled: `SDL_ACQUIRE` remains intentional
+and unrepresentable in Zig; documentation can retain the upstream thread-safety statement without
+creating guards or claiming semantic enforcement._ Only a genuine direct declaration changes the
+direct coverage percentage.
 
 ## Current-state evidence
 
@@ -73,28 +104,32 @@ The current tree is ahead of the old exclusion narrative in several areas:
 - The generated API already uses Zig builtins for byte swapping, checked size addition and
   multiplication, breakpoint helpers, and several other macro bodies.
 
-Those implementations need characterization and hardening before new surfaces are added. The most
-important known gaps are:
+Those implementations need characterization and hardening before new surfaces are added. This
+includes the 13 existing direct ports: regression coverage maintains already-shipped public output
+but does not justify adding more C-spelling aliases for Zig builtins. The most important known gaps
+are:
 
-| Area                         | Current gap                                                                                                                                                      |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Allocator bridge ABI         | Callbacks hard-code `c_ulong`; SDL declares `size_t`, which is not the same ABI type on 64-bit Windows.                                                          |
-| SDL allocator alignment      | The allocator selects `SDL_malloc` up to `max_align_t`, but SDL only guarantees `min(alignof(max_align_t), 2 * sizeof(void *))`.                                 |
-| Allocator recursion          | Installing `sdl.allocator` as SDL's own backing allocator recurses through `SDL_malloc`.                                                                         |
-| Allocator installation proof | `SDL_GetNumAllocations` can return `-1`, and zero proves only that no counted allocations remain, not that SDL has never allocated.                              |
-| Allocator tests              | The bridge fixture runs natively and does not prove callback ABI, alignment thresholds, or compilation across the full target matrix.                            |
-| Format source of truth       | Format kind is guessed from `name.includes("scanf")`; the format parameter is assumed to be the final fixed argument.                                            |
-| Format completeness          | The parser does not yet model the full SDL-supported printf/scanf grammar, especially scanf `hh`/`h`, `%n` length, positional arguments, and difficult scansets. |
-| Format tests                 | Existing semantic tests mostly check generated text. They do not compile a matrix of valid and invalid calls.                                                    |
-| Lock metadata                | CastXML erases the thread-safety attributes in the normal analysis configuration.                                                                                |
-| Declaration attributes       | Most visibility, format, deprecation, analyzer, and result-use attributes are not represented in the semantic model.                                             |
+| Area                         | Current gap                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Allocator bridge ABI         | Callbacks hard-code `c_ulong`; SDL declares `size_t`, which is not the same ABI type on 64-bit Windows.                                                                                                                                                                                                                                                                                                        |
+| SDL allocator alignment      | The allocator selects `SDL_malloc` up to `max_align_t`, but SDL only guarantees `min(alignof(max_align_t), 2 * sizeof(void *))`.                                                                                                                                                                                                                                                                               |
+| Allocator recursion          | Installing `sdl.allocator` as SDL's own backing allocator recurses through `SDL_malloc`.                                                                                                                                                                                                                                                                                                                       |
+| Allocator installation proof | `SDL_GetNumAllocations` can return `-1`, and zero proves only that no counted allocations remain, not that SDL has never allocated.                                                                                                                                                                                                                                                                            |
+| Allocator tests              | The bridge fixture runs natively and does not prove callback ABI, alignment thresholds, or compilation across the full target matrix.                                                                                                                                                                                                                                                                          |
+| Format source of truth       | Format kind is guessed from `name.includes("scanf")`; the format parameter is assumed to be the final fixed argument.                                                                                                                                                                                                                                                                                          |
+| Format completeness          | ~~The parser does not yet model the full SDL-supported printf/scanf grammar, especially scanf `hh`/`h`, `%n` length, positional arguments, and difficult scansets.~~ _Cancelled: completing a second C `printf`/`scanf` implementation is the wrong direction when Zig callers have `std.fmt`, `std.Io`, and typed parsers; preserve raw ABI access and fail unsupported convenience-wrapper formats instead._ |
+| Format tests                 | Existing semantic tests mostly check generated text. They do not compile a matrix of valid and invalid calls within the accepted format subset.                                                                                                                                                                                                                                                                |
+| Lock metadata                | ~~CastXML erases the thread-safety attributes in the normal analysis configuration.~~ _Cancelled as an implementation gap: no accepted feature consumes capability metadata; preserve upstream lock documentation and raw calls._                                                                                                                                                                              |
+| Declaration attributes       | Most visibility, format, deprecation, analyzer, and result-use attributes are not represented in the semantic model.                                                                                                                                                                                                                                                                                           |
 
 These are plan prerequisites, not reasons to discard the existing work.
 
 ## Shared attribute-analysis foundation
 
-Allocator annotations, format checking, lock effects, and declaration attributes should use one
-supplemental semantic pipeline.
+Allocator annotations, format checking, ~~lock effects,~~ and declaration attributes should use one
+supplemental semantic pipeline. _Cancelled: lock-effect ingestion existed only to feed the struck
+guard/capability system; SDL's raw lock declarations and documentation remain available without a
+Zig-side capability model._
 
 ### Why CastXML alone is insufficient
 
@@ -128,30 +163,31 @@ DeclarationSemantics
   returnFlow: normal | no_return | analyzer_no_return
   resultUse: ordinary | should_use
   format: optional FormatContract
-  lockEffects: zero or more LockEffect
 
 FormatContract
   dialect: printf | scanf
   formatParameter: zero-based parameter index
   firstVariadicParameter: zero-based index | va_list
-
-LockEffect
-  kind: acquire | try_acquire | release | require | exclude | assert | return | order
-  mode: exclusive | shared | generic
-  capability: parameter(index) | declaration(identity) | return_value | this
-  successValue: optional boolean
 ```
 
-Use names appropriate to the repository, but preserve these distinctions.
+~~`DeclarationSemantics.lockEffects: []LockEffect`, including effect kind, shared/exclusive mode,
+capability identity, and try-success value.~~ _Cancelled: Zig 0.16.0 has no declaration capability
+system, and synthesizing copyable guards plus runtime tokens would not recreate Clang's static
+contract. Native `defer` around the raw SDL lock and unlock operations is the supported scoped
+pattern._
+
+Use names appropriate to the repository, but preserve the accepted distinctions.
 
 ### Acquisition and merge steps
 
 1. Add a focused Clang-attribute command beside the CastXML and preprocessor commands in
    `analysis.ts`. It must reuse the same include paths, target identities, defines, and public
    source filtering.
-2. Run the supplemental pass with `SDL_THREAD_SAFETY_ANALYSIS=1`. Do not add this define to the
+2. ~~Run the supplemental pass with `SDL_THREAD_SAFETY_ANALYSIS=1`. Do not add this define to the
    ordinary ABI pass; the joystick header intentionally exposes an analyzer-only, non-linkable
-   symbol under that define.
+   symbol under that define.~~ _Cancelled: no accepted Zig feature consumes Clang capability effects
+   after the guard/capability workstream was rejected, so enabling analyzer-only header paths adds
+   acquisition complexity without a public contract._
 3. Traverse Clang JSON and retain only public declarations and recognized attribute nodes. Read
    macro provenance from expansion locations when Clang does not serialize a needed argument.
 4. Match supplemental declarations to CastXML declarations by normalized file, line, name, and
@@ -160,8 +196,10 @@ Use names appropriate to the repository, but preserve these distinctions.
    on contradictory semantic contracts.
 6. Pass normalized metadata through `analysis.ts` and `function-plan.ts`; rendering must not
    rediscover it from function names or comments.
-7. Add a small synthetic header fixture containing every supported attribute kind and malformed
-   cases. Test parameter-index conversion carefully because the C macros use one-based indexes.
+7. Add a small synthetic header fixture containing every accepted attribute kind and malformed
+   cases. Test parameter-index conversion carefully because the C format macros use one-based
+   indexes. ~~Include all 20 lock/capability spellings.~~ _Cancelled: definitions with no Zig-side
+   consumer belong in explicit exclusion evidence, not a semantic implementation fixture._
 8. Add an inventory assertion for the pinned SDL baseline so an upstream attribute addition is a
    reviewed change instead of silently ignored input.
 
@@ -184,7 +222,12 @@ The already-covered macros still need contract tests so later semantic work does
 Keep these as direct coverage only while the release-result tests prove their actual contract. A
 name existing in a namespace is not sufficient evidence.
 
-## Workstream A: Zig-specific lock and capability system
+## ~~Workstream A: Zig-specific lock and capability system~~
+
+_Cancelled: keep the raw SDL lock, try-lock, unlock, condition-wait, and destroy operations, and use
+Zig's native `defer` for scoped release. Copyable guard values, guarded containers, and a TLS
+runtime capability tracker would be a weaker C/Rust-like subsystem rather than a Zig 0.16.0
+facility._
 
 ### Upstream scope
 
@@ -230,11 +273,15 @@ The complete planned mapping is:
 | `SDL_RETURN_CAPABILITY`         | result aliases a capability                 | Capability accessor retaining identity                    |
 | `SDL_NO_THREAD_SAFETY_ANALYSIS` | analyzer escape hatch                       | Explicit raw/unchecked path with no false safety claim    |
 
-Clang's analysis is static and declaration-attached. Zig 0.16.0 has no equivalent declaration
+Clang's analysis is static and declaration-attached. ~~Zig 0.16.0 has no equivalent declaration
 attribute system, so the Zig feature should combine type-directed scoped locking with optional
-runtime diagnostics. It must not be described as a complete port of Clang's analyzer.
+runtime diagnostics.~~ _Cancelled: a runtime approximation does not preserve a static analyzer
+contract and duplicates Zig's ordinary `defer`-based lock use._
 
-### Phase A1: derive scoped operations from lock effects
+### ~~Phase A1: derive scoped operations from lock effects~~
+
+_Cancelled: `lock(); defer unlock();` already gives lexical cleanup without introducing a copyable
+guard whose lifetime and identity Zig cannot enforce._
 
 Teach `function-plan.ts` to group matching acquire/try/release effects by capability parameter and
 handle type. For the current SDL declarations, generate additive methods similar to:
@@ -272,7 +319,11 @@ The final names should be settled with the rest of the handle naming policy. Req
 Zig values are copyable and `defer` is not mandatory. Document that a guard must not be copied, and
 make debug tracking detect double release where possible. Do not claim Rust-like borrow checking.
 
-### Phase A2: capability-protected Zig data
+### ~~Phase A2: capability-protected Zig data~~
+
+_Cancelled: private fields and explicit methods can already enforce encapsulation, while lock
+ownership remains a program invariant in Zig 0.16.0; runtime token matching would not provide the
+static capability guarantee advertised by the C attributes._
 
 Add a separate, explicitly Zig-native generic layer after guards are stable:
 
@@ -289,7 +340,11 @@ This layer is the useful Zig counterpart for `SDL_CAPABILITY`, `SDL_GUARDED_BY`,
 `SDL_PT_GUARDED_BY`, `SDL_REQUIRES`, and `SDL_REQUIRES_SHARED`. It is additive and should live in
 generated support owned by the generic lock-effect rule, not in a handwritten SDL symbol table.
 
-### Phase A3: optional runtime lock diagnostics
+### ~~Phase A3: optional runtime lock diagnostics~~
+
+_Cancelled: a new TLS tracker, rank system, and thread-exit protocol is not SDL binding work and
+would duplicate safety policy better owned by the application or a dedicated synchronization
+package._
 
 Provide a safety-enabled tracker only if it remains allocation-free on lock paths and compiles for
 every configured target. It should track, per thread:
@@ -310,7 +365,10 @@ path is the counterpart for `SDL_NO_THREAD_SAFETY_ANALYSIS`.
 should map to tracker/token operations when an upstream declaration uses them. Do not invent
 behavior for unused macro definitions.
 
-### Lock-system validation
+### ~~Lock-system validation~~
+
+_Cancelled with Workstream A: retain ordinary raw-operation and ABI tests, but do not build the
+fixture matrix for a public guard/capability surface that will not exist._
 
 - Unit-test normalization of all 20 macro kinds with a synthetic header.
 - Assert the eight pinned SDL effects listed above, including success value and shared/exclusive
@@ -330,11 +388,14 @@ There are three different directions and they need separate names and documentat
    memory functions.
 2. **Zig to SDL:** `AllocatorBridge` replaces SDL's process-wide memory callbacks with a permanent
    consumer `std.mem.Allocator`.
-3. **Caller-scoped stack-first:** a caller-owned fixed buffer services small temporary allocations
-   and falls back to `sdl.allocator` for larger ones.
+3. ~~**Caller-scoped stack-first:** a caller-owned fixed buffer services small temporary allocations
+   and falls back to `sdl.allocator` for larger ones.~~ _Cancelled: callers can create
+   `var scratch = std.heap.stackFallback(N, sdl.allocator);` and then pass `scratch.get()` to every
+   allocator-taking wrapper._
 
-The third option is the useful Zig answer to `SDL_stack_alloc`/`SDL_stack_free`; it is not a literal
-macro port.
+~~The third option is the useful Zig answer to `SDL_stack_alloc`/`SDL_stack_free`; it is not a
+literal macro port.~~ _Cancelled: a package alias around the exact standard-library constructor adds
+an SDL-flavored name but no SDL interoperability or safety contract._
 
 ### Phase B1: harden `sdl.allocator`
 
@@ -381,8 +442,8 @@ macro port.
 ### Phase B3: prove every allocator-taking API is allocator-generic
 
 The 50 current wrappers should accept `std.testing.allocator`, `sdl.allocator`, a fixed-buffer
-allocator, and a stack-fallback allocator without special cases. Test at least one representative of
-each generated ownership transformation:
+allocator, and a directly constructed `std.heap.stackFallback` allocator without special cases. Test
+at least one representative of each generated ownership transformation:
 
 - owned sentinel string;
 - owned byte slice;
@@ -401,7 +462,11 @@ source allocation. That is correct but potentially redundant. Treat zero-copy ad
 optimization requiring allocator-identity, ownership, length, alignment, and failure tests; do not
 make it part of the first correctness slice.
 
-### Phase B4: expose a safe stack-first option
+### ~~Phase B4: expose a safe stack-first option~~
+
+_Cancelled: Zig 0.16.0 already exposes this exact allocator composition as `std.heap.stackFallback`;
+documentation may show it with `sdl.allocator`, but generated code and a second public name should
+not be added._
 
 Prefer a small wrapper around Zig's caller-owned `std.heap.stackFallback` rather than `alloca`:
 
@@ -467,6 +532,10 @@ through a stable string-keyed runtime API.
 
 ### Phase C1: make C-format wrappers attribute-driven
 
+This phase remains because it constrains already-shipped wrappers at the C variadic ABI boundary; it
+is not a second Zig formatting frontend. It may validate only the existing proven subset and must
+fail or preserve raw ABI access outside that subset.
+
 1. Populate `FormatContract` from the supplemental attribute pass.
 2. Require the annotated format parameter to be a compatible narrow or wide string type.
 3. Require the variadic index to agree with the function shape; require `FUNCV` declarations to
@@ -479,7 +548,12 @@ through a stable string-keyed runtime API.
 7. Keep format macros excluded as standalone public names while reporting their declaration
    applications as semantic coverage.
 
-### Phase C2: complete and test the C-format validator
+### ~~Phase C2: complete and test the C-format validator~~
+
+_Cancelled: do not grow the existing convenience checker into a complete C `printf`/`scanf`
+implementation. Attribute-driven planning may keep the proven subset and must reject unsupported
+formats; Zig-native callers should use `std.fmt`/`std.Io` and typed parsing, with the raw SDL ABI
+remaining available for exact C behavior._
 
 Build a table-driven grammar and type model rather than extending a single switch ad hoc. Cover:
 
@@ -498,19 +572,22 @@ argument count, wrong promotion, wrong signedness/length, non-sentinel `%s`, imm
 wrong `%p`, malformed format, and unsupported conversion. Run the valid calls against fake ABI
 functions to prove the values crossing the C boundary, not just compilation.
 
-### Phase C3: additive Zig-format logging APIs
+### Phase C3: thin `std.log` backend only
 
-Keep the existing C-format wrappers. Add a separate surface whose format string and tuple use Zig
-formatting, for example:
+Keep the existing C-format wrappers. ~~Add a separate surface whose format string and tuple use Zig
+formatting, for example:~~ _Cancelled: `std.log` already is the Zig-format logging surface; this
+package should provide only an opt-in sink adapter when the application wants SDL routing._
 
-```zig
-sdl.log.messageFmt(.application, .info, "loaded {d} assets from {s}", .{ count, path });
-```
+~~`sdl.log.messageFmt(.application, .info, "loaded {d} assets from {s}", .{ count, path });`~~
+_Cancelled: install `sdl.log.stdLogFn` and call `std.log`, or format explicitly with `std.fmt`
+before calling the raw SDL category/priority API._
 
-Recommended implementation constraints:
+~~Recommended implementation constraints for the second formatting entry point:~~ _Cancelled with
+`messageFmt`; the surviving `stdLogFn` adapter may use the same bounded-buffer and fixed-`"%s"`
+technique internally, but it must not expose another public formatting API._
 
 - format into a caller-local fixed buffer first;
-- use the stack-first allocator from Workstream B with `sdl.allocator` fallback for larger messages;
+- use `std.heap.stackFallback(N, sdl.allocator)` directly if stack-first internal storage is useful;
 - produce a sentinel-terminated UTF-8 string;
 - forward to SDL through a fixed C format such as `"%s"`, so user text is never reinterpreted as a C
   format string;
@@ -544,7 +621,7 @@ public helper.
 
 | Macro                   | Pinned use                                          | Zig treatment to implement or prove                                                                                                                                                                                                                    |
 | ----------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SDL_ANALYZER_NORETURN` | `SDL_ReportAssertion` only                          | Preserve its real return type. It can return, so mapping it to Zig `noreturn` would be incorrect. Record it as analyzer metadata and consume it only in assertion planning/docs.                                                                       |
+| `SDL_ANALYZER_NORETURN` | `SDL_ReportAssertion` only                          | Preserve its real return type. It can return, so mapping it to Zig `noreturn` would be incorrect. Record it as analyzer metadata for documentation only; ~~consume it in generated assertion planning~~ _cancelled with the assertion facility_.       |
 | `SDL_DECLSPEC`          | Exported public SDL runtime functions               | Keep ABI imports/exports, calling convention, and linker visibility in the C import/build boundary. Generated convenience wrappers are ordinary Zig `pub` declarations, not exported SDL symbols. Add cross-target linkage tests.                      |
 | `SDL_DEPRECATED`        | No applied declaration with old names disabled      | Capture `DeprecatedAttr` and Doxygen deprecation text. Emit a prominent doc notice and replacement link. Zig 0.16.0 has no warning-only declaration attribute; do not turn compatibility into a compile error.                                         |
 | `SDL_FALLTHROUGH`       | No public-header body use in this baseline          | Zig switch branches do not fall through. When translating a macro/body, combine cases or share a labeled block. No standalone declaration is needed.                                                                                                   |
@@ -584,7 +661,12 @@ Implement coverage accounting, not new public values:
 4. Add release-result assertions for both calls and compile the fixture for Windows and Linux.
 5. Do not add `beginThreadFunction` or `endThreadFunction` to a public namespace.
 
-### Zig-native SDL assertion integration
+### ~~Zig-native SDL assertion integration~~
+
+_Cancelled: use `std.debug.assert`, `@panic`, `@breakpoint`, `unreachable`, compile-time build
+options, and `@src()` for Zig assertions. Consumers needing SDL's handler/report-list behavior can
+call the raw SDL assertion functions; the binding should not recreate the six C macros as a second
+Zig assertion framework._
 
 The exact excluded family is `SDL_assert`, `SDL_assert_release`, `SDL_assert_paranoid`,
 `SDL_assert_always`, `SDL_enabled_assert`, and `SDL_disabled_assert`. The six macros have useful
@@ -753,19 +835,15 @@ flowchart LR
     S01 --> S02["S02 Coverage model"]
     S02 --> S03["S03 Attribute analysis"]
     S02 --> S04["S04 Allocator correctness"]
-    S04 --> S05["S05 Allocator consumers"] --> S06["S06 Stack fallback"]
-    S03 --> S07["S07 Format metadata"] --> S08["S08 Format grammar"]
-    S06 --> S09["S09 Zig logging"]
-    S08 --> S09
-    S03 --> S10["S10 Scoped locks"] --> S11["S11 Guarded data"]
-    S03 --> S12["S12 Declaration attributes"] --> S13["S13 Assertions"]
+    S04 --> S05["S05 Allocator consumers"]
+    S04 --> S09["S09 std.log to SDL backend"]
+    S03 --> S07["S07 Format metadata"]
+    S03 --> S12["S12 Declaration attributes"]
     S03 --> S14["S14 Remaining exclusions"]
     S05 --> S15["S15 Release audit"]
-    S06 --> S15
+    S07 --> S15
     S09 --> S15
-    S11 --> S15
     S12 --> S15
-    S13 --> S15
     S14 --> S15
 ```
 
@@ -774,28 +852,31 @@ flowchart LR
 This table is the status authority for the roadmap. Update a row only when its exit criteria and
 applicable gates have passed; explanatory prose elsewhere does not mark a slice complete.
 
-| Slice | Deliverable                        | Status      | Required predecessor | Completion evidence                          |
-| ----- | ---------------------------------- | ----------- | -------------------- | -------------------------------------------- |
-| P00   | Executable full validation gate    | Not started | none                 | unmodified baseline passes `deno task check` |
-| S01   | Current-result characterization    | Not started | P00                  | focused tests and clean baseline             |
-| S02   | Relational coverage model          | Not started | S01                  | generated report and coverage tests          |
-| S03   | Supplemental attribute analysis    | Not started | S02                  | synthetic fixture and pinned inventory       |
-| S04   | Allocator and bridge correctness   | Not started | S02                  | ABI/runtime fixture and target compiles      |
-| S05   | Allocator-generic result ownership | Not started | S04                  | transformation/OOM matrix                    |
-| S06   | Caller-scoped stack fallback       | Not started | S05                  | stack/fallback lifetime fixture              |
-| S07   | Attribute-driven format plans      | Not started | S03                  | 27 application inventory                     |
-| S08   | Complete C-format validation       | Not started | S07                  | positive/negative/runtime grammar matrix     |
-| S09   | Zig-format logging                 | Not started | S06, S08             | logging callback and failure fixture         |
-| S10   | Scoped lock guards                 | Not started | S03                  | eight-effect lock fixture                    |
-| S11   | Guarded values and diagnostics     | Not started | S10                  | identity/thread/rank fixtures                |
-| S12   | Declaration attribute consumption  | Not started | S03                  | per-attribute semantic and linkage tests     |
-| S13   | Assertion prototype decision       | Not started | S12                  | accepted fixture or recorded rejection       |
-| S14   | Remaining exclusion disposition    | Not started | S03                  | contradiction tests and no-code evidence     |
-| S15   | Release-result audit               | Not started | all accepted slices  | full matrix and reproducible archive         |
+| Slice | Deliverable                        | Status                      | Required predecessor | Completion evidence                                                                     |
+| ----- | ---------------------------------- | --------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| P00   | Executable full validation gate    | Not started                 | none                 | unmodified baseline passes `deno task check`                                            |
+| S01   | Current-result characterization    | Not started                 | P00                  | focused tests and clean baseline                                                        |
+| S02   | Relational coverage model          | Not started                 | S01                  | generated report and coverage tests                                                     |
+| S03   | Supplemental attribute analysis    | Not started                 | S02                  | synthetic fixture and pinned inventory                                                  |
+| S04   | Allocator and bridge correctness   | Not started                 | S02                  | ABI/runtime fixture and target compiles                                                 |
+| S05   | Allocator-generic result ownership | Not started                 | S04                  | transformation/OOM matrix                                                               |
+| S06   | ~~Caller-scoped stack fallback~~   | ~~Not started~~ _Cancelled_ | S05                  | ~~stack/fallback lifetime fixture~~ _Use `std.heap.stackFallback` directly._            |
+| S07   | Attribute-driven format plans      | Not started                 | S03                  | 27 application inventory                                                                |
+| S08   | ~~Complete C-format validation~~   | ~~Not started~~ _Cancelled_ | S07                  | ~~positive/negative/runtime grammar matrix~~ _Do not implement libc formatting._        |
+| S09   | `std.log` to SDL backend           | Not started                 | S04                  | logging callback and failure fixture                                                    |
+| S10   | ~~Scoped lock guards~~             | ~~Not started~~ _Cancelled_ | S03                  | ~~eight-effect lock fixture~~ _Use raw locks with `defer`._                             |
+| S11   | ~~Guarded values and diagnostics~~ | ~~Not started~~ _Cancelled_ | S10                  | ~~identity/thread/rank fixtures~~ _No binding-owned capability runtime._                |
+| S12   | Declaration attribute consumption  | Not started                 | S03                  | per-attribute semantic and linkage tests                                                |
+| S13   | ~~Assertion prototype decision~~   | ~~Not started~~ _Cancelled_ | S12                  | ~~accepted fixture or recorded rejection~~ _Use Zig assertions; retain raw SDL access._ |
+| S14   | Remaining exclusion disposition    | Not started                 | S03                  | contradiction tests and no-code evidence                                                |
+| S15   | Release-result audit               | Not started                 | all accepted slices  | full matrix and reproducible archive                                                    |
 
-Allowed status values are **Not started**, **In progress**, **Blocked**, **Rejected by gate**, and
-**Complete**. A rejected additive prototype can satisfy a dependency only when the corresponding
-intentional exclusion, failed proof, and absence of a public generated artifact are all recorded.
+Allowed status values are **Not started**, **In progress**, **Blocked**, **Rejected by gate**,
+**Cancelled**, and **Complete**. **Cancelled** records this Zig-native audit and is not an
+implementation dependency. ~~A rejected additive prototype can satisfy a dependency only when the
+corresponding intentional exclusion, failed proof, and absence of a public generated artifact are
+all recorded.~~ _Cancelled for the struck slices: they have an affirmative native Zig replacement,
+not a failed prototype to execute._
 
 The land order is:
 
@@ -811,28 +892,33 @@ The land order is:
    overflow, and callback failure behavior.
 5. **S05 Allocator consumers:** prove every ownership transformation works with arbitrary
    `std.mem.Allocator` implementations.
-6. **S06 Stack fallback:** add and validate the caller-scoped stack-first allocator.
+6. ~~**S06 Stack fallback:** add and validate the caller-scoped stack-first allocator.~~ _Cancelled:
+   `std.heap.stackFallback` is already allocator-generic and accepts `sdl.allocator`._
 7. **S07 Format metadata:** make every annotated wrapper use `FormatContract`, with no name or
    parameter-position guessing.
-8. **S08 Format grammar:** complete and execute the printf/scanf grammar and type matrix.
-9. **S09 Zig logging:** add Zig-format logging and an opt-in `std.log` backend.
-10. **S10 Scoped locks:** generate mutex and RW-lock guards from normalized lock effects.
-11. **S11 Guarded data and diagnostics:** add capability-protected values first, then the optional
-    allocation-free runtime tracker.
+8. ~~**S08 Format grammar:** complete and execute the printf/scanf grammar and type matrix.~~
+   _Cancelled: reject formats outside the proven wrapper subset instead of cloning libc grammar._
+9. **S09 SDL logging backend:** add only an opt-in `std.log` backend; do not add another Zig-format
+   entry point.
+10. ~~**S10 Scoped locks:** generate mutex and RW-lock guards from normalized lock effects.~~
+    _Cancelled: raw lock/unlock plus `defer` is the Zig-native scoped form._
+11. ~~**S11 Guarded data and diagnostics:** add capability-protected values first, then the optional
+    allocation-free runtime tracker.~~ _Cancelled: this cannot reproduce static capability checking
+    and is outside binding interoperability._
 12. **S12 Declaration attributes:** consume control-flow, deprecation, result-use, visibility,
     inline, and unused metadata in small sub-slices.
-13. **S13 Assertions:** prototype the additive assertion facility and land it only if the storage,
-    retry, source, and compile-time-elision proofs all pass.
+13. ~~**S13 Assertions:** prototype the additive assertion facility and land it only if the storage,
+    retry, source, and compile-time-elision proofs all pass.~~ _Cancelled: use Zig's native
+    assertion and failure primitives; exact SDL behavior remains reachable through the raw API._
 14. **S14 Remaining exclusions:** add allocation-annotation consistency checks and make explicit
     no-code decisions for stringification and ELF-note machinery.
 15. **S15 Release audit:** regenerate every library, run every applicable platform gate, audit the
     coverage graph, and prepare a binding revision only if a release is being cut.
 
-After S03, S04-S06 can run independently of S07-S08, S10-S11, and S12. S09 waits for both S06 and
-S08. S13 waits for the return-flow work in S12. S15 waits for all accepted slices, including an
-explicit rejected-prototype result for any gated additive facility. Avoid parallel edits to
-`analysis.ts`, `function-plan.ts`, or `render.ts`; those are integration choke points even when the
-public features appear unrelated.
+After S03, S04-S05 can run independently of S07 and S12. S09 waits for S04 because it may use the
+hardened SDL allocator as an internal long-message fallback. S15 waits for every non-cancelled
+slice. Avoid parallel edits to `analysis.ts`, `function-plan.ts`, or `render.ts`; those are
+integration choke points even when the public features appear unrelated.
 
 ## Slice delivery protocol
 
@@ -929,24 +1015,27 @@ covered, 65 intentional, and zero limitations until a later slice adds a genuine
   makes that file harder to review, put the focused parser in `scripts/codegen/clang-attributes.ts`
   and expose only normalized records to `analysis.ts`.
 - Invoke Clang with the same target, include directories, public-header filters, and ordinary
-  defines as CastXML, plus `SDL_THREAD_SAFETY_ANALYSIS=1` only for the supplemental pass.
-- Normalize format, capability, deprecation, result-use, flow, visibility, inline, unused,
-  allocation-size, alignment, and malloc-like attributes. Retain source spelling/provenance when the
-  JSON node does not contain a normalized argument.
+  defines as CastXML. ~~Add `SDL_THREAD_SAFETY_ANALYSIS=1` for a second capability pass.~~
+  _Cancelled: no accepted generated feature consumes those analyzer-only effects._
+- Normalize format, ~~capability,~~ deprecation, result-use, flow, visibility, inline, unused,
+  allocation-size, alignment, and malloc-like attributes. _Cancelled: capability nodes are explicit
+  no-code exclusions after Workstream A; do not carry dead semantic data through the generator._
 - Match supplemental declarations to CastXML by normalized public file, line, C name, and signature.
   Emit an actionable error for zero matches, multiple matches, malformed parameter indexes, and
   contradictory target contracts.
 - Merge metadata across all 11 targets and carry it through `ApiModel` and `generator.ts` without
   exposing raw Clang JSON to planning or rendering.
-- Add `tests/codegen/fixtures/attributes.h` and a focused analysis test with every supported
-  spelling, unused definitions, malformed applications, and target-varying cases.
+- Add `tests/codegen/fixtures/attributes.h` and a focused analysis test with every accepted
+  spelling, unused definitions, malformed applications, and target-varying cases. ~~Model all 20
+  capability spellings.~~ _Cancelled: coverage evidence may inventory the definitions without
+  implementing a normalized capability subsystem._
 
-**Evidence and exit:** the pinned inventory identifies all 27 format applications and all eight lock
-effects, including shared/exclusive mode, try-lock success value, format dialect, format parameter,
-and varargs/`va_list` index. Analyzer-only `SDL_ThreadID` does not enter the ABI model. Reordered
-Clang JSON and changed process-local IDs do not change the merged model. Run
-`deno task test:bindings`; inspect the serialized test facts rather than committing a raw
-full-header AST dump.
+**Evidence and exit:** the pinned inventory identifies all 27 format applications, with format
+dialect, format parameter, and varargs/`va_list` index. ~~It also normalizes all eight lock effects,
+including shared/exclusive mode and try-lock success value.~~ _Cancelled: those effects have no
+accepted Zig consumer._ Analyzer-only `SDL_ThreadID` does not enter the ABI model. Reordered Clang
+JSON and changed process-local IDs do not change the merged model. Run `deno task test:bindings`;
+inspect the serialized test facts rather than committing a raw full-header AST dump.
 
 ### S04: correct the allocator and bridge ABI
 
@@ -982,9 +1071,10 @@ analysis targets. Run the focused allocator bridge test, `deno task test:build`,
   bookkeeping, cleanup order, and allocator retention in owning result values.
 - Extend `tests/codegen/semantic_rules.test.ts` and a fake-ABI build fixture with one representative
   for every transformation listed in Workstream B3.
-- Use `std.testing.allocator`, `sdl.allocator`, a fixed-buffer allocator, and the later
-  stack-fallback interface through the same public signatures. The stack-fallback case can be
-  completed in S06.
+- Use `std.testing.allocator`, `sdl.allocator`, a fixed-buffer allocator, and a directly constructed
+  `std.heap.stackFallback(N, sdl.allocator)` state through the same public signatures. ~~Complete a
+  generated stack-fallback interface in S06.~~ _Cancelled: the standard allocator itself is the
+  required generic-consumer proof._
 - Make OOM tests fail at every allocation step so partial strings, records, buffers, and source SDL
   allocations are released exactly once.
 - Update generated documentation to name the allocator that owns the result and the required
@@ -994,7 +1084,11 @@ analysis targets. Run the focused allocator bridge test, `deno task test:build`,
 SDL-owned pointer escapes after success or error; all result types that need later cleanup retain
 the original allocator. Run `deno task test:bindings` and the new native fake-ABI fixture.
 
-### S06: add the caller-scoped stack fallback
+### ~~S06: add the caller-scoped stack fallback~~
+
+_Cancelled: this detailed slice is retained only for later revalidation. Zig 0.16.0's
+`std.heap.stackFallback` already implements the state, fixed buffer, fallback routing, resize,
+remap, ownership discrimination, and free pairing described below._
 
 **Dependencies:** S05.
 
@@ -1039,7 +1133,11 @@ printf-named scanf function and a non-final format parameter prove names and pos
 irrelevant; unannotated variadic declarations retain a conservative raw path or fail according to
 explicit policy. Run `deno task test:bindings`.
 
-### S08: complete the C-format grammar and type matrix
+### ~~S08: complete the C-format grammar and type matrix~~
+
+_Cancelled: completing the grammar would turn the binding generator into a libc-format checker. Keep
+S07's attribute-derived declaration facts and the existing proven subset; reject unsupported formats
+and direct Zig code toward `std.fmt`/`std.Io` or the raw C ABI._
 
 **Dependencies:** S07.
 
@@ -1061,16 +1159,20 @@ explicit policy. Run `deno task test:bindings`.
 values at runtime; no case is selected by function name; `FUNCV` wrappers remain direct
 `std.builtin.VaList` calls. Run `deno task test:bindings` and the focused native fixture.
 
-### S09: add Zig-format logging without changing C-format calls
+### S09: add a thin `std.log` to SDL backend
 
-**Dependencies:** S06 and S08.
+**Dependencies:** ~~S06 and S08~~ S04. _The cancelled stack allocator and complete C grammar are not
+needed; an adapter can use `std.fmt` through the `std.Options.logFn` signature and the hardened
+`sdl.allocator` only for internal overflow storage._
 
 **Changes:**
 
-- Settle the public method name, OOM behavior, and scope mapping with the S09 fixtures first.
-- Generate the Zig-format entry point beside existing SDL logging wrappers. Format into a local
-  buffer, fall back through the S06 allocator, add a sentinel, and pass the result to SDL using a
-  fixed `"%s"` C format.
+- ~~Settle a second public Zig-format method name with the S09 fixtures.~~ _Cancelled: `std.log` is
+  the public Zig-format API._ Settle only OOM behavior and scope mapping.
+- ~~Generate a Zig-format entry point beside existing SDL logging wrappers.~~ _Cancelled: the only
+  new public declaration is the backend function matching `std.Options.logFn`._ Internally format
+  into a local buffer, fall back through hardened `sdl.allocator` if needed, add a sentinel, and
+  pass the result to SDL using a fixed `"%s"` C format.
 - Generate a function matching Zig 0.16.0's `std.Options.logFn`; require the application to install
   it through root `std_options`.
 - Prevent recursive logging on allocation/format failure and while SDL invokes a custom output
@@ -1079,12 +1181,15 @@ values at runtime; no case is selected by function name; `FUNCV` wrappers remain
   `std.log.Level` values.
 
 **Evidence and exit:** exact text, percent characters, every mapped level, default and named scopes,
-long messages, OOM policy, custom callback, and multi-threaded calls pass. Existing C-format and
-`VaList` wrappers remain source-compatible. Record additive coverage without changing the four
-format macros' intentional inventory status. Run `deno task test:bindings` and the native logging
-fixture.
+long messages, OOM policy, custom callback, and multi-threaded calls pass through `std.log`.
+Existing C-format and `VaList` wrappers remain source-compatible. Record the adapter as
+interoperability, without changing the four format macros' intentional inventory status. Run
+`deno task test:bindings` and the native logging fixture.
 
-### S10: generate scoped mutex and RW-lock operations
+### ~~S10: generate scoped mutex and RW-lock operations~~
+
+_Cancelled: use the existing raw SDL methods with `defer` and retain their ABI/behavior tests. Do
+not generate copyable mutex or RW-lock guard values._
 
 **Dependencies:** S03.
 
@@ -1107,7 +1212,11 @@ API compatibility pass; every configured target compiles the surface. Document t
 enforce a non-copyable affine guard. Run `deno task test:bindings`, `deno task test:build`, and
 relevant mobile, Windows, and Emscripten compile tasks.
 
-### S11: add guarded data, then optional runtime diagnostics
+### ~~S11: add guarded data, then optional runtime diagnostics~~
+
+_Cancelled: a binding-owned guarded-container hierarchy and allocation-free TLS capability tracker
+are neither native Zig synchronization nor SDL ABI interoperability. The detailed proposal remains
+below only for later revalidation._
 
 **Dependencies:** S10.
 
@@ -1155,7 +1264,11 @@ ignored reason; forced-inline helpers retain one-evaluation and caller-location 
 cross-target linkage remains valid; deprecated docs name a replacement when Doxygen provides one.
 Run `deno task test:bindings`, `deno task test:build`, and the platform linkage tasks.
 
-### S13: gate the additive SDL assertion facility on proof
+### ~~S13: gate the additive SDL assertion facility on proof~~
+
+_Cancelled: Zig assertions should remain Zig assertions. The raw SDL report and handler APIs remain
+available for consumers that deliberately need SDL's global report-list semantics; the generator
+will not synthesize a macro-like assertion layer._
 
 **Dependencies:** S12.
 
@@ -1197,7 +1310,8 @@ Linux-only slice with object inspection, not part of this roadmap's default impl
 
 ### S15: integrate, audit, and prepare the release result
 
-**Dependencies:** every accepted slice and every recorded rejected-prototype decision.
+**Dependencies:** every non-cancelled slice. ~~Every recorded rejected-prototype decision.~~
+_Cancelled slices already have their Zig-native justification inline and are not release blockers._
 
 **Changes and evidence:**
 
@@ -1240,18 +1354,18 @@ A slice is complete only when all applicable items are true:
 Run the narrowest relevant command while iterating. The final validation is layered because
 `deno task check` does not run the Windows, Android, Apple-mobile, or Emscripten tasks.
 
-| Layer                    | When required                                   | Commands                                                 |
-| ------------------------ | ----------------------------------------------- | -------------------------------------------------------- |
-| Format and static checks | Every slice                                     | `deno task fmt`, `deno task lint`, `deno task typecheck` |
-| Deterministic generation | Every generator or policy slice                 | `deno task generate:bindings`, `deno task test:bindings` |
-| Native ABI/runtime       | Allocator, logging, locking, assertion, linkage | `deno task test:build`                                   |
-| Windows ABI              | Callback, linkage, calling-convention changes   | `deno task test:windows-build`                           |
-| Apple mobile             | Public type, TLS, calling-convention changes    | `deno task test:apple-mobile`                            |
-| Android                  | Public type, TLS, calling-convention changes    | `deno task test:android`                                 |
-| Emscripten               | Public type, TLS, varargs, allocation changes   | `deno task test:emscripten`                              |
-| macOS focused build      | macOS framework/linkage or runtime changes      | `deno task test:macos-build`                             |
-| Repository gate          | Before each slice lands                         | `deno task check`                                        |
-| Release gate             | S15                                             | `deno task release-check`                                |
+| Layer                    | When required                                 | Commands                                                 |
+| ------------------------ | --------------------------------------------- | -------------------------------------------------------- |
+| Format and static checks | Every slice                                   | `deno task fmt`, `deno task lint`, `deno task typecheck` |
+| Deterministic generation | Every generator or policy slice               | `deno task generate:bindings`, `deno task test:bindings` |
+| Native ABI/runtime       | Allocator, logging, raw locking, linkage      | `deno task test:build`                                   |
+| Windows ABI              | Callback, linkage, calling-convention changes | `deno task test:windows-build`                           |
+| Apple mobile             | Public type, TLS, calling-convention changes  | `deno task test:apple-mobile`                            |
+| Android                  | Public type, TLS, calling-convention changes  | `deno task test:android`                                 |
+| Emscripten               | Public type, TLS, varargs, allocation changes | `deno task test:emscripten`                              |
+| macOS focused build      | macOS framework/linkage or runtime changes    | `deno task test:macos-build`                             |
+| Repository gate          | Before each slice lands                       | `deno task check`                                        |
+| Release gate             | S15                                           | `deno task release-check`                                |
 
 Negative compile fixtures must assert a stable diagnostic fragment and the declaration or call site
 that caused it. Native runtime fixtures must use fake ABI implementations when triggering the real
@@ -1262,19 +1376,19 @@ tests.
 
 ## Decision gates to resolve during implementation
 
-Resolve each choice in its due slice. The default is the conservative outcome used when a fixture
-does not justify a more complex public API.
+Resolve each non-cancelled choice in its due slice. The default is the conservative outcome used
+when a fixture does not justify a more complex public API.
 
-| Gate                              | Due | Required evidence                                                                    | Conservative default                                                                                        |
-| --------------------------------- | --- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Coverage metrics and presentation | S02 | golden report with direct, semantic, and additive relations on one intentional entry | keep the existing numerator/denominator and show handling in separate columns/sections                      |
-| Allocator bridge installation API | S04 | `-1`, zero, positive, already-installed, and recursive-backing fixture               | preserve `install`; describe its count check as advisory and require the documented first-call precondition |
-| Stack-fallback public name        | S06 | two consumer examples and generated-doc review                                       | `stackFallbackAllocator` in the owning SDL module                                                           |
-| Runtime lock-diagnostic policy    | S11 | Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall compile/runtime fixture            | enable only where Zig runtime safety is expected; omit a separate global option                             |
-| Copied-guard diagnostics          | S10 | copy, manual release, deferred release, and move-like return fixture                 | document non-copyability and keep only allocation-free active-state checks                                  |
-| Logging OOM behavior              | S09 | forced stack and fallback exhaustion with recursive logging detector                 | emit one fixed allocation-free diagnostic, never a truncated user message                                   |
-| `std.log` scope mapping           | S09 | default, named, long, and non-ASCII scope fixture                                    | SDL application category plus a scope prefix in the message                                                 |
-| Assertion storage model           | S13 | repeated, concurrent, report-list, and source-location fixture                       | reject the additive API if per-call-site storage is not stable                                              |
+| Gate                               | Due | Required evidence                                                                    | Conservative default                                                                                        |
+| ---------------------------------- | --- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Coverage metrics and presentation  | S02 | golden report with direct, semantic, and additive relations on one intentional entry | keep the existing numerator/denominator and show handling in separate columns/sections                      |
+| Allocator bridge installation API  | S04 | `-1`, zero, positive, already-installed, and recursive-backing fixture               | preserve `install`; describe its count check as advisory and require the documented first-call precondition |
+| ~~Stack-fallback public name~~     | S06 | ~~two consumer examples and generated-doc review~~ _Cancelled_                       | _Use `std.heap.stackFallback`; no package alias._                                                           |
+| ~~Runtime lock-diagnostic policy~~ | S11 | ~~Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall fixture~~ _Cancelled_            | _No binding-owned runtime tracker._                                                                         |
+| ~~Copied-guard diagnostics~~       | S10 | ~~copy, manual release, deferred release, and move-like return fixture~~ _Cancelled_ | _No generated guards; use raw lock/unlock with `defer`._                                                    |
+| Logging OOM behavior               | S09 | forced stack and fallback exhaustion with recursive logging detector                 | emit one fixed allocation-free diagnostic, never a truncated user message                                   |
+| `std.log` scope mapping            | S09 | default, named, long, and non-ASCII scope fixture                                    | SDL application category plus a scope prefix in the message                                                 |
+| ~~Assertion storage model~~        | S13 | ~~repeated, concurrent, report-list, and source-location fixture~~ _Cancelled_       | _Use Zig assertion primitives; exact SDL integration stays raw._                                            |
 
 A default in this table is not permission to skip the fixture. The fixture proves that the default
 is implementable on the pinned Zig and SDL versions.
@@ -1283,8 +1397,10 @@ is implementable on the pinned Zig and SDL versions.
 
 - Preserve every raw ABI declaration and existing generated direct wrapper unless a separately
   documented correctness bug requires a source change.
-- Add lock guards, guarded values, stack fallback, Zig logging, and assertions as additive APIs.
-  Their existence never reclassifies the motivating macro as directly covered.
+- ~~Add lock guards, guarded values, a stack-fallback alias, a second Zig-format logging entry
+  point, and assertions as additive APIs.~~ _Cancelled: these duplicate `defer`, standard allocator
+  composition, `std.fmt`/`std.log`, and Zig's assertion primitives. Only the thin opt-in
+  `std.Options.logFn` to SDL adapter survives._
 - Avoid compatibility aliases for names that have not shipped. Settle a new public name with its
   decision gate before the first generated release.
 - Treat an allocator ownership, cleanup, or return-flow correction as a release-note item even when
@@ -1296,20 +1412,22 @@ is implementable on the pinned Zig and SDL versions.
 
 ## Risk register and stop conditions
 
-| Risk                                                | Early signal                                                           | Mitigation                                                                                    | Stop condition                                                                              |
-| --------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Clang JSON loses an attribute argument              | synthetic fixture has a typed node but no recoverable expansion token  | combine typed node kind with normalized source provenance and pin fixture output expectations | do not infer the argument from the function name or documentation                           |
-| CastXML/Clang declaration merge is ambiguous        | zero or multiple supplemental matches                                  | match public file, line, name, and signature; include candidates in the error                 | do not attach metadata until identity is unique                                             |
-| Analyzer-only declarations leak into the ABI model  | public symbol/count changes when thread analysis is enabled            | isolate the supplemental define and filter to declarations present in the ordinary model      | reject the analysis result before rendering                                                 |
-| Allocator bridge recurses or outlives backing state | callback re-enters SDL allocation or a stack allocator reaches install | reject known SDL-backed/state-scoped allocators and document process lifetime/thread-safety   | do not claim installation safety from allocation count alone                                |
-| Generated format checks accept the wrong ABI type   | runtime stub sees a different promoted value or mutable destination    | pair compile tests with C varargs runtime inspection                                          | keep the raw call or fail generation for the unsupported conversion                         |
-| Guard copying creates double release                | copied value can release the same handle twice without detection       | active-state identity checks and precise documentation                                        | omit stronger safety claims or the runtime tracker if it needs allocation/global contention |
-| TLS/runtime lock tracking is not portable           | target compile fails or thread-exit state cannot be reclaimed          | keep scoped guards independent from diagnostics                                               | ship guards without the tracker and mark unsupported effects honestly                       |
-| Logging failure recursively logs                    | custom callback or allocator failure re-enters the backend             | allocation-free fixed failure path and reentrancy guard                                       | omit the `std.log` backend if recursion cannot be bounded                                   |
-| Coverage becomes a second hand-maintained inventory | relation names drift from analyzed entries or generated paths          | validate all relation endpoints during generation                                             | fail generation on orphan, duplicate, or stale evidence                                     |
-| Generated changes become too broad to review        | unrelated companion modules change from a core-only rule               | trace the policy owner and inspect complete regeneration                                      | split or correct the rule before landing; never discard unexplained generated diff          |
+| Risk                                                   | Early signal                                                                | Mitigation                                                                                    | Stop condition                                                                     |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Clang JSON loses an attribute argument                 | synthetic fixture has a typed node but no recoverable expansion token       | combine typed node kind with normalized source provenance and pin fixture output expectations | do not infer the argument from the function name or documentation                  |
+| CastXML/Clang declaration merge is ambiguous           | zero or multiple supplemental matches                                       | match public file, line, name, and signature; include candidates in the error                 | do not attach metadata until identity is unique                                    |
+| ~~Analyzer-only declarations leak into the ABI model~~ | ~~public symbol/count changes when thread analysis is enabled~~ _Cancelled_ | _The analyzer-only capability pass is not run._                                               | _Keep ordinary ABI analysis isolated from unused analyzer defines._                |
+| Allocator bridge recurses or outlives backing state    | callback re-enters SDL allocation or a stack allocator reaches install      | reject known SDL-backed/state-scoped allocators and document process lifetime/thread-safety   | do not claim installation safety from allocation count alone                       |
+| Generated format checks accept the wrong ABI type      | runtime stub sees a different promoted value or mutable destination         | pair compile tests with C varargs runtime inspection                                          | keep the raw call or fail generation for the unsupported conversion                |
+| ~~Guard copying creates double release~~               | ~~copied value can release the same handle twice~~ _Cancelled_              | _No copyable guard type is generated._                                                        | _Use lexical `defer` with the raw handle._                                         |
+| ~~TLS/runtime lock tracking is not portable~~          | ~~target compile or thread-exit cleanup fails~~ _Cancelled_                 | _No binding-owned TLS tracker is generated._                                                  | _Capability attributes remain explicit no-code exclusions._                        |
+| Logging failure recursively logs                       | custom callback or allocator failure re-enters the backend                  | allocation-free fixed failure path and reentrancy guard                                       | omit the `std.log` backend if recursion cannot be bounded                          |
+| Coverage becomes a second hand-maintained inventory    | relation names drift from analyzed entries or generated paths               | validate all relation endpoints during generation                                             | fail generation on orphan, duplicate, or stale evidence                            |
+| Generated changes become too broad to review           | unrelated companion modules change from a core-only rule                    | trace the policy owner and inspect complete regeneration                                      | split or correct the rule before landing; never discard unexplained generated diff |
 
 The desired end state is not “65 fewer exclusions.” It is a generator that understands the useful
-allocator, format, lock, linkage, flow, and diagnostic contracts behind those exclusions; exposes
-safe Zig-native facilities where Zig can improve the API; and keeps the remaining differences
-explicit where the C preprocessor or compiler has capabilities Zig 0.16.0 does not.
+allocator, supported-format, linkage, flow, and declaration contracts behind those exclusions;
+exposes only genuine Zig/SDL interoperability; and keeps the remaining differences explicit where
+the C preprocessor or compiler has capabilities Zig 0.16.0 does not. ~~It also grows Zig-native
+lock/capability, stack-allocation, formatting, and assertion facilities.~~ _Cancelled: those
+facilities already have a native language or standard-library owner._
