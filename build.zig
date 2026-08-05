@@ -459,9 +459,15 @@ fn addLibraryModules(
     var library_modules: std.ArrayList(BuiltLibrary) = .empty;
     const translation_units = b.addWriteFiles();
     for (configurations) |*configuration| {
+        const translation_source = if (target.result.os.tag == .windows)
+            b.fmt("#ifndef SDL_UINT64_C\n#define SDL_UINT64_C(c) c ## ULL\n#endif\n{s}", .{
+                configuration.translation_unit,
+            })
+        else
+            configuration.translation_unit;
         const translation_unit = translation_units.add(
             b.fmt("{s}.h", .{configuration.module_name}),
-            configuration.translation_unit,
+            translation_source,
         );
         const translation_target = if (isAndroidTarget(target))
             b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu })
@@ -480,11 +486,6 @@ fn addLibraryModules(
         });
         for (sdl_metadata.translation_defines) |definition| {
             translate_c.defineCMacroRaw(definition);
-        }
-        if (target.result.os.tag == .windows) {
-            // Zig's C frontend does not accept MSVC's `ui64` literal suffix, while SDL's
-            // headers select it whenever `_MSC_VER` is defined. Use the portable suffix.
-            translate_c.defineCMacroRaw("SDL_UINT64_C(c)=c ## ULL");
         }
         addTranslateCTargetDefines(translate_c, target);
         if (target.result.os.tag == .emscripten) {
