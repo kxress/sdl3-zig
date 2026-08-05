@@ -1419,6 +1419,11 @@ fn addTranslateCTargetDefines(
         translate_c.defineCMacro("SDL_ELF_NOTE_DLOPEN_TYPE", "0x407c0c0aU");
         translate_c.defineCMacro("SDL_ELF_NOTE_DLOPEN_VENDOR", "\"FDO\"");
     }
+    if (target.result.os.tag == .macos) {
+        // SDL's public headers require a macOS deployment target, while translate-c does not
+        // inherit the runner's compiler deployment setting from the Zig target.
+        translate_c.defineCMacro("MAC_OS_X_VERSION_MIN_REQUIRED", "1070");
+    }
 }
 
 fn isAndroidTarget(target: std.Build.ResolvedTarget) bool {
