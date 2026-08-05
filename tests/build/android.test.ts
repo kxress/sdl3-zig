@@ -36,7 +36,9 @@ Deno.test("Android builds a Zig SDL consumer and packages an APK", async () => {
     );
   }
 
-  const work = await Deno.makeTempDir({ dir: `${repository}/.zig-cache`, prefix: "android-test-" });
+  const zigCache = `${repository}/.zig-cache`;
+  await Deno.mkdir(zigCache, { recursive: true });
+  const work = await Deno.makeTempDir({ dir: zigCache, prefix: "android-test-" });
   try {
     const cache = `${work}/zig-cache`;
     const project = `${work}/android-project`;
