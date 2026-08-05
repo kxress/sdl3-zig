@@ -38,22 +38,26 @@ same or higher level is cancelled; the unstruck body is preserved only as invest
   neither preserve Clang's static declaration checks nor add an SDL ABI boundary, so guarded
   containers and runtime capability tracking remain cancelled with the scoped guards.
 
-Three cancellations did not survive revalidation:
+Three cancellations did not survive revalidation. They are explicitly marked **Uncancelled after
+revalidation** in their workstream and slice specifications below:
 
-- Complete C-format validation is required by the already-generated typed wrappers. Zig's `std.fmt`
-  does not validate or marshal C variadic arguments, and the current scanner maps scanf `hh`/`h` and
-  every `%n` length to the wrong destination type. This is C ABI correctness, not a second
-  formatting frontend.
-- A direct Zig-format SDL logging entry point preserves SDL's runtime category and seven operational
-  priorities. Zig 0.16.0's `std.log` has only `debug`, `info`, `warn`, and `err`; its backend hook
-  is worth providing too, but it cannot express SDL trace, verbose, critical, or a caller-selected
-  category.
-- An SDL assertion helper preserves retry, break, ignore, always-ignore, custom-handler, trigger
-  count, and persistent report-list behavior. `std.debug.assert`, `@panic`, `@breakpoint`,
-  `unreachable`, and `@src()` provide useful building blocks but none implements that SDL protocol.
-  A Zig 0.16.0 compile/run probe confirmed that a comptime source-and-condition type factory can own
-  stable independent static storage. The helper remains gated on proving that storage with real
-  `SDL_AssertData`, concurrent report linkage, and compile-time elision.
+- **Uncancelled after revalidation — supported C-format Zig APIs:** the generator already emits
+  callable Zig wrappers with a comptime C format and an argument tuple. Completing their format
+  model is in scope only where the result remains a comparably usable API for the underlying SDL
+  operation; raw declaration parity or a `va_list` escape hatch is not sufficient. The current
+  scanner maps scanf `hh`/`h` and every `%n` length to the wrong destination type, so accepted
+  wrappers also need ABI-correct validation.
+- **Uncancelled after revalidation — Zig-format SDL logging:** a direct entry point preserves SDL's
+  runtime category and seven operational priorities. Zig 0.16.0's `std.log` has only `debug`,
+  `info`, `warn`, and `err`; its backend hook is worth providing too, but it cannot express SDL
+  trace, verbose, critical, or a caller-selected category.
+- **Uncancelled after revalidation — SDL assertion integration:** an SDL assertion helper preserves
+  retry, break, ignore, always-ignore, custom-handler, trigger count, and persistent report-list
+  behavior. `std.debug.assert`, `@panic`, `@breakpoint`, `unreachable`, and `@src()` provide useful
+  building blocks but none implements that SDL protocol. A Zig 0.16.0 compile/run probe confirmed
+  that a comptime source-and-condition type factory can own stable independent static storage. The
+  helper remains gated on proving that storage with real `SDL_AssertData`, concurrent report
+  linkage, and compile-time elision.
 
 The surviving work is limited to contracts Zig cannot supply on SDL's behalf: raw SDL ABI access,
 allocator/callback interoperability, ownership translation, C-varargs validation, declaration and
@@ -563,14 +567,34 @@ fail or preserve raw ABI access outside that subset.
 7. Keep format macros excluded as standalone public names while reporting their declaration
    applications as semantic coverage.
 
-### Phase C2: complete and test the C-format validator
+### Phase C2: complete and test the supported C-format Zig API
 
-This phase completes the safety contract of wrappers that the generator already ships. It is not a
-general replacement for libc formatting: parse only the compile-time format needed to select and
-validate C ABI argument types, and reject platform-dependent syntax that SDL cannot support
-consistently across the configured target matrix.
+**Uncancelled after revalidation:** this phase is retained because the generator can provide a
+comparably usable Zig API for the annotated SDL functions: a comptime C format, a Zig argument
+tuple, the same SDL operation and return behavior, and ABI-correct default promotions or mutable
+destinations. Raw C access or `std.builtin.VaList` alone would be parity without a similar Zig API
+and does not satisfy this phase.
 
-Build a table-driven grammar and type model rather than extending a single switch ad hoc. Cover:
+This is not a general replacement for libc formatting. Parse only the compile-time format needed to
+select and validate C ABI argument types, and reject platform-dependent syntax that SDL cannot
+support consistently across the configured target matrix. SDL logging, error state, IOStream
+printing, render-debug text, and SDL_test declarations retain SDL-specific behavior. The libc-like
+`SDL_snprintf`, `SDL_sscanf`, and related declarations remain in scope only while their generated
+wrappers preserve comparable buffer, result, allocation, and format-call semantics.
+
+The acceptance gate is per declaration shape, not merely per C symbol:
+
+1. A caller must be able to perform the SDL operation through a generated Zig wrapper without
+   manually constructing `va_list` or using raw C variadic invocation.
+2. The wrapper must preserve the function's result, side effects, buffer bounds, allocation
+   ownership, and supported C-format behavior.
+3. Every accepted conversion must have an unambiguous C ABI type across the configured targets;
+   unsupported or platform-dependent syntax must fail at comptime with an actionable diagnostic.
+4. If those conditions cannot be met, keep raw ABI access but do not treat parity as justification
+   for the convenience wrapper; record a limitation or an explicit compatibility decision instead.
+
+Build a table-driven supported grammar and type model rather than extending a single switch ad hoc.
+Cover:
 
 - flags, width, precision, `*` width/precision, and their argument order;
 - supported positional syntax, or an explicit compile error if SDL does not support it;
@@ -588,6 +612,11 @@ wrong `%p`, malformed format, and unsupported conversion. Run the valid calls ag
 functions to prove the values crossing the C boundary, not just compilation.
 
 ### Phase C3: Zig-format SDL logging and a `std.log` backend
+
+**Uncancelled after revalidation:** this is a similar Zig API for SDL-specific logging behavior, not
+an alias for `std.log`. It retains caller-selected SDL categories and priorities while accepting a
+Zig format string and tuple; the separate backend covers applications that deliberately choose the
+narrower standard logging model.
 
 Keep the existing C-format wrappers. Add a separate surface whose format string and tuple use Zig
 formatting while retaining SDL's category and priority controls, for example:
@@ -679,6 +708,10 @@ Implement coverage accounting, not new public values:
 5. Do not add `beginThreadFunction` or `endThreadFunction` to a public namespace.
 
 ### Zig-native SDL assertion integration
+
+**Uncancelled after revalidation:** this remains in scope because it can expose SDL's assertion
+protocol through a Zig call pattern with comptime gating and stable site data. Merely exposing
+`SDL_ReportAssertion` raw would not qualify.
 
 Zig's assertion primitives remain the default choice for ordinary program invariants. This additive
 facility is specifically for consumers that need SDL's assertion handler, retry and ignore states,
@@ -856,7 +889,7 @@ flowchart LR
     S04 --> S05["S05 Allocator consumers"]
     S04 --> S09["S09 Zig-format SDL logging"]
     S03 --> S07["S07 Format metadata"]
-    S07 --> S08["S08 C-format validation"]
+    S07 --> S08["S08 Supported C-format Zig API"]
     S03 --> S12["S12 Declaration attributes"]
     S12 --> S13["S13 SDL assertion integration"]
     S03 --> S14["S14 Remaining exclusions"]
@@ -882,7 +915,7 @@ applicable gates have passed; explanatory prose elsewhere does not mark a slice 
 | S05   | Allocator-generic result ownership | Not started                 | S04                  | transformation/OOM matrix                                                    |
 | S06   | ~~Caller-scoped stack fallback~~   | ~~Not started~~ _Cancelled_ | S05                  | ~~stack/fallback lifetime fixture~~ _Use `std.heap.stackFallback` directly._ |
 | S07   | Attribute-driven format plans      | Not started                 | S03                  | 27 application inventory                                                     |
-| S08   | Complete C-format validation       | Not started                 | S07                  | positive/negative/runtime grammar matrix                                     |
+| S08   | Supported C-format Zig API         | Not started                 | S07                  | comparable-call and positive/negative/runtime ABI matrix                     |
 | S09   | Zig-format SDL logging             | Not started                 | S04                  | direct and `std.log` callback/failure fixtures                               |
 | S10   | ~~Scoped lock guards~~             | ~~Not started~~ _Cancelled_ | S03                  | ~~eight-effect lock fixture~~ _Use raw locks with `defer`._                  |
 | S11   | ~~Guarded values and diagnostics~~ | ~~Not started~~ _Cancelled_ | S10                  | ~~identity/thread/rank fixtures~~ _No binding-owned capability runtime._     |
@@ -897,6 +930,10 @@ implementation dependency. A rejected additive prototype can satisfy a dependenc
 corresponding intentional exclusion, failed proof, and absence of a public generated artifact are
 all recorded. The remaining struck slices have an affirmative native Zig replacement rather than a
 prototype gate to execute.
+
+S08 and S13, plus the direct Zig-format portion of S09, are **Uncancelled after revalidation**.
+Their ledger status remains **Not started** because uncancelling restores roadmap scope; it does not
+prove their implementation gates complete.
 
 The land order is:
 
@@ -916,10 +953,11 @@ The land order is:
    `std.heap.stackFallback` is already allocator-generic and accepts `sdl.allocator`._
 7. **S07 Format metadata:** make every annotated wrapper use `FormatContract`, with no name or
    parameter-position guessing.
-8. **S08 Format grammar:** complete and execute the printf/scanf grammar and C ABI type matrix for
-   the already-generated typed wrappers.
-9. **S09 SDL logging integration:** add a direct Zig-format entry point that retains SDL category
-   and priority controls, plus an opt-in `std.log` backend.
+8. **S08 Supported C-format Zig API — Uncancelled after revalidation:** complete and execute the
+   portable printf/scanf grammar and C ABI type matrix only for declaration shapes that preserve a
+   comparably usable Zig call.
+9. **S09 SDL logging integration — direct API uncancelled after revalidation:** add a Zig-format
+   entry point that retains SDL category and priority controls, plus an opt-in `std.log` backend.
 10. ~~**S10 Scoped locks:** generate mutex and RW-lock guards from normalized lock effects.~~
     _Cancelled: raw lock/unlock plus `defer` is the Zig-native scoped form._
 11. ~~**S11 Guarded data and diagnostics:** add capability-protected values first, then the optional
@@ -927,8 +965,9 @@ The land order is:
     and is outside binding interoperability._
 12. **S12 Declaration attributes:** consume control-flow, deprecation, result-use, visibility,
     inline, and unused metadata in small sub-slices.
-13. **S13 Assertions:** prototype the additive SDL assertion facility and land it only if the
-    storage, retry, source, concurrency, and compile-time-elision proofs all pass.
+13. **S13 Assertions — Uncancelled after revalidation:** prototype the additive SDL assertion
+    facility and land it only if the storage, retry, source, concurrency, and compile-time-elision
+    proofs all pass.
 14. **S14 Remaining exclusions:** add allocation-annotation consistency checks and make explicit
     no-code decisions for stringification and ELF-note machinery.
 15. **S15 Release audit:** regenerate every library, run every applicable platform gate, audit the
@@ -1152,12 +1191,18 @@ printf-named scanf function and a non-final format parameter prove names and pos
 irrelevant; unannotated variadic declarations retain a conservative raw path or fail according to
 explicit policy. Run `deno task test:bindings`.
 
-### S08: complete the C-format grammar and type matrix
+### S08: complete the supported C-format Zig API and ABI matrix
+
+**Uncancelled after revalidation:** S08 is accepted only because a comptime format plus tuple can
+provide a similar Zig API for these SDL operations. Its exit criteria must prove that comparable
+call, not just that the raw C declaration is reachable.
 
 Limit this grammar to validation and C ABI tuple construction for SDL's annotated entry points. Do
 not reproduce libc output; the wrapper continues to pass the original format and checked arguments
 to SDL. The distinction matters because `std.fmt` cannot validate the mutable destinations or
-default promotions of a C variadic call.
+default promotions of a C variadic call. If a declaration cannot retain its documented operation,
+result, side effects, ownership, and portable format behavior through this wrapper shape, exclude
+that convenience transformation and record why.
 
 **Dependencies:** S07.
 
@@ -1170,16 +1215,26 @@ default promotions of a C variadic call.
   support or a precise compile error for positional syntax and wide formats.
 - Add positive and negative Zig consumer files under a focused build fixture. The Deno harness must
   assert stable diagnostic fragments instead of checking only exit status.
+- Exercise at least one SDL-specific logging, error, IOStream, rendering, and SDL_test declaration,
+  plus the libc-like `SDL_snprintf`, `SDL_asprintf`, and `SDL_sscanf` families. Prove that each
+  offers the same underlying operation through the generated format-and-tuple call shape; a raw
+  symbol test is insufficient.
 - Back valid cases with C varargs stubs that inspect received promoted values and mutable scanf
   destinations.
 - Include scansets with `^`, leading `]`, ranges, suppression, width, empty/malformed sets, and
   every supported length for `%n` and integer destinations.
 
-**Evidence and exit:** the full table compiles or fails as specified; valid calls prove boundary
-values at runtime; no case is selected by function name; `FUNCV` wrappers remain direct
-`std.builtin.VaList` calls. Run `deno task test:bindings` and the focused native fixture.
+**Evidence and exit:** the supported table compiles or fails as specified; valid calls prove
+boundary values and the SDL-specific side effects at runtime; every retained variadic convenience
+wrapper has a comparable Zig call; no case is selected by function name; `FUNCV` wrappers remain
+direct `std.builtin.VaList` calls but do not by themselves satisfy the similar-API gate. Run
+`deno task test:bindings` and the focused native fixture.
 
 ### S09: add Zig-format SDL logging and a `std.log` backend
+
+**Direct Zig-format API uncancelled after revalidation:** its category and priority parameters
+retain SDL functionality that `std.log` cannot express. The backend was never cancelled; it remains
+the opt-in bridge for standard Zig logging.
 
 **Dependencies:** S04. The direct method and backend can use `std.fmt` and the hardened
 `sdl.allocator` for internal overflow storage; neither depends on the C-format grammar because both
@@ -1284,6 +1339,10 @@ cross-target linkage remains valid; deprecated docs name a replacement when Doxy
 Run `deno task test:bindings`, `deno task test:build`, and the platform linkage tasks.
 
 ### S13: gate the additive SDL assertion facility on proof
+
+**Uncancelled after revalidation:** the proposed call pattern exposes SDL handler, retry/ignore, and
+report-list semantics while preserving compile-time elision. Raw function availability is not the
+acceptance argument.
 
 This is an SDL protocol adapter, not the package's default assertion primitive. Consumers that do
 not need SDL's handler and report-list semantics should continue to use `std.debug.assert` and Zig
@@ -1406,6 +1465,7 @@ when a fixture does not justify a more complex public API.
 | Coverage metrics and presentation  | S02 | golden report with direct, semantic, and additive relations on one intentional entry | keep the existing numerator/denominator and show handling in separate columns/sections                      |
 | Allocator bridge installation API  | S04 | `-1`, zero, positive, already-installed, and recursive-backing fixture               | preserve `install`; describe its count check as advisory and require the documented first-call precondition |
 | ~~Stack-fallback public name~~     | S06 | ~~two consumer examples and generated-doc review~~ _Cancelled_                       | _Use `std.heap.stackFallback`; no package alias._                                                           |
+| C-format convenience eligibility   | S08 | comparable Zig calls and runtime behavior for every retained declaration family      | omit the convenience transformation; retain raw ABI access and record the limitation                        |
 | ~~Runtime lock-diagnostic policy~~ | S11 | ~~Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall fixture~~ _Cancelled_            | _No binding-owned runtime tracker._                                                                         |
 | ~~Copied-guard diagnostics~~       | S10 | ~~copy, manual release, deferred release, and move-like return fixture~~ _Cancelled_ | _No generated guards; use raw lock/unlock with `defer`._                                                    |
 | Logging OOM behavior               | S09 | forced stack and fallback exhaustion with recursive logging detector                 | emit one fixed allocation-free diagnostic, never a truncated user message                                   |
@@ -1424,6 +1484,9 @@ is implementable on the pinned Zig and SDL versions.
   `std.log` or `std.debug.assert`. Keep lock guards, guarded values, and a stack-fallback alias
   cancelled because those still duplicate `defer` and standard allocator composition without
   preserving an otherwise-missing SDL contract.
+- Keep a typed C-format convenience wrapper only when it offers a comparable Zig call and preserves
+  the SDL operation's behavior across the supported target matrix. Raw symbol availability, `VaList`
+  access, or coverage parity alone does not qualify it.
 - Avoid compatibility aliases for names that have not shipped. Settle a new public name with its
   decision gate before the first generated release.
 - Treat an allocator ownership, cleanup, or return-flow correction as a release-note item even when
@@ -1442,6 +1505,7 @@ is implementable on the pinned Zig and SDL versions.
 | ~~Analyzer-only declarations leak into the ABI model~~  | ~~public symbol/count changes when thread analysis is enabled~~ _Cancelled_ | _The analyzer-only capability pass is not run._                                               | _Keep ordinary ABI analysis isolated from unused analyzer defines._                |
 | Allocator bridge recurses or outlives backing state     | callback re-enters SDL allocation or a stack allocator reaches install      | reject known SDL-backed/state-scoped allocators and document process lifetime/thread-safety   | do not claim installation safety from allocation count alone                       |
 | Generated format checks accept the wrong ABI type       | runtime stub sees a different promoted value or mutable destination         | pair compile tests with C varargs runtime inspection                                          | keep the raw call or fail generation for the unsupported conversion                |
+| C-format parity is mistaken for a usable Zig API        | a retained wrapper still requires raw varargs or loses SDL behavior         | require comparable-call fixtures for every retained declaration family                        | omit the convenience wrapper and record the limitation                             |
 | SDL assertion data does not have stable static lifetime | report nodes alias or point at temporary storage                            | comptime site types plus repeated, concurrent, and report-reset fixtures                      | reject the additive assertion API                                                  |
 | ~~Guard copying creates double release~~                | ~~copied value can release the same handle twice~~ _Cancelled_              | _No copyable guard type is generated._                                                        | _Use lexical `defer` with the raw handle._                                         |
 | ~~TLS/runtime lock tracking is not portable~~           | ~~target compile or thread-exit cleanup fails~~ _Cancelled_                 | _No binding-owned TLS tracker is generated._                                                  | _Capability attributes remain explicit no-code exclusions._                        |
