@@ -34,7 +34,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 40 linux-release-check.log | while IFS= read -r line; do
+          { grep -Ei 'error|failed|exited with code|not found|undefined' linux-release-check.log || true; } \
+            | tail -n 12 | while IFS= read -r line; do
             echo "::error title=Linux release output::$line"
           done
 
@@ -61,7 +62,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 40 windows-build.log | while IFS= read -r line; do
+          { grep -Ei 'error|failed|exited with code|not found|undefined' windows-build.log || true; } \
+            | tail -n 12 | while IFS= read -r line; do
             echo "::error title=Windows build output::$line"
           done
 
@@ -95,7 +97,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 40 macos-build.log | while IFS= read -r line; do
+          { grep -Ei 'error|failed|exited with code|not found|undefined' macos-build.log || true; } \
+            | tail -n 12 | while IFS= read -r line; do
             echo "::error title=macOS build output::$line"
           done
       - name: Validate Apple mobile binding and XCFramework slices

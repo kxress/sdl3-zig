@@ -74,7 +74,7 @@ Deno.test({
             "-Doptional_codecs=true",
           ]);
           for (const framework of ["SDL3", "SDL3_image", "SDL3_ttf", "SDL3_mixer", "SDL3_net"]) {
-            await Deno.stat(`${output}/lib/${framework}.framework/${framework}`);
+            await Deno.stat(`${output}/lib/${framework}.framework/Versions/A/${framework}`);
           }
           await assertRpath(`${output}/bin/sdl-distribution-consumer`, "@executable_path/../lib");
           await run(`${output}/bin/sdl-distribution-consumer`, [], { cwd: output });
