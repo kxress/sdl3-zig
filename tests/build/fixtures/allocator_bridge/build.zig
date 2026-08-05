@@ -9,6 +9,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     translate_c.defineCMacro("SDL_DISABLE_OLD_NAMES", "1");
+    if (target.result.os.tag == .macos) {
+        translate_c.defineCMacro("MAC_OS_X_VERSION_MIN_REQUIRED", "1070");
+    }
     translate_c.addIncludePath(b.path("."));
     translate_c.addIncludePath(b.path("../../../../vendor/SDL3/include"));
     const c_module = translate_c.createModule();
