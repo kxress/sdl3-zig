@@ -73,9 +73,12 @@ Deno.test({
           );
           await runScopedExecutable(`${temporary}/${linkage}/output/bin/cmake-source-all`, [], {
             cwd: `${temporary}/${linkage}/output/share/ControllerImage`,
-            env: linkage === "shared"
-              ? { SDL_VIDEODRIVER: "offscreen", SDL_RENDER_DRIVER: "software" }
-              : undefined,
+            env: {
+              SDL_AUDIODRIVER: "dummy",
+              ...(linkage === "shared"
+                ? { SDL_VIDEODRIVER: "offscreen", SDL_RENDER_DRIVER: "software" }
+                : {}),
+            },
           });
           const imageCache = await Deno.readTextFile(
             `${cache}/sdl3-source-build/SDL3_image/CMakeCache.txt`,
