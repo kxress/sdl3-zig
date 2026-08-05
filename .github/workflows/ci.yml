@@ -26,7 +26,17 @@ jobs:
       - name: Fetch verified SDL sources
         run: deno task fetch
       - name: Run release checks
-        run: deno task release-check
+        shell: bash
+        run: |
+          set -o pipefail
+          deno task release-check 2>&1 | tee linux-release-check.log
+      - name: Surface Linux release diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          tail -n 40 linux-release-check.log | while IFS= read -r line; do
+            echo "::error title=Linux release output::$line"
+          done
 
   windows-distributions:
     name: Windows native distributions
@@ -43,7 +53,17 @@ jobs:
       - name: Fetch verified SDL sources
         run: deno task fetch
       - name: Validate native MinGW and MSVC distributions
-        run: deno task test:windows-build
+        shell: bash
+        run: |
+          set -o pipefail
+          deno task test:windows-build 2>&1 | tee windows-build.log
+      - name: Surface Windows build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          tail -n 40 windows-build.log | while IFS= read -r line; do
+            echo "::error title=Windows build output::$line"
+          done
 
   macos-distributions:
     name: macOS source and universal distributions
