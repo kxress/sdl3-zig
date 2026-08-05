@@ -705,6 +705,22 @@ If any value differs, re-run the inventory and update this plan before implement
 Do not hide baseline drift inside a feature slice. If `deno task check` is red before work starts,
 record the failing command and isolate whether it is an environment problem or a repository problem.
 
+### Observed preflight blocker
+
+On 2026-08-04, the roadmap validation reached and passed formatting, lint, type checking, metadata,
+source-cache validation, all 18 codegen tests, byte-identical binding regeneration, the allocator
+bridge fixture, system-SDL linking, bindings-only consumption, and MinGW prebuilt cross-compilation.
+`deno task check` still exited nonzero because the `test:build` permission list does not allow:
+
+- the temporary `cmake-source-all` executables built and run by `tests/build/linux.test.ts`; or
+- `readelf`, which the source cross-compilation test invokes.
+
+This is a validation-harness permission failure, not evidence of a binding or CMake failure. Treat
+restoring an executable `deno task check` as preflight P00. Preserve explicit Deno permissions: add
+the known inspection tool and change temporary-consumer execution so the harness does not require an
+unbounded subprocess permission. S01 cannot be marked complete until the unmodified baseline passes
+that repaired gate.
+
 ## Repository change map
 
 Each concern has one owning stage. A slice can touch downstream stages, but must not move policy
@@ -733,7 +749,8 @@ characterization and coverage modeling are complete.
 
 ```mermaid
 flowchart LR
-    S01["S01 Characterize"] --> S02["S02 Coverage model"]
+    P00["P00 Repair validation gate"] --> S01["S01 Characterize"]
+    S01 --> S02["S02 Coverage model"]
     S02 --> S03["S03 Attribute analysis"]
     S02 --> S04["S04 Allocator correctness"]
     S04 --> S05["S05 Allocator consumers"] --> S06["S06 Stack fallback"]
@@ -757,23 +774,24 @@ flowchart LR
 This table is the status authority for the roadmap. Update a row only when its exit criteria and
 applicable gates have passed; explanatory prose elsewhere does not mark a slice complete.
 
-| Slice | Deliverable                        | Status      | Required predecessor | Completion evidence                      |
-| ----- | ---------------------------------- | ----------- | -------------------- | ---------------------------------------- |
-| S01   | Current-result characterization    | Not started | none                 | focused tests and clean baseline         |
-| S02   | Relational coverage model          | Not started | S01                  | generated report and coverage tests      |
-| S03   | Supplemental attribute analysis    | Not started | S02                  | synthetic fixture and pinned inventory   |
-| S04   | Allocator and bridge correctness   | Not started | S02                  | ABI/runtime fixture and target compiles  |
-| S05   | Allocator-generic result ownership | Not started | S04                  | transformation/OOM matrix                |
-| S06   | Caller-scoped stack fallback       | Not started | S05                  | stack/fallback lifetime fixture          |
-| S07   | Attribute-driven format plans      | Not started | S03                  | 27 application inventory                 |
-| S08   | Complete C-format validation       | Not started | S07                  | positive/negative/runtime grammar matrix |
-| S09   | Zig-format logging                 | Not started | S06, S08             | logging callback and failure fixture     |
-| S10   | Scoped lock guards                 | Not started | S03                  | eight-effect lock fixture                |
-| S11   | Guarded values and diagnostics     | Not started | S10                  | identity/thread/rank fixtures            |
-| S12   | Declaration attribute consumption  | Not started | S03                  | per-attribute semantic and linkage tests |
-| S13   | Assertion prototype decision       | Not started | S12                  | accepted fixture or recorded rejection   |
-| S14   | Remaining exclusion disposition    | Not started | S03                  | contradiction tests and no-code evidence |
-| S15   | Release-result audit               | Not started | all accepted slices  | full matrix and reproducible archive     |
+| Slice | Deliverable                        | Status      | Required predecessor | Completion evidence                          |
+| ----- | ---------------------------------- | ----------- | -------------------- | -------------------------------------------- |
+| P00   | Executable full validation gate    | Not started | none                 | unmodified baseline passes `deno task check` |
+| S01   | Current-result characterization    | Not started | P00                  | focused tests and clean baseline             |
+| S02   | Relational coverage model          | Not started | S01                  | generated report and coverage tests          |
+| S03   | Supplemental attribute analysis    | Not started | S02                  | synthetic fixture and pinned inventory       |
+| S04   | Allocator and bridge correctness   | Not started | S02                  | ABI/runtime fixture and target compiles      |
+| S05   | Allocator-generic result ownership | Not started | S04                  | transformation/OOM matrix                    |
+| S06   | Caller-scoped stack fallback       | Not started | S05                  | stack/fallback lifetime fixture              |
+| S07   | Attribute-driven format plans      | Not started | S03                  | 27 application inventory                     |
+| S08   | Complete C-format validation       | Not started | S07                  | positive/negative/runtime grammar matrix     |
+| S09   | Zig-format logging                 | Not started | S06, S08             | logging callback and failure fixture         |
+| S10   | Scoped lock guards                 | Not started | S03                  | eight-effect lock fixture                    |
+| S11   | Guarded values and diagnostics     | Not started | S10                  | identity/thread/rank fixtures                |
+| S12   | Declaration attribute consumption  | Not started | S03                  | per-attribute semantic and linkage tests     |
+| S13   | Assertion prototype decision       | Not started | S12                  | accepted fixture or recorded rejection       |
+| S14   | Remaining exclusion disposition    | Not started | S03                  | contradiction tests and no-code evidence     |
+| S15   | Release-result audit               | Not started | all accepted slices  | full matrix and reproducible archive         |
 
 Allowed status values are **Not started**, **In progress**, **Blocked**, **Rejected by gate**, and
 **Complete**. A rejected additive prototype can satisfy a dependency only when the corresponding
@@ -781,6 +799,8 @@ intentional exclusion, failed proof, and absence of a public generated artifact 
 
 The land order is:
 
+0. **P00 Validation preflight:** correct the `test:build` permission/execution path and prove that
+   the unmodified release result passes `deno task check`.
 1. **S01 Characterization:** lock down correct existing allocator, variadic, thread-hook,
    direct-port, and inline behavior without preserving known defects as desired behavior.
 2. **S02 Coverage relations:** implement the two-axis inventory/handling model and migrate all 65
@@ -837,9 +857,25 @@ add an inventory failure with its source location, and update this plan before r
 
 ## Detailed slice specifications
 
+### P00: restore an executable validation baseline
+
+**Dependencies:** none. This is test infrastructure, not binding behavior.
+
+**Changes:**
+
+- Update the `test:build` command in `deno.json` to permit the known object-inspection tool.
+- Change the Linux fixture or build step so running a newly built temporary consumer does not
+  require granting Deno unrestricted subprocess access. Keep the permission boundary reviewable and
+  cross-platform.
+- Re-run the full task against the unmodified generated bindings; do not combine this repair with an
+  allocator, format, or lock change.
+
+**Evidence and exit:** the source static/shared consumers execute, the cross-compiled object is
+inspected, and `deno task check` passes. The repair causes no generated source or coverage diff.
+
 ### S01: characterize the current release result
 
-**Dependencies:** none.
+**Dependencies:** P00.
 
 **Changes:**
 
