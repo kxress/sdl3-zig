@@ -128,7 +128,7 @@ export async function buildDistributionConsumer(
     `${temporary}/cache/${target}-${output.slice(output.lastIndexOf("/") + 1)}/local`,
     "--global-cache-dir",
     `${temporary}/cache/${target}-${output.slice(output.lastIndexOf("/") + 1)}/global`,
-  ], { cwd: consumer, stdout: "inherit", stderr: "inherit" });
+  ], { cwd: consumer });
 }
 
 export async function runWindowsExecutable(
