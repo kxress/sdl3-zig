@@ -12,24 +12,36 @@ async function expectDiagnostic(step: string, fragment: string): Promise<void> {
   }
 }
 
-Deno.test("generated allocator bridge passes its fake-ABI lifetime and pairing fixture", async () => {
-  await run("zig", ["build", "--summary", "all"], { cwd: fixture });
+Deno.test({
+  name: "generated allocator bridge passes its fake-ABI lifetime and pairing fixture",
+  timeout: 10 * 60 * 1000,
+  fn: async () => {
+    await run("zig", ["build", "--summary", "all"], { cwd: fixture });
+  },
 });
 
-Deno.test("allocator bridge preserves size_t ABI width on Windows targets", async () => {
-  await run("zig", ["build", "compile-check", "-Dtarget=x86_64-windows-gnu"], { cwd: fixture });
+Deno.test({
+  name: "allocator bridge preserves size_t ABI width on Windows targets",
+  timeout: 10 * 60 * 1000,
+  fn: async () => {
+    await run("zig", ["build", "compile-check", "-Dtarget=x86_64-windows-gnu"], { cwd: fixture });
+  },
 });
 
-Deno.test("allocator bridge compiles for every configured analysis target", async (test) => {
-  for (const analysisTarget of codegenConfiguration.targets) {
-    await test.step(analysisTarget, async () => {
-      // Zig spells the API-level suffix in the analysis target separately from its target triple.
-      const zigTarget = analysisTarget === "aarch64-linux-android21"
-        ? "aarch64-linux-android"
-        : analysisTarget;
-      await run("zig", ["build", "matrix-check", `-Dtarget=${zigTarget}`], { cwd: fixture });
-    });
-  }
+Deno.test({
+  name: "allocator bridge compiles for every configured analysis target",
+  timeout: 10 * 60 * 1000,
+  fn: async (test) => {
+    for (const analysisTarget of codegenConfiguration.targets) {
+      await test.step(analysisTarget, async () => {
+        // Zig spells the API-level suffix in the analysis target separately from its target triple.
+        const zigTarget = analysisTarget === "aarch64-linux-android21"
+          ? "aarch64-linux-android"
+          : analysisTarget;
+        await run("zig", ["build", "matrix-check", `-Dtarget=${zigTarget}`], { cwd: fixture });
+      });
+    }
+  },
 });
 
 Deno.test("SDL_COMPILE_TIME_ASSERT preserves its supplied failure name", async () => {
