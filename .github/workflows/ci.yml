@@ -64,8 +64,7 @@ jobs:
         shell: bash
         run: |
           sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-            | grep -Ein 'cmake|msb[0-9]+|error|failed|failure|timed out|timeout|cannot|not found|exited with code' \
-            | tail -n 10 \
+            | grep -Ein -C 2 'CMake (Error|Warning)|Could NOT|No CMAKE|not found|compiler|MSB[0-9]+|fatal' \
             | while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
