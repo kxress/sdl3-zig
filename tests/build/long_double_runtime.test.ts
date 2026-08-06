@@ -1,4 +1,4 @@
-import { run, runScopedExecutable, withTempDirectory } from "./support.ts";
+import { run, runScopedExecutable } from "./support.ts";
 
 const nativeTarget = (() => {
   switch (Deno.build.os) {
@@ -19,24 +19,25 @@ Deno.test({
   name: "native C and Zig agree on long-double layout and round-trip ABI",
   ignore: nativeTarget === undefined,
   async fn() {
-    await withTempDirectory("sdl-long-double-runtime-", async (directory) => {
-      const cSource = `${directory}/probe.c`;
-      const zigSource = `${directory}/probe.zig`;
-      const executable = `${directory}/long-double-runtime${
-        Deno.build.os === "windows" ? ".exe" : ""
-      }`;
-      await Deno.writeTextFile(
-        cSource,
-        `#include <stddef.h>
+    // Preserve the temporary Zig cache; recursive cleanup can hang on hosted macOS runners.
+    const directory = await Deno.makeTempDir({ prefix: "sdl-long-double-runtime-" });
+    const cSource = `${directory}/probe.c`;
+    const zigSource = `${directory}/probe.zig`;
+    const executable = `${directory}/long-double-runtime${
+      Deno.build.os === "windows" ? ".exe" : ""
+    }`;
+    await Deno.writeTextFile(
+      cSource,
+      `#include <stddef.h>
 
 size_t probe_size(void) { return sizeof(long double); }
 size_t probe_alignment(void) { return _Alignof(long double); }
 long double probe_roundtrip(long double value) { return value; }
 `,
-      );
-      await Deno.writeTextFile(
-        zigSource,
-        `extern fn probe_size() callconv(.c) usize;
+    );
+    await Deno.writeTextFile(
+      zigSource,
+      `extern fn probe_size() callconv(.c) usize;
 extern fn probe_alignment() callconv(.c) usize;
 extern fn probe_roundtrip(value: c_longdouble) callconv(.c) c_longdouble;
 
@@ -47,23 +48,22 @@ pub fn main() !void {
     if (probe_roundtrip(value) != value) return error.RoundTripMismatch;
 }
 `,
-      );
-      await run("zig", [
-        "build-exe",
-        zigSource,
-        cSource,
-        "-lc",
-        "-target",
-        nativeTarget!,
-        "--name",
-        "long-double-runtime",
-        `-femit-bin=${executable}`,
-        "--cache-dir",
-        `${directory}/zig-cache`,
-        "--global-cache-dir",
-        `${directory}/zig-global-cache`,
-      ]);
-      await runScopedExecutable(executable, []);
-    });
+    );
+    await run("zig", [
+      "build-exe",
+      zigSource,
+      cSource,
+      "-lc",
+      "-target",
+      nativeTarget!,
+      "--name",
+      "long-double-runtime",
+      `-femit-bin=${executable}`,
+      "--cache-dir",
+      `${directory}/zig-cache`,
+      "--global-cache-dir",
+      `${directory}/zig-global-cache`,
+    ]);
+    await runScopedExecutable(executable, []);
   },
 });
