@@ -111,6 +111,11 @@ pub fn build(b: *std.Build) void {
             b.fmt("-DCMAKE_CXX_FLAGS=-isystem{s}", .{path}),
         ) catch @panic("OOM");
     }
+    if (target.result.os.tag == .windows) {
+        // The native CI image does not provide an external LibUSB package. HIDAPI's optional
+        // backend is not required by this source smoke fixture.
+        source_cmake_options_list.append(b.allocator, "-DSDL_HIDAPI_LIBUSB=OFF") catch @panic("OOM");
+    }
     source_cmake_options_list.appendSlice(b.allocator, source_cmake_options) catch @panic("OOM");
     const executable = b.addExecutable(.{
         .name = "cmake-source-all",
