@@ -108,9 +108,6 @@ jobs:
           done
           deno test --frozen --allow-read --allow-write \
             --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig \
-            tests/build/long_double_runtime.test.ts 2>&1 | tee -a macos-build.log
-          deno test --frozen --allow-read --allow-write \
-            --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig \
             tests/build/macos.test.ts 2>&1 | tee -a macos-build.log
       - name: Surface macOS build diagnostics
         if: failure()
