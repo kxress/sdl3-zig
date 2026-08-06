@@ -59,7 +59,10 @@ pub fn build(b: *std.Build) void {
         &.{"-DSDLIMAGE_BMP=OFF"}
     else
         &.{};
-    const source_cmake_generator: ?[]const u8 = if (target.result.os.tag == .windows) "Ninja" else null;
+    const source_cmake_generator: ?[]const u8 = if (target.result.os.tag == .windows)
+        "Visual Studio 17 2022"
+    else
+        null;
     const source_sysroot = b.option(
         []const u8,
         "source_sysroot",
@@ -113,6 +116,8 @@ pub fn build(b: *std.Build) void {
         ) catch @panic("OOM");
     }
     if (target.result.os.tag == .windows) {
+        source_cmake_options_list.append(b.allocator, "-A") catch @panic("OOM");
+        source_cmake_options_list.append(b.allocator, "x64") catch @panic("OOM");
         // The native CI image does not provide an external LibUSB package. HIDAPI's optional
         // backend is not required by this source smoke fixture.
         source_cmake_options_list.append(b.allocator, "-DSDL_HIDAPI_LIBUSB=OFF") catch @panic("OOM");

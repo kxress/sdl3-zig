@@ -53,9 +53,6 @@ jobs:
           cache: false
       - name: Fetch verified SDL sources
         run: deno task fetch
-      - name: Install Ninja generator
-        shell: bash
-        run: choco install ninja --yes --no-progress
       - name: Validate native MinGW and MSVC distributions
         shell: bash
         run: |
