@@ -1172,6 +1172,10 @@ fn addCmakeSourceBuild(
                 absolute_data_directory,
                 generator_path,
             });
+            generate_data.setName("generate ControllerImage data");
+            if (target.result.os.tag == .windows) {
+                generate_data.stdio = .inherit;
+            }
             generate_data.addDirectoryArg(b.path("vendor/ControllerImage/art"));
             generate_data.step.dependOn(&install.step);
             generate_data.step.dependOn(&make_data_directory.step);
