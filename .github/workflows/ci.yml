@@ -42,7 +42,9 @@ jobs:
 
   windows-distributions:
     name: Windows native distributions
-    runs-on: windows-latest
+    # Keep the Visual Studio 2022 generator aligned with the pinned Windows toolchain. The
+    # floating windows-latest label moved to the Visual Studio 2026 image in June 2026.
+    runs-on: windows-2022
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
