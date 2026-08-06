@@ -44,7 +44,7 @@ Deno.test({
 for (const analysisTarget of codegenConfiguration.targets) {
   Deno.test({
     name: `allocator bridge compiles for ${analysisTarget}`,
-    timeout: 10 * 60 * 1000,
+    timeout: 2 * 60 * 1000,
     fn: async () => {
       // Zig spells the API-level suffix in the analysis target separately from its target triple.
       const zigTarget = analysisTarget === "aarch64-linux-android21"
