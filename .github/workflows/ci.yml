@@ -66,6 +66,7 @@ jobs:
           diagnostic="$(tail -n 320 windows-build.log \
             | sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' \
             | tr '\\n' ' ')"
+          diagnostic="${diagnostic//'%'/'%25'}"
           echo "::error title=Windows build output::$diagnostic"
       - name: Upload Windows build log
         if: failure()
