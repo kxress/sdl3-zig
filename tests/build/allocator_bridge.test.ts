@@ -41,21 +41,19 @@ Deno.test({
   },
 });
 
-Deno.test({
-  name: "allocator bridge compiles for every configured analysis target",
-  timeout: 10 * 60 * 1000,
-  fn: async (test) => {
-    for (const analysisTarget of codegenConfiguration.targets) {
-      await test.step(analysisTarget, async () => {
-        // Zig spells the API-level suffix in the analysis target separately from its target triple.
-        const zigTarget = analysisTarget === "aarch64-linux-android21"
-          ? "aarch64-linux-android"
-          : analysisTarget;
-        await runFixture("matrix-check", `-Dtarget=${zigTarget}`);
-      });
-    }
-  },
-});
+for (const analysisTarget of codegenConfiguration.targets) {
+  Deno.test({
+    name: `allocator bridge compiles for ${analysisTarget}`,
+    timeout: 10 * 60 * 1000,
+    fn: async () => {
+      // Zig spells the API-level suffix in the analysis target separately from its target triple.
+      const zigTarget = analysisTarget === "aarch64-linux-android21"
+        ? "aarch64-linux-android"
+        : analysisTarget;
+      await runFixture("matrix-check", `-Dtarget=${zigTarget}`);
+    },
+  });
+}
 
 Deno.test("SDL_COMPILE_TIME_ASSERT preserves its supplied failure name", async () => {
   const result = await command("zig", ["build", "negative-compile-time"], { cwd: fixture });
