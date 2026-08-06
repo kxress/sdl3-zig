@@ -15,7 +15,7 @@ import {
 
 const companions = ["image", "ttf", "mixer", "net"];
 const sourceAllFixture = `${import.meta.dirname}/fixtures/source_all`;
-const stageLog = "windows-stage.log";
+const stageLog = new URL("../../windows-stage.log", import.meta.url);
 
 async function traceStage(message: string): Promise<void> {
   await Deno.writeTextFile(stageLog, `${new Date().toISOString()} ${message}\n`, { append: true });
