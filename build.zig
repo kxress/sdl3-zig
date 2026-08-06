@@ -1043,6 +1043,9 @@ fn addCmakeSourceBuild(
                 "-DSPIRV_CROSS_ENABLE_TESTS=OFF",
             });
             configure_spirv_cross.setName(b.fmt("configure SPIRV-Cross for {s}", .{component}));
+            if (target.result.os.tag == .windows) {
+                configure_spirv_cross.stdio = .inherit;
+            }
             configure_spirv_cross.addArg("-DCMAKE_INSTALL_LIBDIR=lib");
             if (generator) |value| configure_spirv_cross.addArgs(&.{ "-G", value });
             if (toolchain) |value| configure_spirv_cross.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
@@ -1053,6 +1056,9 @@ fn addCmakeSourceBuild(
                 &.{ "cmake", "--build", spirv_cross_build, "--target", "install" },
             );
             install_spirv_cross.setName(b.fmt("install SPIRV-Cross for {s}", .{component}));
+            if (target.result.os.tag == .windows) {
+                install_spirv_cross.stdio = .inherit;
+            }
             if (target.result.os.tag == .windows) {
                 install_spirv_cross.addArgs(&.{ "--config", "Debug" });
             }
@@ -1086,6 +1092,12 @@ fn addCmakeSourceBuild(
         else
             &.{ "cmake", "--build", component_build, "--target", "install" });
         install.setName(b.fmt("install {s}", .{component}));
+        if (target.result.os.tag == .windows) {
+            // Keep native CMake diagnostics in the CI log instead of reducing a failed step to
+            // Zig's dependency graph; this is especially useful for Visual Studio generators.
+            configure.stdio = .inherit;
+            install.stdio = .inherit;
+        }
         if (target.result.os.tag == .windows) {
             install.addArgs(&.{ "--config", "Debug" });
         }
