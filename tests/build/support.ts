@@ -29,7 +29,13 @@ export async function run(
   args: string[],
   options: CommandOptions = {},
 ): Promise<void> {
-  const result = await command(executable, args, options);
+  let result: Deno.CommandOutput;
+  try {
+    result = await command(executable, args, options);
+  } catch (error) {
+    console.error(`${executable} ${args.join(" ")} could not start:`, error);
+    throw error;
+  }
   if (result.success) return;
   const stderr = options.stderr === "inherit"
     ? "(stderr inherited by parent process)"
