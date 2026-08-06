@@ -65,8 +65,12 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          stage_log="$(find . -name windows-stage.log -type f -print -quit)"
           failure_line="$(grep -n 'FAILURES' windows-build.log | tail -n 1 | cut -d: -f1)"
           if [[ -n "$failure_line" ]]; then
+            if [[ -n "$stage_log" ]]; then
+              cat "$stage_log"
+            fi
             start_line=$((failure_line > 24 ? failure_line - 24 : 1))
             end_line=$((failure_line + 8))
             sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
@@ -77,7 +81,7 @@ jobs:
               done
           else
             diagnostics="$({
-              if [[ -f windows-stage.log ]]; then cat windows-stage.log; fi
+              if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
             } || true)"
             if [[ -z "$diagnostics" ]]; then
               diagnostics="$({
@@ -98,7 +102,7 @@ jobs:
           name: windows-build-log-${{ github.run_id }}
           path: |
             windows-build.log
-            windows-stage.log
+            **/windows-stage.log
 
   macos-distributions:
     name: macOS source and universal distributions
