@@ -721,10 +721,10 @@ planning or unreleased intermediate work.
       variation, and reproducible output; remaining host-gated linkage is recorded below.
 - [x] Record allocator ownership/cleanup/return-flow corrections and other consumer-visible behavior
       changes in [`RELEASE_NOTES.md`](RELEASE_NOTES.md), including unchanged Zig signatures.
-- [x] Run the full validation matrix below through the GitHub Actions workflow and record
+- [ ] Run the full validation matrix below through the GitHub Actions workflow and record
       unavailable host-only commands. The Linux `release-check`, `windows-distributions`,
       `macos-distributions`, `android-consumer`, and `emscripten-consumer` jobs own the
-      corresponding gates; run 31065796681 passed all five required jobs.
+      corresponding gates; run 31106605963 is still in progress.
 - [x] Run `deno task release-check`; inspect documentation and the release archive/reproduction
       result.
 - [x] No publication was requested for this worktree run, so the conditional `prepare-release`
@@ -789,9 +789,9 @@ build tasks now include the native allocator bridge and long-double probe. Fresh
 bootstrapped by `deno task fetch` in every platform job; the source synchronizer creates the ignored
 `vendor/` root before staging verified artifacts, and the Emscripten job fails its preflight if the
 pinned SDK environment is not active. GitHub Actions run
-[31065796681](https://github.com/kxress/sdl3-zig/actions/runs/31065796681) passed Linux release
-checks, Windows native distributions, macOS source and universal distributions, Android
-consumer/APK, and Emscripten consumer validation. Those results close the host-gated rows above.
+[31106605963](https://github.com/kxress/sdl3-zig/actions/runs/31106605963) is the current required
+matrix and remains in progress; its result must replace this pending status before the host-gated
+rows are checked off.
 
 ## Decision defaults and stop conditions
 
