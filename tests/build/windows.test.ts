@@ -21,43 +21,42 @@ Deno.test({
   ignore: Deno.build.os !== "windows",
   timeout: 30 * 60 * 1000,
   async fn(test) {
-    await withTempDirectory("sdl-windows-cmake-source-", async (temporary) => {
-      for (const linkage of ["static", "shared"]) {
-        await test.step(linkage, async () => {
-          const cache = `${temporary}/${linkage}/local`;
-          await run("zig", [
-            "build",
-            `-Dtarget=${Deno.build.arch}-windows-msvc`,
-            `-Dlinkage=${linkage}`,
-            "-Dinstall_controller_image_data=true",
-            "-p",
-            `${temporary}/${linkage}/output`,
-            "--cache-dir",
-            cache,
-            "--global-cache-dir",
-            `${temporary}/${linkage}/global`,
-          ], { cwd: sourceAllFixture });
-          if (linkage === "shared") {
-            for (
-              const library of [
-                "SDL3",
-                "SDL3_shadercross",
-                "SDL3_image",
-                "SDL3_ttf",
-                "SDL3_mixer",
-                "SDL3_net",
-              ]
-            ) {
-              await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
-            }
+    const temporary = await Deno.makeTempDir({ prefix: "sdl-windows-cmake-source-" });
+    for (const linkage of ["static", "shared"]) {
+      await test.step(linkage, async () => {
+        const cache = `${temporary}/${linkage}/local`;
+        await run("zig", [
+          "build",
+          `-Dtarget=${Deno.build.arch}-windows-msvc`,
+          `-Dlinkage=${linkage}`,
+          "-Dinstall_controller_image_data=true",
+          "-p",
+          `${temporary}/${linkage}/output`,
+          "--cache-dir",
+          cache,
+          "--global-cache-dir",
+          `${temporary}/${linkage}/global`,
+        ], { cwd: sourceAllFixture });
+        if (linkage === "shared") {
+          for (
+            const library of [
+              "SDL3",
+              "SDL3_shadercross",
+              "SDL3_image",
+              "SDL3_ttf",
+              "SDL3_mixer",
+              "SDL3_net",
+            ]
+          ) {
+            await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
           }
-          await runWindowsExecutable(
-            `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
-            `${temporary}/${linkage}/output/share/ControllerImage`,
-          );
-        });
-      }
-    });
+        }
+        await runWindowsExecutable(
+          `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
+          `${temporary}/${linkage}/output/share/ControllerImage`,
+        );
+      });
+    }
   },
 });
 
