@@ -77,13 +77,13 @@ jobs:
               done
           else
             diagnostics="$({
-              sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
-                | tail -n 80
+              grep -E '\[windows (source|prebuilt)\]' windows-build.log | tail -n 10
             } || true)"
             if [[ -z "$diagnostics" ]]; then
               diagnostics="$({
-                grep -E '\[windows (source|prebuilt)\]' windows-build.log | tail -n 10
+                sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+                  | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
+                | tail -n 80
               } || true)"
             fi
             while IFS= read -r line; do
