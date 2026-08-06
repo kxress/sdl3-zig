@@ -1153,7 +1153,12 @@ fn addCmakeSourceBuild(
             const command_cwd = std.Io.Dir.cwd().realPathFileAlloc(b.graph.io, ".", b.allocator) catch
                 @panic("unable to resolve source build working directory");
             const generator_path = if (std.fs.path.isAbsolute(component_build))
-                b.pathJoin(&.{ component_build, generator_name })
+                if (target.result.os.tag == .windows)
+                    b.pathJoin(&.{ component_build, "Debug", generator_name })
+                else
+                    b.pathJoin(&.{ component_build, generator_name })
+            else if (target.result.os.tag == .windows)
+                std.fs.path.join(b.allocator, &.{ command_cwd, component_build, "Debug", generator_name }) catch @panic("OOM")
             else
                 std.fs.path.join(b.allocator, &.{ command_cwd, component_build, generator_name }) catch @panic("OOM");
             const absolute_data_directory = if (std.fs.path.isAbsolute(data_directory))
