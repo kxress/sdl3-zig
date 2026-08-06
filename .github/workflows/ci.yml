@@ -45,6 +45,7 @@ jobs:
     # Keep the Visual Studio 2022 generator aligned with the pinned Windows toolchain. The
     # floating windows-latest label moved to the Visual Studio 2026 image in June 2026.
     runs-on: windows-2022
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -60,13 +61,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          : > windows-stage.log
           deno task test:windows-build 2>&1 | tee windows-build.log
       - name: Surface Windows build diagnostics
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         shell: bash
         run: |
           stage_log="$(find . -name windows-stage.log -type f -print -quit)"
-          failure_line="$(grep -n 'FAILURES' windows-build.log | tail -n 1 | cut -d: -f1)"
+          failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
             if [[ -n "$stage_log" ]]; then
               cat "$stage_log"
@@ -96,7 +98,7 @@ jobs:
             done <<< "$diagnostics"
           fi
       - name: Upload Windows build log
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-build-log-${{ github.run_id }}
