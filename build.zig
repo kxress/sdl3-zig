@@ -1051,6 +1051,9 @@ fn addCmakeSourceBuild(
             const install_spirv_cross = b.addSystemCommand(
                 &.{ "cmake", "--build", spirv_cross_build, "--target", "install" },
             );
+            if (target.result.os.tag == .windows) {
+                install_spirv_cross.addArgs(&.{ "--config", "Debug" });
+            }
             install_spirv_cross.step.dependOn(&configure_spirv_cross.step);
             previous = &install_spirv_cross.step;
         }
@@ -1079,6 +1082,9 @@ fn addCmakeSourceBuild(
             &.{ "cmake", "--build", component_build, "--target", "controllerimage", "make-controllerimage-data" }
         else
             &.{ "cmake", "--build", component_build, "--target", "install" });
+        if (target.result.os.tag == .windows) {
+            install.addArgs(&.{ "--config", "Debug" });
+        }
         install.step.dependOn(&configure.step);
         var component_last_step: ?*std.Build.Step = null;
         if (source_runtime_stage) |stage| {
