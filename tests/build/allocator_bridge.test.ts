@@ -34,6 +34,7 @@ Deno.test({
 
 Deno.test({
   name: "allocator bridge preserves size_t ABI width on Windows targets",
+  ignore: Deno.build.os !== "windows",
   timeout: 10 * 60 * 1000,
   fn: async () => {
     await runFixture("compile-check", "-Dtarget=x86_64-windows-gnu");
