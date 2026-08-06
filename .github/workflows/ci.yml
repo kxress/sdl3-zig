@@ -67,6 +67,7 @@ jobs:
         run: |
           sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
             | grep -Ein -C 3 'CMake Error|Configuring incomplete|Build files have been written|error [A-Z]+[0-9]+|fatal error|FAILED:|Could NOT|No CMAKE|not found|MSB[0-9]+' \
+            | tail -n 12 \
             | while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
