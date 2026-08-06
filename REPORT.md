@@ -724,7 +724,7 @@ planning or unreleased intermediate work.
 - [ ] Run the full validation matrix below through the GitHub Actions workflow and record
       unavailable host-only commands. The Linux `release-check`, `windows-distributions`,
       `macos-distributions`, `android-consumer`, and `emscripten-consumer` jobs own the
-      corresponding gates; run 31110969191 is still in progress.
+      corresponding gates; the latest workflow run is still in progress.
 - [x] Run `deno task release-check`; inspect documentation and the release archive/reproduction
       result.
 - [x] No publication was requested for this worktree run, so the conditional `prepare-release`
@@ -788,10 +788,8 @@ APK, and skips only device execution because no emulator/device is connected. Th
 build tasks now include the native allocator bridge and long-double probe. Fresh CI checkouts are
 bootstrapped by `deno task fetch` in every platform job; the source synchronizer creates the ignored
 `vendor/` root before staging verified artifacts, and the Emscripten job fails its preflight if the
-pinned SDK environment is not active. GitHub Actions run
-[31110969191](https://github.com/kxress/sdl3-zig/actions/runs/31110969191) is the current required
-matrix and remains in progress; its result must replace this pending status before the host-gated
-rows are checked off.
+pinned SDK environment is not active. The latest GitHub Actions matrix remains in progress; its
+result must replace this pending status before the host-gated rows are checked off.
 
 ## Decision defaults and stop conditions
 
