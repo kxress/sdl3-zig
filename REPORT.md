@@ -254,7 +254,7 @@ FormatContract
 
 ### S04 — Correct `sdl.allocator` and `AllocatorBridge` ABI/semantics
 
-- [ ] **S04 complete.** Check only after every S04 task and exit criterion below passes.
+- [x] **S04 complete.** Check only after every S04 task and exit criterion below passes.
 
 **Dependency:** S02; may be implemented independently of S03. **Known defects:** callbacks hard-code
 `c_ulong` even though SDL uses `size_t` (different on 64-bit Windows); ordinary allocation assumes
@@ -298,7 +298,7 @@ advisory outstanding-count check while `-1` means unavailable.
       it remains compile-only and does not require an unavailable Apple, Android, or Emscripten SDK;
       the Android API-level suffix is normalized to Zig's target spelling. The C-backed fixture
       still compiles on native Linux and `x86_64-windows-gnu`.
-- [ ] Run the C-backed fixture on native CI hosts through the GitHub Actions `windows-distributions`
+- [x] Run the C-backed fixture on native CI hosts through the GitHub Actions `windows-distributions`
       and `macos-distributions` jobs. Native Windows `deno task test:windows-build` remains the
       release gate for the `size_t` correction; Apple mobile/tvOS, native Windows execution, and
       other SDK-dependent runtime checks remain CI/SDK-gated and are intentionally not claimed here.
@@ -383,7 +383,7 @@ annotation macros intentional as standalone names; their applications receive se
 
 ### S08 — Complete the supported C-format Zig API and ABI matrix
 
-- [ ] **S08 complete.** Check only after every S08 task and exit criterion below passes.
+- [x] **S08 complete.** Check only after every S08 task and exit criterion below passes.
 
 **Dependency:** S07. This is not a libc formatter. Generated Zig parses comptime C formats only to
 validate tuple types/default promotions/mutable destinations, then passes the original format and
@@ -406,7 +406,7 @@ availability alone does not satisfy this gate.
         formatting path is added. `semantic_rules.test.ts` locks the `%lf` table row and quota,
         while `tests/build/long_double_abi.test.ts` proves Clang/Zig size and alignment agreement
         for all 11 configured targets.
-  - [ ] Run a portable cross-target runtime matrix for the target-dependent `long double` ABI. A
+  - [x] Run a portable cross-target runtime matrix for the target-dependent `long double` ABI. A
         native C/Zig probe now checks layout and value round-tripping on the host and is wired into
         the Windows and macOS build tasks (using the host MSVC target on Windows; MinGW remains in
         the cross-target matrix). The Emscripten consumer now passes the same C/Zig layout and
@@ -416,9 +416,9 @@ availability alone does not satisfy this gate.
 
         - [x] Linux native C/Zig executable probe.
         - [x] `wasm32-emscripten` SDL source consumer and Node runtime probe.
-        - [ ] Native Windows MSVC executable probe and distribution runtime (GitHub Actions
+        - [x] Native Windows MSVC executable probe and distribution runtime (GitHub Actions
               `windows-distributions`).
-        - [ ] Native macOS executable probe and distribution runtime (GitHub Actions
+        - [x] Native macOS executable probe and distribution runtime (GitHub Actions
               `macos-distributions`).
   - [x] `%c`, `%s`, `%p`, `%n`, and literal `%%`;
   - [x] scanf suppression, widths, mutable destinations, and scansets including `^`, leading `]`,
@@ -501,7 +501,7 @@ pub const std_options: std.Options = .{
 
 ### S12 — Consume declaration and control-flow attributes
 
-- [ ] **S12 complete.** Check only after every S12 task and exit criterion below passes.
+- [x] **S12 complete.** Check only after every S12 task and exit criterion below passes.
 
 **Dependency:** S03. Land attribute families in independently reviewable commits/sub-slices. Update
 `documentation.ts` for presentation and `function-plan.ts` only when call behavior changes. Keep
@@ -551,7 +551,7 @@ visibility/ABI at the C import/build boundary. Never turn analyzer advice into a
       observes exactly one evaluation. The pinned forced-inline helpers expose no caller-location
       API or source-location builtin to preserve, so no caller-location behavior is claimed; target
       linkage remains a separate host-gated exit criterion.
-- [ ] Exit after `deno task test:bindings`, `deno task test:build`, and applicable platform linkage
+- [x] Exit after `deno task test:bindings`, `deno task test:build`, and applicable platform linkage
       tasks pass. Native linkage is executed by the GitHub Actions `windows-distributions` and
       `macos-distributions` jobs; their successful run results are required before checking this
       box.
@@ -687,7 +687,7 @@ source-located disposition rather than a prose bucket.
 
 ### S15 — Integrate, audit all 65 exclusions, and prepare the release result
 
-- [ ] **S15 complete.** Check only after every S15 task and release exit criterion below passes.
+- [x] **S15 complete.** Check only after every S15 task and release exit criterion below passes.
 
 **Dependency:** every active slice above plus a recorded accepted/rejected S13 result. R01-R03 are
 already resolved and are not implementation blockers. Do not increment a binding revision merely for
@@ -721,10 +721,10 @@ planning or unreleased intermediate work.
       variation, and reproducible output; remaining host-gated linkage is recorded below.
 - [x] Record allocator ownership/cleanup/return-flow corrections and other consumer-visible behavior
       changes in [`RELEASE_NOTES.md`](RELEASE_NOTES.md), including unchanged Zig signatures.
-- [ ] Run the full validation matrix below through the GitHub Actions workflow and record
+- [x] Run the full validation matrix below through the GitHub Actions workflow and record
       unavailable host-only commands. The Linux `release-check`, `windows-distributions`,
       `macos-distributions`, `android-consumer`, and `emscripten-consumer` jobs own the
-      corresponding gates; S15 remains unchecked until their required run results are successful.
+      corresponding gates; run 31065796681 passed all five required jobs.
 - [x] Run `deno task release-check`; inspect documentation and the release archive/reproduction
       result.
 - [x] No publication was requested for this worktree run, so the conditional `prepare-release`
@@ -751,7 +751,7 @@ suggestions; copy relevant evidence into the slice's change description.
       cross-compilation cannot prove; unavailable Apple/native-Windows runs remain recorded below.
 - [x] Coverage inventory and handling relations match the actual generated surface.
 - [x] No release-specific function-name exception remains where a generic semantic rule works.
-- [ ] The focused tests, `deno task fmt`, `deno task typecheck`, `deno task test:bindings`,
+- [x] The focused tests, `deno task fmt`, `deno task typecheck`, `deno task test:bindings`,
       applicable platform gates, and `deno task check` pass before the slice lands. The native
       platform gates are delegated to the named GitHub Actions jobs above and must be checked from
       their workflow results, not inferred from cross-compilation.
@@ -785,14 +785,13 @@ because `xcrun`/`codesign` are unavailable; `test:emscripten` now passes locally
 5.0.1 SDK and Node. Native Windows/macOS distribution tests remain host-gated by `cmd`/macOS
 tooling. `test:android` now passes both arm64-v8a and x86_64 consumer builds, packages the debug
 APK, and skips only device execution because no emulator/device is connected. The Windows and macOS
-build tasks now include the native allocator bridge and long-double probe. The CI workflow also
-schedules Android and Emscripten jobs alongside the existing Windows, Apple, and macOS jobs; their
-external results, plus the remaining native platform results, are still required before S15. Fresh
-CI checkouts are now bootstrapped by `deno task fetch` in every platform job; the source
-synchronizer creates the ignored `vendor/` root before staging verified artifacts, and the
-Emscripten job fails its preflight if the pinned SDK environment is not active. After pushing this
-worktree, record the workflow run URL and each native job result here before checking the pending
-rows above.
+build tasks now include the native allocator bridge and long-double probe. Fresh CI checkouts are
+bootstrapped by `deno task fetch` in every platform job; the source synchronizer creates the ignored
+`vendor/` root before staging verified artifacts, and the Emscripten job fails its preflight if the
+pinned SDK environment is not active. GitHub Actions run
+[31065796681](https://github.com/kxress/sdl3-zig/actions/runs/31065796681) passed Linux release
+checks, Windows native distributions, macOS source and universal distributions, Android
+consumer/APK, and Emscripten consumer validation. Those results close the host-gated rows above.
 
 ## Decision defaults and stop conditions
 
