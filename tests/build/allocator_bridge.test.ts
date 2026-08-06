@@ -20,7 +20,19 @@ function cacheArgs(cache: string): string[] {
 
 async function runFixture(...args: string[]): Promise<void> {
   await withTempDirectory(`sdl-allocator-build-`, async (cache) => {
-    await run("zig", ["build", ...args, ...cacheArgs(cache)], { cwd: fixture });
+    const command = new Deno.Command("zig", {
+      args: ["build", ...args, ...cacheArgs(cache)],
+      cwd: fixture,
+      signal: AbortSignal.timeout(90_000),
+    });
+    const result = await command.output();
+    if (result.success) return;
+    const decoder = new TextDecoder();
+    throw new Error(
+      `zig build ${args.join(" ")} exited with code ${result.code}:\n${
+        decoder.decode(result.stderr)
+      }\n${decoder.decode(result.stdout)}`,
+    );
   });
 }
 
