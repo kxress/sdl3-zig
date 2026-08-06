@@ -62,8 +62,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          { grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined' windows-build.log || true; } \
-            | tail -n 12 | while IFS= read -r line; do
+          tail -n 240 windows-build.log | while IFS= read -r line; do
             echo "::error title=Windows build output::$line"
           done
 

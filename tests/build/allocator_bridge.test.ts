@@ -1,22 +1,34 @@
-import { command, run } from "./support.ts";
+import { command, run, withTempDirectory } from "./support.ts";
 import { codegenConfiguration } from "../../scripts/codegen/config.ts";
 
 const fixture = `${import.meta.dirname}/fixtures/allocator_bridge`;
 
 async function expectDiagnostic(step: string, fragment: string): Promise<void> {
-  const result = await command("zig", ["build", step], { cwd: fixture });
-  if (result.success) throw new Error(`expected ${step} to fail`);
-  const diagnostic = new TextDecoder().decode(result.stderr);
-  if (!diagnostic.includes(fragment)) {
-    throw new Error(`${step} diagnostic changed unexpectedly:\n${diagnostic}`);
-  }
+  await withTempDirectory(`sdl-allocator-${step}-`, async (cache) => {
+    const result = await command("zig", ["build", step, ...cacheArgs(cache)], { cwd: fixture });
+    if (result.success) throw new Error(`expected ${step} to fail`);
+    const diagnostic = new TextDecoder().decode(result.stderr);
+    if (!diagnostic.includes(fragment)) {
+      throw new Error(`${step} diagnostic changed unexpectedly:\n${diagnostic}`);
+    }
+  });
+}
+
+function cacheArgs(cache: string): string[] {
+  return ["--cache-dir", `${cache}/local`, "--global-cache-dir", `${cache}/global`];
+}
+
+async function runFixture(...args: string[]): Promise<void> {
+  await withTempDirectory(`sdl-allocator-build-`, async (cache) => {
+    await run("zig", ["build", ...args, ...cacheArgs(cache)], { cwd: fixture });
+  });
 }
 
 Deno.test({
   name: "generated allocator bridge passes its fake-ABI lifetime and pairing fixture",
   timeout: 10 * 60 * 1000,
   fn: async () => {
-    await run("zig", ["build", "--summary", "all"], { cwd: fixture });
+    await runFixture("--summary", "all");
   },
 });
 
@@ -24,7 +36,7 @@ Deno.test({
   name: "allocator bridge preserves size_t ABI width on Windows targets",
   timeout: 10 * 60 * 1000,
   fn: async () => {
-    await run("zig", ["build", "compile-check", "-Dtarget=x86_64-windows-gnu"], { cwd: fixture });
+    await runFixture("compile-check", "-Dtarget=x86_64-windows-gnu");
   },
 });
 
@@ -38,7 +50,7 @@ Deno.test({
         const zigTarget = analysisTarget === "aarch64-linux-android21"
           ? "aarch64-linux-android"
           : analysisTarget;
-        await run("zig", ["build", "matrix-check", `-Dtarget=${zigTarget}`], { cwd: fixture });
+        await runFixture("matrix-check", `-Dtarget=${zigTarget}`);
       });
     }
   },

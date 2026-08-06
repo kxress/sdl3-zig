@@ -59,6 +59,7 @@ pub fn build(b: *std.Build) void {
         &.{"-DSDLIMAGE_BMP=OFF"}
     else
         &.{};
+    const source_cmake_generator = if (target.result.os.tag == .windows) "Ninja" else null;
     const source_sysroot = b.option(
         []const u8,
         "source_sysroot",
@@ -143,6 +144,7 @@ pub fn build(b: *std.Build) void {
         .mixer = true,
         .net = true,
         .source_cmake_options = source_cmake_options_list.items,
+        .source_cmake_generator = source_cmake_generator,
         .source_mixer_cmake_options = source_mixer_cmake_options,
         .source_cmake_toolchain = source_cmake_toolchain,
         .source_features = .{
