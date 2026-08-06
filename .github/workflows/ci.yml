@@ -76,7 +76,9 @@ jobs:
                 echo "::error title=Windows build output::$line"
               done
           else
-            tail -n 40 windows-build.log | while IFS= read -r line; do
+            sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+              | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
+              | tail -n 80 | while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
             done
