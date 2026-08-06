@@ -65,6 +65,12 @@ jobs:
           tail -n 240 windows-build.log | while IFS= read -r line; do
             echo "::error title=Windows build output::$line"
           done
+      - name: Upload Windows build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-log-${{ github.run_id }}
+          path: windows-build.log
 
   macos-distributions:
     name: macOS source and universal distributions
@@ -110,6 +116,12 @@ jobs:
           tail -n 1000 macos-build.log | while IFS= read -r line; do
             echo "::error title=macOS build output::$line"
           done
+      - name: Upload macOS build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-log-${{ github.run_id }}
+          path: macos-build.log
       - name: Validate Apple mobile binding and XCFramework slices
         run: deno task test:apple-mobile
 
