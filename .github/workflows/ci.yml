@@ -94,7 +94,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          deno task test:macos-build 2>&1 | tee macos-build.log
+          deno test --frozen --allow-read --allow-write \
+            --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig \
+            tests/build/allocator_bridge.test.ts 2>&1 | tee macos-build.log
+          deno test --frozen --allow-read --allow-write \
+            --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig \
+            tests/build/long_double_runtime.test.ts 2>&1 | tee -a macos-build.log
+          deno test --frozen --allow-read --allow-write \
+            --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig \
+            tests/build/macos.test.ts 2>&1 | tee -a macos-build.log
       - name: Surface macOS build diagnostics
         if: failure()
         shell: bash
