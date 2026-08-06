@@ -1,4 +1,4 @@
-import { command, run, withTempDirectory } from "./support.ts";
+import { command, withTempDirectory } from "./support.ts";
 import { codegenConfiguration } from "../../scripts/codegen/config.ts";
 
 const fixture = `${import.meta.dirname}/fixtures/allocator_bridge`;
