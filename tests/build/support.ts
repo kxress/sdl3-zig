@@ -40,7 +40,10 @@ export async function run(
   const output = [stderr, stdout].filter((value) =>
     value !== "" && !value.startsWith("(stdout") && !value.startsWith("(stderr")
   ).join("\n");
-  throw new Error(`${executable} ${args.join(" ")} exited with code ${result.code}:\n${output}`);
+  const message = `${executable} ${args.join(" ")} exited with code ${result.code}:\n${output}`;
+  // Keep failures visible in CI logs even when the test reporter folds the thrown error.
+  console.error(message);
+  throw new Error(message);
 }
 
 /**
