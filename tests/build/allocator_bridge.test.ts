@@ -23,7 +23,9 @@ async function runFixture(...args: string[]): Promise<void> {
   const command = new Deno.Command("zig", {
     args: ["build", ...args, ...cacheArgs(cache)],
     cwd: fixture,
-    signal: AbortSignal.timeout(90_000),
+    // MSVC-hosted translation and linking can exceed the local 90-second probe budget when
+    // several allocator matrix tests share a Windows runner.
+    signal: AbortSignal.timeout(Deno.build.os === "windows" ? 300_000 : 90_000),
   });
   const result = await command.output();
   if (result.success) return;
