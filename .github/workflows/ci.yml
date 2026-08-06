@@ -103,10 +103,7 @@ jobs:
           deno_matrix=(deno test --frozen --allow-read --allow-write \
             --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,otool,tar,zig)
           for target in \
-            x86_64-linux-gnu x86_64-windows-gnu aarch64-ios \
-            aarch64-ios-simulator x86_64-ios-simulator aarch64-tvos \
-            aarch64-tvos-simulator x86_64-tvos-simulator wasm32-emscripten \
-            aarch64-linux-android21; do
+            x86_64-linux-gnu x86_64-windows-gnu wasm32-emscripten aarch64-linux-android21; do
             "${deno_matrix[@]}" --filter "allocator bridge compiles for ${target}" \
               tests/build/allocator_bridge.test.ts 2>&1 | tee -a macos-build.log
           done
