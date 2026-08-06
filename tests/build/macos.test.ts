@@ -15,6 +15,7 @@ const sourceAllFixture = `${import.meta.dirname}/fixtures/source_all`;
 Deno.test({
   name: "macOS builds and runs the CMake source distribution for SDL and every companion",
   ignore: Deno.build.os !== "darwin",
+  timeout: 10 * 60 * 1000,
   async fn(test) {
     await withTempDirectory("sdl-macos-cmake-source-", async (temporary) => {
       for (const linkage of ["static", "shared"]) {
@@ -61,6 +62,7 @@ Deno.test({
 Deno.test({
   name: "macOS prebuilt distributions link and install for every supported architecture",
   ignore: Deno.build.os !== "darwin",
+  timeout: 10 * 60 * 1000,
   async fn(test) {
     await withTempDirectory("sdl-macos-distribution-", async (temporary) => {
       const packageRoot = await stageReleaseTree(`${temporary}/package`);

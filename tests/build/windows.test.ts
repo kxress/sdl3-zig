@@ -19,6 +19,7 @@ const sourceAllFixture = `${import.meta.dirname}/fixtures/source_all`;
 Deno.test({
   name: "Windows MSVC builds and runs the CMake source distribution for SDL and every companion",
   ignore: Deno.build.os !== "windows",
+  timeout: 10 * 60 * 1000,
   async fn(test) {
     await withTempDirectory("sdl-windows-cmake-source-", async (temporary) => {
       for (const linkage of ["static", "shared"]) {
@@ -62,6 +63,7 @@ Deno.test({
 Deno.test({
   name: "Windows MinGW prebuilt distributions link and install",
   ignore: Deno.build.os !== "windows",
+  timeout: 10 * 60 * 1000,
   async fn(test) {
     await buildWindowsDistribution(test, "mingw");
   },
@@ -70,6 +72,7 @@ Deno.test({
 Deno.test({
   name: "Windows MSVC prebuilt distributions link and install",
   ignore: Deno.build.os !== "windows",
+  timeout: 10 * 60 * 1000,
   async fn(test) {
     await buildWindowsDistribution(test, "msvc");
   },
