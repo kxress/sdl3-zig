@@ -29,6 +29,7 @@ Deno.test({
             "build",
             `-Dtarget=${Deno.build.arch}-windows-msvc`,
             `-Dlinkage=${linkage}`,
+            "-Dinstall_controller_image_data=true",
             "-p",
             `${temporary}/${linkage}/output`,
             "--cache-dir",
@@ -52,7 +53,7 @@ Deno.test({
           }
           await runWindowsExecutable(
             `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
-            `${temporary}/${linkage}`,
+            `${temporary}/${linkage}/output/share/ControllerImage`,
           );
         });
       }
