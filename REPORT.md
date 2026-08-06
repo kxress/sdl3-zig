@@ -394,7 +394,7 @@ availability alone does not satisfy this gate.
 - [x] Keep the parser in generated Zig support so consumer comptime strings and tuple types are
       checked during consumer compilation. Factor its TypeScript source builder out of `render.ts`
       if helpful, but keep declaration semantics in `function-plan.ts`.
-- [ ] Replace ad hoc switches with a table-driven printf/scanf grammar and ABI type model covering:
+- [x] Replace ad hoc switches with a table-driven printf/scanf grammar and ABI type model covering:
   - [x] flags, width, precision, `*` width/precision, and argument order;
   - [x] positional syntax when SDL supports it, otherwise a precise compile error;
   - [x] integer lengths `hh`, `h`, default, `l`, `ll`, `j`, `z`, and `t`;
