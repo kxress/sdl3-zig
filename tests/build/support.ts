@@ -136,7 +136,9 @@ export async function runWindowsExecutable(
   cwd: string,
   env?: Record<string, string>,
 ): Promise<void> {
-  await run("cmd", ["/d", "/c", executable], { cwd, env, stdout: "inherit", stderr: "inherit" });
+  // Keep child output in the thrown error so CI diagnostics retain the executable's
+  // assertion or panic instead of only reporting cmd.exe's exit code.
+  await run("cmd", ["/d", "/c", executable], { cwd, env });
 }
 
 function consumerManifest(dependency: string): string {
