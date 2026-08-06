@@ -76,12 +76,20 @@ jobs:
                 echo "::error title=Windows build output::$line"
               done
           else
-            sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-              | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
-              | tail -n 80 | while IFS= read -r line; do
+            diagnostics="$({
+              sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
+                | tail -n 80
+            } || true)"
+            if [[ -z "$diagnostics" ]]; then
+              diagnostics="$({
+                grep -E '\[windows (source|prebuilt)\]' windows-build.log | tail -n 10
+              } || true)"
+            fi
+            while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
-            done
+            done <<< "$diagnostics"
           fi
       - name: Upload Windows build log
         if: failure()
