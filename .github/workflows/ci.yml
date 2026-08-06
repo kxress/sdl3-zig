@@ -77,7 +77,7 @@ jobs:
               done
           else
             diagnostics="$({
-              grep -E '\[windows (source|prebuilt)\]' windows-build.log | tail -n 10
+              if [[ -f windows-stage.log ]]; then cat windows-stage.log; fi
             } || true)"
             if [[ -z "$diagnostics" ]]; then
               diagnostics="$({
@@ -96,7 +96,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build-log-${{ github.run_id }}
-          path: windows-build.log
+          path: |
+            windows-build.log
+            windows-stage.log
 
   macos-distributions:
     name: macOS source and universal distributions

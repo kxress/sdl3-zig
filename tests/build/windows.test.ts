@@ -15,6 +15,11 @@ import {
 
 const companions = ["image", "ttf", "mixer", "net"];
 const sourceAllFixture = `${import.meta.dirname}/fixtures/source_all`;
+const stageLog = "windows-stage.log";
+
+async function traceStage(message: string): Promise<void> {
+  await Deno.writeTextFile(stageLog, `${new Date().toISOString()} ${message}\n`, { append: true });
+}
 
 Deno.test({
   name: "Windows MSVC builds and runs the CMake source distribution for SDL and every companion",
@@ -22,8 +27,11 @@ Deno.test({
   timeout: 30 * 60 * 1000,
   async fn(test) {
     const temporary = await Deno.makeTempDir({ prefix: "sdl-windows-cmake-source-" });
+    await Deno.writeTextFile(stageLog, "");
+    await traceStage("source test started");
     for (const linkage of ["static", "shared"]) {
       await test.step(linkage, async () => {
+        await traceStage(`building ${linkage} linkage`);
         console.error(`[windows source] building ${linkage} linkage`);
         const cache = `${temporary}/${linkage}/local`;
         await run("zig", [
@@ -52,11 +60,13 @@ Deno.test({
             await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
           }
         }
+        await traceStage(`running ${linkage} executable`);
         console.error(`[windows source] running ${linkage} executable`);
         await runWindowsExecutable(
           `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
           `${temporary}/${linkage}/output/share/ControllerImage`,
         );
+        await traceStage(`passed ${linkage} linkage`);
         console.error(`[windows source] passed ${linkage} linkage`);
       });
     }
@@ -93,6 +103,7 @@ async function buildWindowsDistribution(
     for (const target of targets) {
       const targetString = targetName(target);
       await test.step(`${targetString} prebuilts link and install`, async () => {
+        await traceStage(`building ${abi} ${targetString}`);
         console.error(`[windows prebuilt] building ${abi} ${targetString}`);
         const optionalCodecs = windowsOptionalArchitectures[abi].includes(target.arch);
         const output = `${temporary}/${targetString}`;
@@ -105,9 +116,11 @@ async function buildWindowsDistribution(
           await Deno.stat(`${output}/bin/${library}.dll`);
         }
         if (targetString === `${Deno.build.arch}-windows-${target.abi}`) {
+          await traceStage(`running ${abi} ${targetString}`);
           console.error(`[windows prebuilt] running ${abi} ${targetString}`);
           await runWindowsExecutable(`${output}/bin/sdl-distribution-consumer.exe`, output);
         }
+        await traceStage(`passed ${abi} ${targetString}`);
         console.error(`[windows prebuilt] passed ${abi} ${targetString}`);
       });
     }

@@ -2,6 +2,7 @@
 .zig-cache/
 zig-out/
 zig-pkg/
+windows-stage.log
 .mise.local.toml
 UNRELATED_NOTES.md
 docs/
