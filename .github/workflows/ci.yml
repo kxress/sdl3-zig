@@ -34,8 +34,9 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          { grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined' linux-release-check.log || true; } \
-            | tail -n 12 | while IFS= read -r line; do
+          sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' linux-release-check.log \
+            | grep -Ei 'error:|exited with code|notcapable|notfound|no such file|undefined|failed|timeout' \
+            | tail -n 40 | while IFS= read -r line; do
             echo "::error title=Linux release output::$line"
           done
 
@@ -62,10 +63,9 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          {
-            grep -Ein -C 4 'expected|actual|FAIL|test failed|error:' windows-build.log || true
-            tail -n 80 windows-build.log
-          } | tail -n 240 | while IFS= read -r line; do
+          sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+            | grep -Ein -C 6 'expected|actual|FAIL|test failed|error:|exited with code|cmake error|msb[0-9]+|fatal|cannot|not found' \
+            | tail -n 320 | while IFS= read -r line; do
             echo "::error title=Windows build output::$line"
           done
       - name: Upload Windows build log
