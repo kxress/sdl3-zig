@@ -63,11 +63,10 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 80 windows-build.log \
+          diagnostic="$(tail -n 320 windows-build.log \
             | sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' \
-            | while IFS= read -r line; do
-            echo "::error title=Windows build output::$line"
-          done
+            | tr '\\n' ' ')"
+          echo "::error title=Windows build output::$diagnostic"
       - name: Upload Windows build log
         if: failure()
         uses: actions/upload-artifact@v4
