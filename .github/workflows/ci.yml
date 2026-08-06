@@ -65,13 +65,22 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-            | grep -Ein -C 3 'CMake Error|Configuring incomplete|Build files have been written|error [A-Z]+[0-9]+|fatal error|FAILED:|Could NOT|No CMAKE|not found|MSB[0-9]+|exited with code|Test failed|FAIL' \
-            | tail -n 12 \
-            | while IFS= read -r line; do
+          failure_line="$(grep -n 'FAILURES' windows-build.log | tail -n 1 | cut -d: -f1)"
+          if [[ -n "$failure_line" ]]; then
+            start_line=$((failure_line > 24 ? failure_line - 24 : 1))
+            end_line=$((failure_line + 8))
+            sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+              | sed -n "${start_line},${end_line}p" \
+              | while IFS= read -r line; do
+                line="${line//'%'/'%25'}"
+                echo "::error title=Windows build output::$line"
+              done
+          else
+            tail -n 40 windows-build.log | while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
             done
+          fi
       - name: Upload Windows build log
         if: failure()
         uses: actions/upload-artifact@v4
