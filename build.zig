@@ -1042,6 +1042,7 @@ fn addCmakeSourceBuild(
                 "-DSPIRV_CROSS_CLI=OFF",
                 "-DSPIRV_CROSS_ENABLE_TESTS=OFF",
             });
+            configure_spirv_cross.setName(b.fmt("configure SPIRV-Cross for {s}", .{component}));
             configure_spirv_cross.addArg("-DCMAKE_INSTALL_LIBDIR=lib");
             if (generator) |value| configure_spirv_cross.addArgs(&.{ "-G", value });
             if (toolchain) |value| configure_spirv_cross.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
@@ -1051,6 +1052,7 @@ fn addCmakeSourceBuild(
             const install_spirv_cross = b.addSystemCommand(
                 &.{ "cmake", "--build", spirv_cross_build, "--target", "install" },
             );
+            install_spirv_cross.setName(b.fmt("install SPIRV-Cross for {s}", .{component}));
             if (target.result.os.tag == .windows) {
                 install_spirv_cross.addArgs(&.{ "--config", "Debug" });
             }
@@ -1058,6 +1060,7 @@ fn addCmakeSourceBuild(
             previous = &install_spirv_cross.step;
         }
         const configure = b.addSystemCommand(&.{ "cmake", "-S", source_path, "-B", component_build, b.fmt("-DCMAKE_INSTALL_PREFIX={s}", .{prefix}) });
+        configure.setName(b.fmt("configure {s}", .{component}));
         configure.addArg(b.fmt("-DCMAKE_PREFIX_PATH={s}", .{prefix}));
         configure.addArg(b.fmt("-DBUILD_SHARED_LIBS={s}", .{shared_value}));
         configure.addArg("-DCMAKE_INSTALL_LIBDIR=lib");
@@ -1082,6 +1085,7 @@ fn addCmakeSourceBuild(
             &.{ "cmake", "--build", component_build, "--target", "controllerimage", "make-controllerimage-data" }
         else
             &.{ "cmake", "--build", component_build, "--target", "install" });
+        install.setName(b.fmt("install {s}", .{component}));
         if (target.result.os.tag == .windows) {
             install.addArgs(&.{ "--config", "Debug" });
         }
