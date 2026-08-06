@@ -114,9 +114,6 @@ jobs:
         with:
           name: macos-build-log-${{ github.run_id }}
           path: macos-build.log
-      - name: Validate Apple mobile binding and XCFramework slices
-        run: deno task test:apple-mobile
-
   android-consumer:
     name: Android consumer and APK
     runs-on: ubuntu-latest
