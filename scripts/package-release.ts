@@ -190,6 +190,22 @@ async function copyPackageSources(release: SdlRelease, destination: string): Pro
 
 async function copyPackagePath(source: string, destination: string): Promise<void> {
   const stat = await Deno.lstat(source);
+  // Windows runners cannot stat the macOS framework's `Versions/Current` symlink from the
+  // verified SDL source trees. Materialize safe relative symlink targets there so the Windows
+  // distribution fixture can stage the complete source tree without changing Unix packaging.
+  if (Deno.build.os === "windows" && stat.isSymlink) {
+    const target = await Deno.readLink(source);
+    const normalizedTarget = target.replaceAll("\\", "/");
+    if (
+      normalizedTarget.startsWith("/") ||
+      /^[A-Za-z]:\//.test(normalizedTarget) ||
+      normalizedTarget.split("/").includes("..")
+    ) {
+      throw new Error(`Unsafe release symlink ${source} -> ${target}`);
+    }
+    await copyPackagePath(resolve(dirname(source), target), destination);
+    return;
+  }
   if (!stat.isDirectory) {
     await copyTo(source, destination);
     return;
