@@ -24,6 +24,7 @@ Deno.test({
     const temporary = await Deno.makeTempDir({ prefix: "sdl-windows-cmake-source-" });
     for (const linkage of ["static", "shared"]) {
       await test.step(linkage, async () => {
+        console.error(`[windows source] building ${linkage} linkage`);
         const cache = `${temporary}/${linkage}/local`;
         await run("zig", [
           "build",
@@ -51,10 +52,12 @@ Deno.test({
             await Deno.stat(`${temporary}/${linkage}/output/bin/${library}.dll`);
           }
         }
+        console.error(`[windows source] running ${linkage} executable`);
         await runWindowsExecutable(
           `${temporary}/${linkage}/output/bin/cmake-source-all.exe`,
           `${temporary}/${linkage}/output/share/ControllerImage`,
         );
+        console.error(`[windows source] passed ${linkage} linkage`);
       });
     }
   },
@@ -90,6 +93,7 @@ async function buildWindowsDistribution(
     for (const target of targets) {
       const targetString = targetName(target);
       await test.step(`${targetString} prebuilts link and install`, async () => {
+        console.error(`[windows prebuilt] building ${abi} ${targetString}`);
         const optionalCodecs = windowsOptionalArchitectures[abi].includes(target.arch);
         const output = `${temporary}/${targetString}`;
         await buildDistributionConsumer(consumer, temporary, targetString, output, [
@@ -101,8 +105,10 @@ async function buildWindowsDistribution(
           await Deno.stat(`${output}/bin/${library}.dll`);
         }
         if (targetString === `${Deno.build.arch}-windows-${target.abi}`) {
+          console.error(`[windows prebuilt] running ${abi} ${targetString}`);
           await runWindowsExecutable(`${output}/bin/sdl-distribution-consumer.exe`, output);
         }
+        console.error(`[windows prebuilt] passed ${abi} ${targetString}`);
       });
     }
   });
