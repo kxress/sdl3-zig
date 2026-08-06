@@ -19,21 +19,29 @@ function cacheArgs(cache: string): string[] {
 }
 
 async function runFixture(...args: string[]): Promise<void> {
-  await withTempDirectory(`sdl-allocator-build-`, async (cache) => {
+  const cache = await Deno.makeTempDir({ prefix: "sdl-allocator-build-" });
+  let completed = false;
+  try {
     const command = new Deno.Command("zig", {
       args: ["build", ...args, ...cacheArgs(cache)],
       cwd: fixture,
       signal: AbortSignal.timeout(90_000),
     });
     const result = await command.output();
-    if (result.success) return;
+    if (result.success) {
+      completed = true;
+      return;
+    }
     const decoder = new TextDecoder();
     throw new Error(
       `zig build ${args.join(" ")} exited with code ${result.code}:\n${
         decoder.decode(result.stderr)
       }\n${decoder.decode(result.stdout)}`,
     );
-  });
+  } finally {
+    // Preserve an aborted target cache for CI diagnostics; successful probes clean up normally.
+    if (completed) await Deno.remove(cache, { recursive: true });
+  }
 }
 
 Deno.test({
