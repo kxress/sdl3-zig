@@ -578,10 +578,16 @@ fn addLibraryModules(
                 if (target.result.os.tag == .windows and target.result.abi == .msvc) {
                     // The Visual Studio generator appends its debug postfix despite the
                     // CMake cache setting. Link the emitted archives by their exact names.
-                    for (spirv_cross_libraries) |library| {
+                    for ([_][]const u8{ "c", "cpp", "core" }) |library| {
                         module.addObjectFile(.{ .cwd_relative = b.fmt(
                             "{s}/lib/spirv-cross-{s}d.lib",
                             .{ source.prefix, library },
+                        ) });
+                    }
+                    for ([_][]const u8{ "glsl", "hlsl", "msl", "reflect" }) |library| {
+                        module.addObjectFile(.{ .cwd_relative = b.fmt(
+                            "{s}/Debug/spirv-cross-{s}d.lib",
+                            .{ spirv_cross_build, library },
                         ) });
                     }
                 } else {
