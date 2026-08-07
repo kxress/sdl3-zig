@@ -960,40 +960,43 @@ fn addCmakeSourceBuild(
             destination: []const u8,
         } = null;
         if (std.mem.eql(u8, component, "SDL3_shadercross") and
-            (shadercross_uses_external_dxc or linkage == .static)) {
-            const staged_source = b.cache_root.join(
-                b.allocator,
-                &.{ "sdl3-source-build", "SDL3_shadercross-source" },
-            ) catch @panic("OOM");
-            const stage_source = b.addSystemCommand(&.{ "cmake", "-E", "copy_directory", source_path, staged_source });
-            if (previous) |step| stage_source.step.dependOn(step);
-            source_path = staged_source;
-            if (shadercross_dxc == .bundled) {
-                const system_name = switch (target.result.os.tag) {
-                    .linux => "Linux",
-                    .windows => "Windows",
-                    else => @panic("shadercross_dxc=bundled is available only for Linux and Windows"),
-                };
-                const download = b.addSystemCommand(&.{
-                    "cmake",
-                    b.fmt("-DCMAKE_SYSTEM_NAME={s}", .{system_name}),
-                    "-P",
-                    b.pathJoin(&.{ source_path, "build-scripts", "download-prebuilt-DirectXShaderCompiler.cmake" }),
-                });
-                download.step.dependOn(&stage_source.step);
-                shadercross_runtime = &download.step;
-            } else {
-                const dxc_root = shadercross_dxc_root orelse
-                    @panic("shadercross_dxc=external requires -Dshadercross_dxc_root=<path>");
-                const stage_runtime = b.addSystemCommand(&.{
-                    "cmake",
-                    "-E",
-                    "copy_directory",
-                    dxc_root,
-                    b.pathJoin(&.{ source_path, "external", "DirectXShaderCompiler-binaries" }),
-                });
-                stage_runtime.step.dependOn(&stage_source.step);
-                shadercross_runtime = &stage_runtime.step;
+            (shadercross_uses_external_dxc or linkage == .static))
+        {
+            if (shadercross_uses_external_dxc) {
+                const staged_source = b.cache_root.join(
+                    b.allocator,
+                    &.{ "sdl3-source-build", "SDL3_shadercross-source" },
+                ) catch @panic("OOM");
+                const stage_source = b.addSystemCommand(&.{ "cmake", "-E", "copy_directory", source_path, staged_source });
+                if (previous) |step| stage_source.step.dependOn(step);
+                source_path = staged_source;
+                if (shadercross_dxc == .bundled) {
+                    const system_name = switch (target.result.os.tag) {
+                        .linux => "Linux",
+                        .windows => "Windows",
+                        else => @panic("shadercross_dxc=bundled is available only for Linux and Windows"),
+                    };
+                    const download = b.addSystemCommand(&.{
+                        "cmake",
+                        b.fmt("-DCMAKE_SYSTEM_NAME={s}", .{system_name}),
+                        "-P",
+                        b.pathJoin(&.{ source_path, "build-scripts", "download-prebuilt-DirectXShaderCompiler.cmake" }),
+                    });
+                    download.step.dependOn(&stage_source.step);
+                    shadercross_runtime = &download.step;
+                } else {
+                    const dxc_root = shadercross_dxc_root orelse
+                        @panic("shadercross_dxc=external requires -Dshadercross_dxc_root=<path>");
+                    const stage_runtime = b.addSystemCommand(&.{
+                        "cmake",
+                        "-E",
+                        "copy_directory",
+                        dxc_root,
+                        b.pathJoin(&.{ source_path, "external", "DirectXShaderCompiler-binaries" }),
+                    });
+                    stage_runtime.step.dependOn(&stage_source.step);
+                    shadercross_runtime = &stage_runtime.step;
+                }
             }
         }
         if (linkage == .shared and sourceRuntimeSelected(component, link_options)) {
