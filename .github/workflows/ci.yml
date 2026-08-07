@@ -104,7 +104,7 @@ jobs:
           name: windows-build-log-${{ github.run_id }}
           path: |
             windows-build.log
-            **/windows-stage.log
+            windows-stage.log
 
   macos-distributions:
     name: macOS source and universal distributions
