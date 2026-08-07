@@ -1068,6 +1068,12 @@ fn addCmakeSourceBuild(
                 configure_spirv_cross.stdio = .inherit;
             }
             configure_spirv_cross.addArg("-DCMAKE_INSTALL_LIBDIR=lib");
+            configure_spirv_cross.addArgs(&.{
+                b.fmt("-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY={s}/lib", .{prefix}),
+                b.fmt("-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG={s}/lib", .{prefix}),
+                b.fmt("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={s}/lib", .{prefix}),
+                b.fmt("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG={s}/lib", .{prefix}),
+            });
             if (generator) |value| configure_spirv_cross.addArgs(&.{ "-G", value });
             if (toolchain) |value| configure_spirv_cross.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
             configure_spirv_cross.addArgs(extra_options);
