@@ -85,12 +85,13 @@ jobs:
             diagnostics="$({
               if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
             } || true)"
-            if [[ -z "$diagnostics" ]]; then
-              diagnostics="$({
+            build_diagnostics="$({
                 sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                   | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
                 | tail -n 80
               } || true)"
+            if [[ -n "$build_diagnostics" ]]; then
+              diagnostics+=$'\n'"$build_diagnostics"
             fi
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
