@@ -584,7 +584,7 @@ fn addLibraryModules(
                     // CMake cache setting. Link the emitted archives by their exact names.
                     for (spirv_cross_libraries) |library| {
                         module.addObjectFile(.{ .cwd_relative = b.fmt(
-                            "{s}/external/SPIRV-Cross/Debug/spirv-cross-{s}d.lib",
+                            "{s}/Debug/spirv-cross-{s}d.lib",
                             .{ shadercross_component_build, library },
                         ) });
                     }
