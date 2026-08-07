@@ -1073,6 +1073,7 @@ fn addCmakeSourceBuild(
                 b.fmt("-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG={s}/lib", .{prefix}),
                 b.fmt("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={s}/lib", .{prefix}),
                 b.fmt("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG={s}/lib", .{prefix}),
+                "-DCMAKE_DEBUG_POSTFIX=",
             });
             if (generator) |value| configure_spirv_cross.addArgs(&.{ "-G", value });
             if (toolchain) |value| configure_spirv_cross.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
