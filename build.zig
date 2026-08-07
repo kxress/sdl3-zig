@@ -546,6 +546,22 @@ fn addLibraryModules(
                     &.{ "sdl3-source-build", configuration.source_build_directory },
                 ) catch @panic("OOM");
             module.addLibraryPath(.{ .cwd_relative = library_path });
+            if (std.mem.eql(u8, configuration.module_name, "controller_image")) {
+                const controller_image_build = b.cache_root.join(
+                    b.allocator,
+                    &.{ "sdl3-source-build", "ControllerImage" },
+                ) catch @panic("OOM");
+                for ([_][]const u8{
+                    b.fmt("{s}/lib", .{source.prefix}),
+                    b.fmt("{s}/lib/Debug", .{source.prefix}),
+                    controller_image_build,
+                    b.fmt("{s}/Debug", .{controller_image_build}),
+                    b.fmt("{s}/lib", .{controller_image_build}),
+                    b.fmt("{s}/lib/Debug", .{controller_image_build}),
+                }) |search_path| {
+                    module.addLibraryPath(.{ .cwd_relative = search_path });
+                }
+            }
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
             if (target.result.os.tag == .macos) linkMacosSourceDependencies(b, module);
             if (std.mem.eql(u8, configuration.module_name, "shadercross") and source.linkage == .static) {
