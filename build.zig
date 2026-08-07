@@ -549,13 +549,16 @@ fn addLibraryModules(
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
             if (target.result.os.tag == .macos) linkMacosSourceDependencies(b, module);
             if (std.mem.eql(u8, configuration.module_name, "shadercross") and source.linkage == .static) {
-                module.linkSystemLibrary("spirv-cross-c", .{});
-                module.linkSystemLibrary("spirv-cross-glsl", .{});
-                module.linkSystemLibrary("spirv-cross-hlsl", .{});
-                module.linkSystemLibrary("spirv-cross-msl", .{});
-                module.linkSystemLibrary("spirv-cross-cpp", .{});
-                module.linkSystemLibrary("spirv-cross-reflect", .{});
-                module.linkSystemLibrary("spirv-cross-core", .{});
+                const spirv_cross_options: std.Build.Module.LinkSystemLibraryOptions = .{
+                    .preferred_link_mode = .static,
+                };
+                module.linkSystemLibrary("spirv-cross-c", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-glsl", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-hlsl", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-msl", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-cpp", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-reflect", spirv_cross_options);
+                module.linkSystemLibrary("spirv-cross-core", spirv_cross_options);
                 module.linkSystemLibrary("c++", .{});
                 if (source.shadercross_dxc == .bundled or source.shadercross_dxc == .external) {
                     const dxc_library_path = b.cache_root.join(
