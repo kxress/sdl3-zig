@@ -76,6 +76,7 @@ jobs:
             diagnostics="$({
               if [[ -n "$spirv_files" ]]; then
                 echo "SPIRV-Cross artifacts found: $(wc -l <<< \"$spirv_files\")"
+                echo "SPIRV-Cross c archives: $(printf '%s\n' \"$spirv_files\" | grep -Ei '/spirv-cross-c[^/]*\\.lib$' | tail -n 6 | tr '\\n' '|')"
               fi
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
