@@ -558,7 +558,7 @@ fn addLibraryModules(
                 ) catch @panic("OOM");
                 const shadercross_component_build = b.cache_root.join(
                     b.allocator,
-                    &.{ "sdl3-source-build", configuration.source_build_directory },
+                    &.{ "sdl3-source-build", "external", "SPIRV-Cross" },
                 ) catch @panic("OOM");
                 for ([_][]const u8{
                     spirv_cross_build,
