@@ -70,7 +70,14 @@ jobs:
           stage_log="$(find . -name windows-stage.log -type f -print -quit)"
           failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
+            spirv_files="$({
+              find /c/Users/runneradmin/AppData/Local/Temp -maxdepth 6 -type f \\
+                \( -iname 'spirv-cross-*.lib' -o -iname 'libspirv-cross-*.a' \) -print 2>/dev/null
+            } | tail -n 80 || true)"
             diagnostics="$({
+              if [[ -n "$spirv_files" ]]; then
+                while IFS= read -r path; do echo "SPIRV-Cross artifact: $path"; done <<< "$spirv_files"
+              fi
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
                 | tail -n 80
