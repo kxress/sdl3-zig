@@ -74,15 +74,9 @@ jobs:
               find /c/Users -path '*/AppData/Local/Temp/sdl-windows-cmake-source-*/*' -type f \( -iname 'spirv-cross-*.lib' -o -iname 'libspirv-cross-*.a' \) -print 2>/dev/null
             } | tail -n 80 || true)"
             diagnostics="$({
-              if [[ -n "$spirv_files" ]]; then
-                echo "SPIRV-Cross artifacts found: $(wc -l <<< \"$spirv_files\")"
-              fi
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
-                | tail -n 80
-              echo '--- final Windows build log ---'
-              tail -n 120 windows-build.log
-              if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
+                | tail -n 20
             } || true)"
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
