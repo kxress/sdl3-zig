@@ -959,7 +959,8 @@ fn addCmakeSourceBuild(
             source: []const u8,
             destination: []const u8,
         } = null;
-        if (std.mem.eql(u8, component, "SDL3_shadercross") and shadercross_uses_external_dxc) {
+        if (std.mem.eql(u8, component, "SDL3_shadercross") and
+            (shadercross_uses_external_dxc or linkage == .static)) {
             const staged_source = b.cache_root.join(
                 b.allocator,
                 &.{ "sdl3-source-build", "SDL3_shadercross-source" },
