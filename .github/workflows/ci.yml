@@ -75,8 +75,8 @@ jobs:
             } | tail -n 80 || true)"
             diagnostics="$({
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
-                | tail -n 20
+                | grep -Ei 'error:' \
+                | head -n 20
             } || true)"
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
