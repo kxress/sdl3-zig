@@ -71,7 +71,7 @@ jobs:
           failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
             spirv_files="$({
-              find /c/Users/runneradmin/AppData/Local/Temp -maxdepth 6 -type f \\
+              find /c/Users/runneradmin/AppData/Local/Temp -maxdepth 12 -type f \\
                 \( -iname 'spirv-cross-*.lib' -o -iname 'libspirv-cross-*.a' \) -print 2>/dev/null
             } | tail -n 80 || true)"
             diagnostics="$({
