@@ -556,6 +556,10 @@ fn addLibraryModules(
                     b.allocator,
                     &.{ "sdl3-source-build", b.fmt("SPIRV-Cross-{s}", .{@tagName(source.shadercross_dxc)}) },
                 ) catch @panic("OOM");
+                const shadercross_component_build = b.cache_root.join(
+                    b.allocator,
+                    &.{ "sdl3-source-build", configuration.source_build_directory },
+                ) catch @panic("OOM");
                 for ([_][]const u8{
                     spirv_cross_build,
                     b.fmt("{s}/Debug", .{spirv_cross_build}),
@@ -578,16 +582,10 @@ fn addLibraryModules(
                 if (target.result.os.tag == .windows and target.result.abi == .msvc) {
                     // The Visual Studio generator appends its debug postfix despite the
                     // CMake cache setting. Link the emitted archives by their exact names.
-                    for ([_][]const u8{ "c", "cpp", "core" }) |library| {
+                    for (spirv_cross_libraries) |library| {
                         module.addObjectFile(.{ .cwd_relative = b.fmt(
-                            "{s}/lib/spirv-cross-{s}d.lib",
-                            .{ source.prefix, library },
-                        ) });
-                    }
-                    for ([_][]const u8{ "glsl", "hlsl", "msl", "reflect" }) |library| {
-                        module.addObjectFile(.{ .cwd_relative = b.fmt(
-                            "{s}/Debug/spirv-cross-{s}d.lib",
-                            .{ spirv_cross_build, library },
+                            "{s}/external/SPIRV-Cross/Debug/spirv-cross-{s}d.lib",
+                            .{ shadercross_component_build, library },
                         ) });
                     }
                 } else {
