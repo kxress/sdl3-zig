@@ -70,17 +70,16 @@ jobs:
           stage_log="$(find . -name windows-stage.log -type f -print -quit)"
           failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
-            if [[ -n "$stage_log" ]]; then
-              cat "$stage_log"
-            fi
-            start_line=$((failure_line > 200 ? failure_line - 200 : 1))
-            end_line=$((failure_line + 8))
-            sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-              | sed -n "${start_line},${end_line}p" \
-              | while IFS= read -r line; do
-                line="${line//'%'/'%25'}"
-                echo "::error title=Windows build output::$line"
-              done
+            diagnostics="$({
+              if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
+              sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
+                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit code' \
+                | tail -n 80
+            } || true)"
+            while IFS= read -r line; do
+              line="${line//'%'/'%25'}"
+              echo "::error title=Windows build output::$line"
+            done <<< "$diagnostics"
           else
             diagnostics="$({
               if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
