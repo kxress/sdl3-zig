@@ -552,6 +552,20 @@ fn addLibraryModules(
                 const spirv_cross_options: std.Build.Module.LinkSystemLibraryOptions = .{
                     .preferred_link_mode = .static,
                 };
+                const spirv_cross_build = b.cache_root.join(
+                    b.allocator,
+                    &.{ "sdl3-source-build", b.fmt("SPIRV-Cross-{s}", .{@tagName(source.shadercross_dxc)}) },
+                ) catch @panic("OOM");
+                for ([_][]const u8{
+                    spirv_cross_build,
+                    b.fmt("{s}/Debug", .{spirv_cross_build}),
+                    b.fmt("{s}/lib", .{spirv_cross_build}),
+                    b.fmt("{s}/lib/Debug", .{spirv_cross_build}),
+                    b.fmt("{s}/lib", .{source.prefix}),
+                    b.fmt("{s}/lib/Debug", .{source.prefix}),
+                }) |search_path| {
+                    module.addLibraryPath(.{ .cwd_relative = search_path });
+                }
                 module.linkSystemLibrary("spirv-cross-c", spirv_cross_options);
                 module.linkSystemLibrary("spirv-cross-glsl", spirv_cross_options);
                 module.linkSystemLibrary("spirv-cross-hlsl", spirv_cross_options);
