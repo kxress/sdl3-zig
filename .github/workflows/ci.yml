@@ -71,10 +71,10 @@ jobs:
           failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
             diagnostics="$({
-              if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit(ed)? with code|exit code' \
+                | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
                 | tail -n 80
+              if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
             } || true)"
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
@@ -86,7 +86,7 @@ jobs:
             } || true)"
             build_diagnostics="$({
                 sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                  | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|MSB[0-9]+|exit(ed)? with code|exit code' \
+                  | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
                 | tail -n 80
               } || true)"
             if [[ -n "$build_diagnostics" ]]; then
