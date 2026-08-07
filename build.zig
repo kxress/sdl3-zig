@@ -566,13 +566,29 @@ fn addLibraryModules(
                 }) |search_path| {
                     module.addLibraryPath(.{ .cwd_relative = search_path });
                 }
-                module.linkSystemLibrary("spirv-cross-c", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-glsl", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-hlsl", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-msl", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-cpp", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-reflect", spirv_cross_options);
-                module.linkSystemLibrary("spirv-cross-core", spirv_cross_options);
+                const spirv_cross_libraries = [_][]const u8{
+                    "c",
+                    "glsl",
+                    "hlsl",
+                    "msl",
+                    "cpp",
+                    "reflect",
+                    "core",
+                };
+                if (target.result.os.tag == .windows and target.result.abi == .msvc) {
+                    // The Visual Studio generator appends its debug postfix despite the
+                    // CMake cache setting. Link the emitted archives by their exact names.
+                    for (spirv_cross_libraries) |library| {
+                        module.addObjectFile(.{ .cwd_relative = b.fmt(
+                            "{s}/lib/spirv-cross-{s}d.lib",
+                            .{ source.prefix, library },
+                        ) });
+                    }
+                } else {
+                    for (spirv_cross_libraries) |library| {
+                        module.linkSystemLibrary(b.fmt("spirv-cross-{s}", .{library}), spirv_cross_options);
+                    }
+                }
                 module.linkSystemLibrary("c++", .{});
                 if (source.shadercross_dxc == .bundled or source.shadercross_dxc == .external) {
                     const dxc_library_path = b.cache_root.join(
