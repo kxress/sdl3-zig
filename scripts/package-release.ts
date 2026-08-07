@@ -213,6 +213,10 @@ async function copyPackagePath(source: string, destination: string): Promise<voi
   await Deno.mkdir(destination, { recursive: true });
   for await (const entry of Deno.readDir(source)) {
     if (localBuildRoots.has(entry.name)) continue;
+    // The Windows source consumer does not use macOS Xcode projects, and GitHub's Windows
+    // checkout cannot stat the framework symlink nested in them. Keep those projects in Unix
+    // release trees while avoiding an irrelevant host-specific tree during Windows staging.
+    if (Deno.build.os === "windows" && entry.name === "Xcode") continue;
     await copyPackagePath(`${source}/${entry.name}`, `${destination}/${entry.name}`);
   }
 }
