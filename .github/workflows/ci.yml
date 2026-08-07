@@ -80,6 +80,8 @@ jobs:
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | grep -Ei 'error|failed|fatal|assert|panic|timeout|undefined|not found|no such file|os error|notfound|permission|MSB[0-9]+|exit(ed)? with code|exit code' \
                 | tail -n 80
+              echo '--- final Windows build log ---'
+              tail -n 120 windows-build.log
               if [[ -n "$stage_log" ]]; then cat "$stage_log"; fi
             } || true)"
             while IFS= read -r line; do
