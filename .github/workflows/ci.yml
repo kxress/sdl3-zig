@@ -73,7 +73,7 @@ jobs:
             if [[ -n "$stage_log" ]]; then
               cat "$stage_log"
             fi
-            start_line=$((failure_line > 24 ? failure_line - 24 : 1))
+            start_line=$((failure_line > 200 ? failure_line - 200 : 1))
             end_line=$((failure_line + 8))
             sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
               | sed -n "${start_line},${end_line}p" \
