@@ -125,6 +125,9 @@ pub fn addTo(
         std.debug.panic("sdl3.addTo requires an artifact with a resolved target", .{});
     const optimize = artifact.root_module.optimize orelse
         std.debug.panic("sdl3.addTo requires an artifact with an optimization mode", .{});
+    if (target.result.os.tag == .windows and target.result.cpu.arch == .aarch64) {
+        artifact.setLibCFile(windowsAarch64LibcFile(b));
+    }
     const dependency = b.dependencyFromBuildZig(@This(), .{
         .target = target,
         .optimize = optimize,
@@ -508,7 +511,14 @@ fn addLibraryModules(
             translate_c.addIncludePath(b.path(include_directory));
         }
         var imports: std.ArrayList(std.Build.Module.Import) = .empty;
-        imports.append(b.allocator, .{ .name = configuration.abi_import_name, .module = translate_c.createModule() }) catch @panic("OOM");
+        const abi_module = translate_c.createModule();
+        if (target.result.os.tag == .windows and target.result.cpu.arch == .aarch64) {
+            // Keep libc enabled for translate-c to find the x86_64 Windows headers, but do not
+            // propagate that host libc requirement into the ARM64 consumer module. Zig 0.16 does
+            // not detect a native ARM64 Windows libc installation automatically.
+            abi_module.link_libc = false;
+        }
+        imports.append(b.allocator, .{ .name = configuration.abi_import_name, .module = abi_module }) catch @panic("OOM");
         imports.append(b.allocator, .{ .name = "sdl3_support", .module = support }) catch @panic("OOM");
         for (configuration.dependencies) |dependency_name| {
             imports.append(b.allocator, .{ .name = dependency_name, .module = findLibraryModule(library_modules.items, dependency_name) }) catch @panic("OOM");
@@ -567,6 +577,9 @@ fn addLibraryModules(
             }
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
             if (target.result.os.tag == .macos) linkMacosSourceDependencies(b, module);
+            if (target.result.os.tag == .windows and source.linkage == .static) {
+                linkWindowsStaticSourceDependencies(module);
+            }
             if (std.mem.eql(u8, configuration.module_name, "shadercross") and source.linkage == .static) {
                 const spirv_cross_options: std.Build.Module.LinkSystemLibraryOptions = .{
                     .preferred_link_mode = .static,
@@ -682,6 +695,58 @@ fn linkMacosSourceDependencies(b: *std.Build, module: *std.Build.Module) void {
         "QuartzCore",
         "UniformTypeIdentifiers",
     }) |framework| module.linkFramework(framework, .{});
+}
+
+fn linkWindowsSystemDependencies(module: *std.Build.Module) void {
+    // CMake's static SDL targets carry these as transitive link dependencies. A Zig module
+    // linking the installed archive does not inherit CMake's INTERFACE_LINK_LIBRARIES metadata.
+    // Keep the Windows system-library surface explicit at the package boundary.
+    for ([_][]const u8{
+        "advapi32",
+        "comdlg32",
+        "dinput8",
+        "gdi32",
+        "hid",
+        "imm32",
+        "iphlpapi",
+        "ole32",
+        "oleaut32",
+        "rpcrt4",
+        "setupapi",
+        "shell32",
+        "shlwapi",
+        "user32",
+        "uuid",
+        "version",
+        "winmm",
+        "ws2_32",
+    }) |library| module.linkSystemLibrary(library, .{});
+}
+
+fn linkWindowsStaticSourceDependencies(module: *std.Build.Module) void {
+    linkWindowsSystemDependencies(module);
+}
+
+fn windowsAarch64LibcFile(b: *std.Build) std.Build.LazyPath {
+    // Zig 0.16 can detect the native x86_64 Windows libc but not the equivalent ARM64 kit.
+    // Reuse its detected SDK and toolchain paths, changing only the architecture-specific
+    // library directories for the final ARM64 consumer link.
+    const result = std.process.run(b.allocator, b.graph.io, .{
+        .argv = &.{ b.graph.zig_exe, "libc" },
+    }) catch @panic("unable to detect the native Windows libc installation");
+    const exit_code = switch (result.term) {
+        .exited => |code| code,
+        else => @panic("zig libc terminated unexpectedly"),
+    };
+    if (exit_code != 0) @panic("zig libc could not detect the native Windows libc installation");
+    const arm64_paths = std.mem.replaceOwned(
+        u8,
+        b.allocator,
+        result.stdout,
+        "\\x64",
+        "\\arm64",
+    ) catch @panic("unable to construct the ARM64 Windows libc description");
+    return b.addWriteFiles().add("windows-aarch64-libc.txt", arm64_paths);
 }
 
 pub fn build(b: *std.Build) void {
@@ -1162,6 +1227,12 @@ fn addCmakeSourceBuild(
             shadercross_dxc,
             source_features,
         );
+        if (target.result.os.tag == .windows) {
+            // Zig 0.16 links the static UCRT for Windows targets. Keep the Visual Studio-
+            // generated static archives on the matching static CRT, including CMake's Debug
+            // configuration, so their references are not dllimport-only UCRT symbols.
+            configure.addArg("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded");
+        }
         if (generator) |value| configure.addArgs(&.{ "-G", value });
         if (toolchain) |value| configure.addArg(b.fmt("-DCMAKE_TOOLCHAIN_FILE={s}", .{value}));
         configure.addArgs(extra_options);
@@ -1662,6 +1733,7 @@ fn configurePrebuilt(
                         .{ library_root, selection.library.library_name },
                     )),
                 );
+                linkWindowsSystemDependencies(module);
                 b.addNamedLazyPath(
                     b.fmt("runtime-{s}", .{selection.library.key}),
                     b.path(b.fmt(
