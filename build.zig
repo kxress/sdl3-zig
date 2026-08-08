@@ -623,7 +623,7 @@ fn addLibraryModules(
                     // bundled libc++ here makes Zig 0.16 compile libc++abi and
                     // fails on the pinned Windows toolchain; use the native
                     // MSVC C++ runtime instead.
-                    module.linkSystemLibrary("msvcprt", .{});
+                    module.linkSystemLibrary(if (optimize == .Debug) "msvcprtd" else "msvcprt", .{});
                 } else {
                     module.linkSystemLibrary("c++", .{});
                 }
