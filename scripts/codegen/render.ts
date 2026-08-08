@@ -3495,7 +3495,7 @@ function renderFunctionMacroCall(
       ...macro.parameters.map((_, index) => parameterNames[index]),
       ...normalizedArguments.slice(macro.parameters.length).map((argument) => {
         const hook = runtimeHookIdentifier(argument);
-        return hook ? `@ptrCast(@alignCast(c.${hook[1]}))` : argument;
+        return hook ? `@ptrCast(&c.${hook[1]})` : argument;
       }),
     ]
     : normalizedArguments.map((argument) => {

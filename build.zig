@@ -493,6 +493,9 @@ fn addLibraryModules(
         for (sdl_metadata.translation_defines) |definition| {
             translate_c.defineCMacroRaw(definition);
         }
+        if (std.mem.eql(u8, configuration.module_name, "sdl")) {
+            translate_c.defineCMacro("SDL_MAIN_HANDLED", "1");
+        }
         addTranslateCTargetDefines(translate_c, target);
         if (target.result.os.tag == .emscripten) {
             const sysroot = emscripten_sysroot orelse
