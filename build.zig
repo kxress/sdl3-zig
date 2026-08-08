@@ -618,7 +618,15 @@ fn addLibraryModules(
                         module.linkSystemLibrary(b.fmt("spirv-cross-{s}", .{library}), spirv_cross_options);
                     }
                 }
-                module.linkSystemLibrary("c++", .{});
+                if (target.result.os.tag == .windows and target.result.abi == .msvc) {
+                    // SPIR-V-Cross is built with the MSVC C++ ABI. Linking Zig's
+                    // bundled libc++ here makes Zig 0.16 compile libc++abi and
+                    // fails on the pinned Windows toolchain; use the native
+                    // MSVC C++ runtime instead.
+                    module.linkSystemLibrary("msvcprt", .{});
+                } else {
+                    module.linkSystemLibrary("c++", .{});
+                }
                 if (source.shadercross_dxc == .bundled or source.shadercross_dxc == .external) {
                     const dxc_library_path = b.cache_root.join(
                         b.allocator,
