@@ -76,6 +76,7 @@ jobs:
             diagnostics="$({
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | grep -Ei 'error|failed|fatal|undefined|unresolved|cannot|not found|exit(ed)? with code' \
+                | grep -Eiv 'libcxx|libcxxabi|stdlib_stdexcept|exception_ptr' \
                 | head -n 120
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | tail -n 120
