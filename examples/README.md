@@ -29,10 +29,10 @@ zig build raylib-textures-bunnymark
 zig build run-raylib-textures-bunnymark
 ```
 
-The group and individual build/run steps build and link the verified SDL3 sources bundled in the
-repository. Examples that load images, fonts, or music additionally build and link the matching
-SDL3_image, SDL3_ttf, or SDL3_mixer sources. `zig build example` remains an alias for
-`sdl-renderer-clear`.
+The group and individual build/run steps use the automatic distribution order: shipped official
+prebuilts, compatible system libraries, then the verified SDL3 sources bundled in the repository.
+Examples that load images, fonts, or music additionally select the matching SDL3_image, SDL3_ttf, or
+SDL3_mixer distribution. `zig build example` remains an alias for `sdl-renderer-clear`.
 
 The repository-owned `shaders/` directory is a separate opt-in helper. It builds deterministic
 SPIR-V, DXIL, MSL, and reflection outputs from GLSL, HLSL, or Zig shader inputs, then provides a

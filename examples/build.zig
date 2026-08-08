@@ -92,8 +92,13 @@ const examples = [_]Example{
 };
 
 pub fn add(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+    const distribution = b.option(
+        sdl3.Distribution,
+        "distribution",
+        "SDL library distribution: auto, none, system, prebuilt, or source",
+    ) orelse .auto;
     const modules = sdl3.addRepositoryModulesWithOptions(b, target, optimize, .{
-        .distribution = .source,
+        .distribution = distribution,
         .image = true,
         .ttf = true,
         .mixer = true,

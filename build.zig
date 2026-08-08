@@ -3,6 +3,8 @@ const sdl_metadata = @import("sdl_metadata.zig");
 const maintenance_steps = @import("examples/steps.zig");
 
 pub const Distribution = enum {
+    /// Prefer package-local official prebuilts, then discoverable system libraries, then source.
+    auto,
     /// Import bindings without selecting or linking an SDL implementation.
     none,
     /// Link SDL libraries supplied by the system or consumer.
@@ -84,8 +86,9 @@ pub const SourceFeatureOptions = struct {
 };
 
 pub const AddOptions = struct {
-    /// Select the native library distribution explicitly for this consumer.
-    distribution: Distribution,
+    /// Select the native library distribution for this consumer. `auto` prefers package-local
+    /// official prebuilts, then discoverable system libraries, then a verified source build.
+    distribution: Distribution = .auto,
     linkage: Linkage = .shared,
     sdl3_test: bool = false,
     controller_image: bool = false,
@@ -128,10 +131,28 @@ pub fn addTo(
     if (target.result.os.tag == .windows and target.result.cpu.arch == .aarch64) {
         artifact.setLibCFile(windowsAarch64LibcFile(b));
     }
+    const distribution = resolveDistribution(
+        b,
+        target,
+        options.linkage,
+        options.distribution,
+        .{
+            .sdl = true,
+            .test_ = options.sdl3_test,
+            .controller_image = options.controller_image,
+            .shadercross = options.shadercross,
+            .image = options.image,
+            .ttf = options.ttf,
+            .mixer = options.mixer,
+            .net = options.net,
+            .system_version_overrides = options.system_version_overrides,
+            .allow_unknown_system_versions = options.allow_unknown_system_versions,
+        },
+    );
     const dependency = b.dependencyFromBuildZig(@This(), .{
         .target = target,
         .optimize = optimize,
-        .distribution = options.distribution,
+        .distribution = distribution,
         .linkage = options.linkage,
         .enable_image = options.image,
         .enable_test = options.sdl3_test,
@@ -167,7 +188,7 @@ pub fn addTo(
         .shadercross_dxc_root = options.shadercross_dxc_root,
     });
 
-    if (options.distribution == .source) {
+    if (distribution == .source) {
         artifact.step.dependOn(dependency.builder.getInstallStep());
         const install_source_runtime = options.install_runtime and
             (options.linkage == .shared or
@@ -195,7 +216,7 @@ pub fn addTo(
     if (options.mixer) artifact.root_module.addImport("mixer", dependency.module("mixer"));
     if (options.net) artifact.root_module.addImport("net", dependency.module("net"));
 
-    if (options.distribution == .prebuilt) {
+    if (distribution == .prebuilt) {
         if (target.result.os.tag == .macos) {
             artifact.root_module.addRPathSpecial("@executable_path/../lib");
         }
@@ -280,19 +301,32 @@ pub fn addRepositoryModulesWithOptions(
     optimize: std.builtin.OptimizeMode,
     options: RepositoryOptions,
 ) RepositoryModules {
+    const distribution = resolveDistribution(
+        b,
+        target,
+        options.linkage,
+        options.distribution,
+        .{
+            .sdl = options.distribution != .none,
+            .image = options.image,
+            .ttf = options.ttf,
+            .mixer = options.mixer,
+            .net = options.net,
+        },
+    );
     const support = b.createModule(.{
         .root_source_file = b.path("src/support.zig"),
         .target = target,
         .optimize = optimize,
     });
     const link_options = LinkOptions{
-        .sdl = options.distribution != .none,
+        .sdl = distribution != .none,
         .image = options.image,
         .ttf = options.ttf,
         .mixer = options.mixer,
         .net = options.net,
     };
-    const source_build: ?SourceBuild = if (options.distribution == .source)
+    const source_build: ?SourceBuild = if (distribution == .source)
         addCmakeSourceBuild(
             b,
             target,
@@ -313,7 +347,7 @@ pub fn addRepositoryModulesWithOptions(
         target,
         optimize,
         support,
-        options.distribution,
+        distribution,
         link_options,
         options.linkage,
         null,
@@ -334,7 +368,7 @@ pub fn addRepositoryModulesWithOptions(
         .mixer = findLibraryModule(library_modules, "mixer"),
         .net = findLibraryModule(library_modules, "net"),
     };
-    if (options.distribution == .prebuilt) {
+    if (distribution == .prebuilt) {
         configurePrebuilt(b, target, options.linkage, .{
             .sdl = modules.sdl,
             .test_ = null,
@@ -347,7 +381,7 @@ pub fn addRepositoryModulesWithOptions(
             .optional_codecs = false,
         });
     }
-    if (options.distribution == .source and options.install_runtime) {
+    if (distribution == .source and options.install_runtime) {
         installRepositorySourceRuntime(b, source_build.?, target);
     }
     return modules;
@@ -444,6 +478,78 @@ fn versionParts(value: []const u8) ?[3]u32 {
         part.* = std.fmt.parseUnsigned(u32, text[0..end], 10) catch return null;
     }
     return parts;
+}
+
+fn resolveDistribution(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    linkage: Linkage,
+    requested: Distribution,
+    link_options: LinkOptions,
+) Distribution {
+    if (requested != .auto) return requested;
+    if (linkage == .shared and prebuiltAvailable(b, target, link_options)) return .prebuilt;
+    if (isNativeTarget(b, target) and systemLibrariesAvailable(b, link_options)) return .system;
+    return .source;
+}
+
+fn isNativeTarget(b: *std.Build, target: std.Build.ResolvedTarget) bool {
+    const host = b.graph.host;
+    return target.result.os.tag == host.result.os.tag and
+        target.result.cpu.arch == host.result.cpu.arch and
+        target.result.abi == host.result.abi;
+}
+
+fn systemLibrariesAvailable(b: *std.Build, options: LinkOptions) bool {
+    for (sdl_metadata.libraries) |configuration| {
+        if (!linkOptionEnabled(configuration, options)) continue;
+        const version = findSystemVersionOverride(configuration, options.system_version_overrides) orelse
+            discoverPkgConfigVersion(b, configuration.pkg_config_name);
+        if (version) |actual| {
+            if (!versionAtLeast(actual, configuration.minimum_version)) return false;
+        } else if (!options.allow_unknown_system_versions) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn prebuiltAvailable(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    options: LinkOptions,
+) bool {
+    const policy = findPrebuiltTarget(target) orelse return false;
+    for (sdl_metadata.libraries) |configuration| {
+        if (!linkOptionEnabled(configuration, options)) continue;
+        if (!configuration.prebuilt) return false;
+        const root = if (std.mem.eql(u8, policy.family, "macos"))
+            std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/macos/frameworks/{s}.framework", .{
+                configuration.key,
+                configuration.framework_name,
+            }) catch return false
+        else
+            std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/{s}/{s}", .{
+                configuration.key,
+                policy.package_family,
+                policy.arch,
+            }) catch return false;
+        defer std.heap.page_allocator.free(root);
+        if (std.mem.eql(u8, policy.family, "macos")) {
+            b.build_root.handle.access(b.graph.io, root, .{}) catch return false;
+        } else {
+            const import_library = if (std.mem.eql(u8, policy.family, "mingw"))
+                std.fmt.allocPrint(std.heap.page_allocator, "{s}/lib/lib{s}.dll.a", .{ root, configuration.library_name }) catch return false
+            else
+                std.fmt.allocPrint(std.heap.page_allocator, "{s}/lib/{s}.lib", .{ root, configuration.library_name }) catch return false;
+            defer std.heap.page_allocator.free(import_library);
+            const runtime = std.fmt.allocPrint(std.heap.page_allocator, "{s}/bin/{s}.dll", .{ root, configuration.library_name }) catch return false;
+            defer std.heap.page_allocator.free(runtime);
+            b.build_root.handle.access(b.graph.io, import_library, .{}) catch return false;
+            b.build_root.handle.access(b.graph.io, runtime, .{}) catch return false;
+        }
+    }
+    return true;
 }
 
 fn addLibraryModules(
@@ -803,11 +909,11 @@ pub fn build(b: *std.Build) void {
         "Allow system SDL libraries without discoverable pkg-config versions",
     ) orelse false;
     const effective_link_sdl = link_sdl or link_test or link_controller_image or link_shadercross or link_image or link_ttf or link_mixer or link_net;
-    const distribution = b.option(
+    const requested_distribution = b.option(
         Distribution,
         "distribution",
-        "SDL library distribution: none, system, prebuilt, or source",
-    ) orelse .none;
+        "SDL library distribution: auto, none, system, prebuilt, or source",
+    );
     const optional_codecs = b.option(
         bool,
         "optional_codecs",
@@ -909,6 +1015,13 @@ pub fn build(b: *std.Build) void {
         .system_version_overrides = system_version_overrides,
         .allow_unknown_system_versions = allow_unknown_system_versions,
     };
+    const distribution = resolveDistribution(
+        b,
+        target,
+        linkage,
+        requested_distribution orelse .none,
+        link_options,
+    );
     const source_build = if (distribution == .source)
         addCmakeSourceBuild(
             b,
@@ -1007,20 +1120,34 @@ pub fn build(b: *std.Build) void {
         });
     }
 
-    addMaintenanceProxy(b, "docs");
-    addMaintenanceProxy(b, "examples");
-    addMaintenanceProxy(b, "examples-sdl");
-    addMaintenanceProxy(b, "examples-raylib");
-    addMaintenanceProxy(b, "example");
+    addMaintenanceProxy(b, "docs", requested_distribution);
+    addMaintenanceProxy(b, "examples", requested_distribution);
+    addMaintenanceProxy(b, "examples-sdl", requested_distribution);
+    addMaintenanceProxy(b, "examples-raylib", requested_distribution);
+    addMaintenanceProxy(b, "example", requested_distribution);
     for (maintenance_steps.names) |name| {
-        addMaintenanceProxy(b, name);
-        addMaintenanceProxy(b, b.fmt("run-{s}", .{name}));
+        addMaintenanceProxy(b, name, requested_distribution);
+        addMaintenanceProxy(b, b.fmt("run-{s}", .{name}), requested_distribution);
     }
 }
 
-fn addMaintenanceProxy(b: *std.Build, name: []const u8) void {
+fn addMaintenanceProxy(
+    b: *std.Build,
+    name: []const u8,
+    requested_distribution: ?Distribution,
+) void {
     const step = b.step(name, b.fmt("Run repository maintenance step {s}", .{name}));
-    const command = b.addSystemCommand(&.{ "zig", "build", "--build-file", "build-maintenance.zig", name });
+    const command = if (requested_distribution) |distribution|
+        b.addSystemCommand(&.{
+            "zig",
+            "build",
+            "--build-file",
+            "build-maintenance.zig",
+            name,
+            b.fmt("-Ddistribution={s}", .{@tagName(distribution)}),
+        })
+    else
+        b.addSystemCommand(&.{ "zig", "build", "--build-file", "build-maintenance.zig", name });
     command.setCwd(b.path("."));
     step.dependOn(&command.step);
 }

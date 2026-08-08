@@ -1,6 +1,6 @@
 export type PrebuiltFamily = "mingw" | "msvc" | "macos";
 export type WindowsPrebuiltFamily = Exclude<PrebuiltFamily, "macos">;
-export type DistributionMode = "none" | "system" | "prebuilt" | "source";
+export type DistributionMode = "auto" | "none" | "system" | "prebuilt" | "source";
 export type Linkage = "static" | "shared";
 export type PrebuiltOs = "windows" | "macos";
 export type PrebuiltAbi = "gnu" | "msvc" | null;
@@ -76,6 +76,7 @@ export const prebuiltTargets: readonly PrebuiltTarget[] = [
 
 export const distributionPolicy = {
   modes: [
+    "auto",
     "none",
     "system",
     "prebuilt",

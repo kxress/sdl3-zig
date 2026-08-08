@@ -13,16 +13,16 @@ documentation describe the API instead of merely exposing translated declaration
 
 ## Included libraries
 
-| Library         | Zig module                                  | Enable with `addTo`        | Distribution                         |
-| --------------- | ------------------------------------------- | -------------------------- | ------------------------------------ |
-| SDL3            | `sdl`, `sdl3.core`                          | always                     | system, official prebuilt, or source |
-| SDL3_image      | `image`, `sdl3.image`                       | `.image = true`            | system, official prebuilt, or source |
-| SDL3_ttf        | `ttf`, `sdl3.ttf`                           | `.ttf = true`              | system, official prebuilt, or source |
-| SDL3_mixer      | `mixer`, `sdl3.mixer`                       | `.mixer = true`            | system, official prebuilt, or source |
-| SDL3_net        | `net`, `sdl3.net`                           | `.net = true`              | system, official prebuilt, or source |
-| SDL3_test       | `test`, `sdl3.@"test"`                      | `.sdl3_test = true`        | system or source                     |
-| ControllerImage | `controller_image`, `sdl3.controller_image` | `.controller_image = true` | system or source                     |
-| SDL_shadercross | `shadercross`, `sdl3.shadercross`           | `.shadercross = true`      | system or source                     |
+| Library         | Zig module                                  | Enable with `addTo`        | Distribution                               |
+| --------------- | ------------------------------------------- | -------------------------- | ------------------------------------------ |
+| SDL3            | `sdl`, `sdl3.core`                          | always                     | auto, system, official prebuilt, or source |
+| SDL3_image      | `image`, `sdl3.image`                       | `.image = true`            | auto, system, official prebuilt, or source |
+| SDL3_ttf        | `ttf`, `sdl3.ttf`                           | `.ttf = true`              | auto, system, official prebuilt, or source |
+| SDL3_mixer      | `mixer`, `sdl3.mixer`                       | `.mixer = true`            | auto, system, official prebuilt, or source |
+| SDL3_net        | `net`, `sdl3.net`                           | `.net = true`              | auto, system, official prebuilt, or source |
+| SDL3_test       | `test`, `sdl3.@"test"`                      | `.sdl3_test = true`        | system or source                           |
+| ControllerImage | `controller_image`, `sdl3.controller_image` | `.controller_image = true` | system or source                           |
+| SDL_shadercross | `shadercross`, `sdl3.shadercross`           | `.shadercross = true`      | system or source                           |
 
 SDL3_test, ControllerImage, and SDL_shadercross are optional source-only SDL packages.
 
@@ -108,13 +108,16 @@ static or shared linkage independently; it is never inferred from the host or to
 
 | Distribution | Behavior                                                                                                                      |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `.auto`      | Prefers a shipped official prebuilt, then compatible system libraries, then verified sources.                                 |
 | `.prebuilt`  | Requires a supported official Windows or macOS prebuilt. Upstream publishes shared libraries only.                            |
 | `.system`    | Links libraries supplied by the system or by the application. Static and shared both work when those libraries are available. |
 | `.source`    | Builds the selected verified upstream source trees with their upstream CMake projects in the consumer's Zig cache.            |
 | `.none`      | Exposes bindings without choosing or linking a native implementation.                                                         |
 
-Distribution selection is explicit; the build never changes it based on the host target. The
-top-level package build defaults to `.none` when no distribution is specified.
+`addTo` defaults to `.auto`, which prefers a package-local official prebuilt, then compatible system
+libraries, and finally a verified source build. Explicit distributions remain available when a
+consumer needs deterministic control. The top-level package build defaults to `.none` when no
+distribution is specified because it does not know which native components a consumer wants.
 
 System distributions require each selected library's pkg-config version to meet the pinned component
 baseline. For caller-supplied libraries without metadata, pass
@@ -378,10 +381,11 @@ Source archives and all other release inputs are verified by their pinned SHA-25
 
 ## Examples
 
-The repository includes SDL and selected 2D raylib-derived example ports, built against the verified
-SDL-family sources bundled in the repository. The authoritative example inventory is the table in
-[`examples/build.zig`](examples/build.zig); see [`examples/README.md`](examples/README.md) for
-assets, origins, and licensing.
+The repository includes SDL and selected 2D raylib-derived example ports. By default, examples use
+the same automatic distribution order as library consumers: shipped official prebuilts, compatible
+system libraries, then the verified SDL-family sources bundled in the repository. The authoritative
+example inventory is the table in [`examples/build.zig`](examples/build.zig); see
+[`examples/README.md`](examples/README.md) for assets, origins, and licensing.
 
 ```sh
 zig build examples
