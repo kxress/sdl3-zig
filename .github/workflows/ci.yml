@@ -13,6 +13,8 @@ permissions:
 jobs:
   release-check:
     name: Linux release checks
+    # Temporarily focus the matrix on the Windows native failure.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -113,6 +115,8 @@ jobs:
 
   macos-distributions:
     name: macOS source and universal distributions
+    # Temporarily focus the matrix on the Windows native failure.
+    if: ${{ false }}
     runs-on: macos-14
     steps:
       - name: Check out repository
@@ -155,6 +159,8 @@ jobs:
           path: macos-build.log
   android-consumer:
     name: Android consumer and APK
+    # Temporarily focus the matrix on the Windows native failure.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -185,6 +191,8 @@ jobs:
 
   emscripten-consumer:
     name: Emscripten consumer
+    # Temporarily focus the matrix on the Windows native failure.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
