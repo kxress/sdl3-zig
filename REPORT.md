@@ -724,8 +724,8 @@ planning or unreleased intermediate work.
 - [ ] Run the full validation matrix below through the GitHub Actions workflow and record
       unavailable host-only commands. The Linux `release-check`, `windows-distributions`,
       `macos-distributions`, `android-consumer`, and `emscripten-consumer` jobs own the
-      corresponding gates; run 100 was cancelled across all jobs by a GitHub-hosted-runner outage
-      before any gate completed. Rerun this matrix after GitHub Actions recovers.
+      corresponding gates. Runs 31231935525 and 31236494501 pass Linux, macOS, Android, and
+      Emscripten; Windows remains blocked by Zig 0.16.0's libcxxabi/MSVC sub-compilation failure.
 - [x] Run `deno task release-check`; inspect documentation and the release archive/reproduction
       result.
 - [x] No publication was requested for this worktree run, so the conditional `prepare-release`
