@@ -138,7 +138,41 @@ upstream codec runtimes with `optional_codecs = true`.
 
 Windows GNU supports x86 and x86_64; Windows MSVC supports x86, x86_64, and AArch64. macOS prebuilts
 are universal frameworks for x86_64 and AArch64. SDL does not publish generic Linux desktop
-prebuilts, so select `.system` or `.source` there.
+prebuilts, so select `.system` or `.source` there. Package-local prebuilts are desktop-only; mobile
+and web targets use caller-supplied libraries or a source build.
+
+### Target-aware bindings
+
+The generated declarations retain availability for the configured Linux, Windows, macOS, iOS, tvOS,
+Emscripten, and Android targets. Platform-specific APIs are selected at compile time from the
+consumer target, rather than being removed from the generated modules. The release archive ships
+official prebuilts only for Windows and macOS desktop; iOS, tvOS, Android, and Emscripten consumers
+must provide their own native distribution or configure `.source`.
+
+For a source Emscripten build, pass the Emscripten CMake toolchain and sysroot used by your SDK:
+
+```zig
+_ = sdl3.addTo(b, exe, .{
+    .distribution = .source,
+    .emscripten_sysroot = "/path/to/emsdk/upstream/emscripten/cache/sysroot",
+    .source_cmake_toolchain = "/path/to/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+});
+```
+
+For Android source builds, provide the NDK root and its CMake toolchain. SDL's Android project owns
+the final APK packaging and Java activity integration:
+
+```zig
+_ = sdl3.addTo(b, shared_library, .{
+    .distribution = .source,
+    .android_ndk_root = "/path/to/android-ndk",
+    .source_cmake_toolchain = "/path/to/android-ndk/build/cmake/android.toolchain.cmake",
+});
+```
+
+Both cross-target examples assume the application has selected the corresponding Zig target. The
+default headless source profile remains appropriate for build-only consumers; enable the required
+SDL subsystems through `source_features` for an application that uses them.
 
 ## Build from verified source
 

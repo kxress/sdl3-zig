@@ -12,7 +12,8 @@ reproducible acquisition, generation, validation, and release.
   configuration in `scripts/codegen/config.ts`.
 - `scripts/`: SDL source synchronization, package metadata generation, release assembly, and their
   focused support modules.
-- `tests/`: repository checks and their black-box consumer/linking fixtures.
+- `tests/`: repository checks and black-box consumer/linking fixtures, including desktop, Android,
+  Emscripten, and Apple-mobile coverage.
 - `vendor/`: ignored local cache of verified upstream SDL-family source trees, headers, licenses,
   and source assets. `deno task fetch` repopulates it when absent or stale; release assembly
   validates it before packaging.
@@ -40,7 +41,7 @@ deno task setup
 
 Run maintenance workflows from Linux, macOS, or WSL. Native Windows is reserved for
 `deno task test:windows-build`; translated MSVC C imports require the MSVC SDK, and mise skips the
-Unix tools there.
+Unix tools there. Apple-mobile validation requires macOS with Xcode and the matching SDKs.
 
 The repository workflow is explicit:
 
@@ -63,7 +64,22 @@ deno task typecheck
 deno task test:metadata
 deno task test:sources
 deno task test:bindings
+deno task test:build
+deno task test:shaders
 ```
+
+Cross-target gates have their own prerequisites and are intentionally separate from `check`:
+
+```sh
+deno task test:windows-build
+deno task test:emscripten
+deno task test:android
+deno task test:apple-mobile
+```
+
+`test:emscripten` needs an activated Emscripten SDK. `test:android` needs JDK 17, Android SDK
+platform 35, build-tools 35.0.1, and NDK 28.2.13676358. `test:apple-mobile` needs Xcode with the iOS
+and tvOS SDKs.
 
 ## Change guidelines
 
@@ -88,7 +104,8 @@ deno task test:bindings
 - Increment the binding revision in `scripts/sdl-release.ts` only for binding-only fixes on an
   unchanged SDL baseline.
 - Do not hand-edit generated `src/{sdl,image,ttf,mixer,net,test,controller_image,shadercross}.zig`
-  or generated `sdl_metadata.zig`; change their inputs and regenerate.
+  or generated `sdl_metadata.zig`; change their inputs and regenerate. Platform-specific
+  declarations are generated from the target matrix in `scripts/codegen/config.ts`.
 - Do not hand-edit verified files under `vendor/`. The directory is an ignored local cache; release
   prebuilts are downloaded and verified during package assembly, not committed.
 - Commit generated bindings for releases; they are the package's public source.
