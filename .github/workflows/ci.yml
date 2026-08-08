@@ -75,7 +75,7 @@ jobs:
             } | tail -n 80 || true)"
             diagnostics="$({
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                | grep -Ei 'error|failed|fatal|undefined|unresolved|cannot|not found|exit(ed)? with code' \
+                | grep -Ei -C 3 'lld-link|error|failed|fatal|undefined|unresolved|cannot|not found|symbol|exit(ed)? with code' \
                 | grep -Eiv 'libcxx|libcxxabi|stdlib_stdexcept|exception_ptr' \
                 | head -n 120
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
