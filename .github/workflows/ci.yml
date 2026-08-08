@@ -70,7 +70,6 @@ jobs:
           stage_log="$(find . -name windows-stage.log -type f -print -quit)"
           failure_line="$(grep -n 'FAILURES' windows-build.log 2>/dev/null | tail -n 1 | cut -d: -f1 || true)"
           if [[ -n "$failure_line" ]]; then
-            diagnostics_prefix="$(if [[ -n \"$stage_log\" ]]; then cat \"$stage_log\"; fi)"
             spirv_files="$({
               find /c/Users -path '*/AppData/Local/Temp/sdl-windows-cmake-source-*/*' -type f \( -iname 'spirv-cross-*.lib' -o -iname 'libspirv-cross-*.a' \) -print 2>/dev/null
             } | tail -n 80 || true)"
@@ -81,7 +80,6 @@ jobs:
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
                 | tail -n 120
             } || true)"
-            diagnostics="$diagnostics_prefix$'\\n'$diagnostics"
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
               echo "::error title=Windows build output::$line"
