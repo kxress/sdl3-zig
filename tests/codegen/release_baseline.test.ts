@@ -91,11 +91,11 @@ Deno.test("release baseline retains the pinned SDL, target matrix, and clean cov
   }
   assertStringIncludes(
     generated,
-    "createThreadRuntime(fn_, name, data, @ptrCast(&c.SDL_BeginThreadFunction), @ptrCast(&c.SDL_EndThreadFunction))",
+    'createThreadRuntime(fn_, name, data, if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.SDL_BeginThreadFunction) else @ptrCast(@alignCast(c.SDL_BeginThreadFunction)), if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.SDL_EndThreadFunction) else @ptrCast(@alignCast(c.SDL_EndThreadFunction)))',
   );
   assertStringIncludes(
     generated,
-    "createThreadWithPropertiesRuntime(props, @ptrCast(&c.SDL_BeginThreadFunction), @ptrCast(&c.SDL_EndThreadFunction))",
+    'createThreadWithPropertiesRuntime(props, if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.SDL_BeginThreadFunction) else @ptrCast(@alignCast(c.SDL_BeginThreadFunction)), if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.SDL_EndThreadFunction) else @ptrCast(@alignCast(c.SDL_EndThreadFunction)))',
   );
   assertStringIncludes(generated, "validateCVarargs(format, args, false)");
   assertStringIncludes(generated, "validateCVarargs(format, args, true)");

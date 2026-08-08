@@ -297,7 +297,7 @@ Deno.test("semantic fixtures preserve independent pointer, slice, callback, and 
   assertStringIncludes(source, "pub inline fn create(value: c_int) c_int {");
   assertStringIncludes(
     source,
-    "return createRuntime(value, @ptrCast(&c.PATTERN_BeginFunction), @ptrCast(&c.PATTERN_EndFunction));",
+    'return createRuntime(value, if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.PATTERN_BeginFunction) else @ptrCast(@alignCast(c.PATTERN_BeginFunction)), if (comptime @import("builtin").os.tag == .windows) @ptrCast(&c.PATTERN_EndFunction) else @ptrCast(@alignCast(c.PATTERN_EndFunction)));',
   );
   assertStringIncludes(source, "pub inline fn formatV(ap: std.builtin.VaList) c_int {");
   assertStringIncludes(

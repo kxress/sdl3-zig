@@ -75,8 +75,8 @@ jobs:
             } | tail -n 80 || true)"
             diagnostics="$({
               sed -E $'s/\\x1B\\[[0-9;]*[[:alpha:]]//g' windows-build.log \
-                | grep -Ei 'error:' \
-                | head -n 20
+                | grep -Ei -C 2 'error:|compilation errors|failed with exit code' \
+                | head -n 80
             } || true)"
             while IFS= read -r line; do
               line="${line//'%'/'%25'}"
