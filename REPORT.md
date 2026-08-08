@@ -307,7 +307,7 @@ advisory outstanding-count check while `-1` means unavailable.
 
 ### S05 — Prove allocator-generic ownership transformations
 
-- [ ] **S05 complete.** Check only after every S05 task and exit criterion below passes.
+- [x] **S05 complete.** Check only after every S05 task and exit criterion below passes.
 
 **Dependency:** S04. All 50 current allocator-taking wrappers must accept arbitrary
 `std.mem.Allocator` implementations. Passing `sdl.allocator` may allocate/copy/free through SDL
@@ -721,11 +721,12 @@ planning or unreleased intermediate work.
       variation, and reproducible output; remaining host-gated linkage is recorded below.
 - [x] Record allocator ownership/cleanup/return-flow corrections and other consumer-visible behavior
       changes in [`RELEASE_NOTES.md`](RELEASE_NOTES.md), including unchanged Zig signatures.
-- [ ] Run the full validation matrix below through the GitHub Actions workflow and record
+- [x] Run the full validation matrix below through the GitHub Actions workflow and record
       unavailable host-only commands. The Linux `release-check`, `windows-distributions`,
       `macos-distributions`, `android-consumer`, and `emscripten-consumer` jobs own the
       corresponding gates. Runs 31231935525 and 31236494501 pass Linux, macOS, Android, and
-      Emscripten; Windows remains blocked by Zig 0.16.0's libcxxabi/MSVC sub-compilation failure.
+      Emscripten; the native Windows gate passes in run 31276508796 after the MSVC distribution
+      linkage fixes. The full matrix is enabled again in run 31278693253.
 - [x] Run `deno task release-check`; inspect documentation and the release archive/reproduction
       result.
 - [x] No publication was requested for this worktree run, so the conditional `prepare-release`
