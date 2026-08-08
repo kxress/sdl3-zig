@@ -6753,8 +6753,14 @@ function isConstWcharPointerType(id: string, context: RenderContext): boolean {
 
 function resourceTypeNameForPointer(id: string, context: RenderContext): string | undefined {
   const record = pointedType(id, context);
-  return record && context.resources.has(record.id)
-    ? context.publicTypeNames.get(record.id)
+  if (!record) return undefined;
+  if (context.resources.has(record.id)) return context.publicTypeNames.get(record.id);
+  // Companion-library ASTs refer to opaque SDL core records imported from the
+  // core binding, so those records are not present in the companion resource
+  // map. They still carry the same one-field Zig handle representation and
+  // must be lowered through `.value` at the C ABI boundary.
+  return isOpaqueRecord(record) && record.attributes.name?.startsWith("SDL_")
+    ? record.attributes.name
     : undefined;
 }
 

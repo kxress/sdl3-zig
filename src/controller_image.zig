@@ -231,7 +231,7 @@ pub inline fn addDataFromFile(fname: ?[:0]const u8) sdl.Error!void {
 ///
 /// Returns `error.SdlFailure` when ControllerImage reports failure.
 pub inline fn addDataFromIoStream(io: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.ControllerImage_AddDataFromIOStream(@ptrCast(io), closeio)) return error.SdlFailure;
+    if (!c.ControllerImage_AddDataFromIOStream(if (io) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Create an device object to obtain image data for a specific gamepad.
@@ -250,7 +250,7 @@ pub inline fn addDataFromIoStream(io: ?*sdl.ioStream.IoStream, closeio: bool) sd
 /// - **See also:** createGamepadDeviceByInstance
 /// - **See also:** Device.deinit
 pub inline fn createGamepadDevice(gamepad: ?*sdl.gamepad.Gamepad) ?Device {
-    const result = c.ControllerImage_CreateGamepadDevice(@ptrCast(gamepad));
+    const result = c.ControllerImage_CreateGamepadDevice(if (gamepad) |resource| @ptrCast(resource.value) else null);
     return if (result) |value| Device{ .value = @ptrCast(value) } else null;
 }
 

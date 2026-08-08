@@ -745,7 +745,7 @@ pub inline fn commonDestroyState(state: ?*CommonState) void {
 ///   - `window`: The window whose information should be displayed.
 ///   - `used_height`: Returns the height used, so the caller can draw more below.
 pub inline fn commonDrawWindowInfo(renderer: ?*sdl.render.Renderer, window: ?*sdl.video.Window, used_height: ?*f32) void {
-    c.SDLTest_CommonDrawWindowInfo(@ptrCast(renderer), @ptrCast(window), @ptrCast(used_height));
+    c.SDLTest_CommonDrawWindowInfo(if (renderer) |resource| @ptrCast(resource.value) else null, if (window) |resource| @ptrCast(resource.value) else null, @ptrCast(used_height));
 }
 
 /// Common event handler for test windows if you use a standard sdl.main.
@@ -873,12 +873,12 @@ pub inline fn createTestSuiteRunner(state: ?*CommonState, test_suites: ?*?*TestS
 
 /// SDL operation `drawCharacter`.
 pub inline fn drawCharacter(renderer: ?*sdl.render.Renderer, x: f32, y: f32, c_2: u32) bool {
-    return c.SDLTest_DrawCharacter(@ptrCast(renderer), x, y, c_2);
+    return c.SDLTest_DrawCharacter(if (renderer) |resource| @ptrCast(resource.value) else null, x, y, c_2);
 }
 
 /// SDL operation `drawString`.
 pub inline fn drawString(renderer: ?*sdl.render.Renderer, x: f32, y: f32, s: ?[:0]const u8) bool {
-    return c.SDLTest_DrawString(@ptrCast(renderer), x, y, if (s != null) @ptrCast(s.?.ptr) else null);
+    return c.SDLTest_DrawString(if (renderer) |resource| @ptrCast(resource.value) else null, x, y, if (s != null) @ptrCast(s.?.ptr) else null);
 }
 
 /// SDL operation `TestSuiteRunner.execute`.
@@ -1263,7 +1263,7 @@ pub inline fn textWindowDestroy(textwin: ?*TextWindow) void {
 
 /// SDL operation `textWindowDisplay`.
 pub inline fn textWindowDisplay(textwin: ?*TextWindow, renderer: ?*sdl.render.Renderer) void {
-    c.SDLTest_TextWindowDisplay(@ptrCast(textwin), @ptrCast(renderer));
+    c.SDLTest_TextWindowDisplay(@ptrCast(textwin), if (renderer) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Memory tracking related functions of SDL test framework.

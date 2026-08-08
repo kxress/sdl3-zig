@@ -1508,7 +1508,7 @@ pub inline fn copyFont(existing_font: ?Font) sdl.Error!Font {
 ///
 /// Returns `error.SdlFailure` when SDL_ttf reports failure.
 pub inline fn createGpuTextEngine(device: ?*sdl.gpu.Device) sdl.Error!*TextEngine {
-    const result = c.TTF_CreateGPUTextEngine(@ptrCast(device));
+    const result = c.TTF_CreateGPUTextEngine(if (device) |resource| @ptrCast(resource.value) else null);
     if (result == null) return error.SdlFailure;
     return @ptrCast(result.?);
 }
@@ -1550,7 +1550,7 @@ pub inline fn createGpuTextEngineWithProperties(props: sdl.properties.Id) sdl.Er
 ///
 /// Returns `error.SdlFailure` when SDL_ttf reports failure.
 pub inline fn createRendererTextEngine(renderer: ?*sdl.render.Renderer) sdl.Error!*TextEngine {
-    const result = c.TTF_CreateRendererTextEngine(@ptrCast(renderer));
+    const result = c.TTF_CreateRendererTextEngine(if (renderer) |resource| @ptrCast(resource.value) else null);
     if (result == null) return error.SdlFailure;
     return @ptrCast(result.?);
 }
@@ -2840,7 +2840,7 @@ pub inline fn openFont(file: ?[:0]const u8, ptsize: f32) sdl.Error!Font {
 ///
 /// Returns `error.SdlFailure` when SDL_ttf reports failure.
 pub inline fn openFontIo(src: ?*sdl.ioStream.IoStream, closeio: bool, ptsize: f32) sdl.Error!Font {
-    const result = c.TTF_OpenFontIO(@ptrCast(src), closeio, ptsize);
+    const result = c.TTF_OpenFontIO(if (src) |resource| @ptrCast(resource.value) else null, closeio, ptsize);
     if (result == null) return error.SdlFailure;
     return Font{ .value = @ptrCast(result.?) };
 }

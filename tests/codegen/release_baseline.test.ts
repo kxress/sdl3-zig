@@ -6,6 +6,7 @@ Deno.test("release baseline retains the pinned SDL, target matrix, and clean cov
   const toolPin = await Deno.readTextFile("mise.toml");
   const coverage = await Deno.readTextFile("COVERAGE.md");
   const generated = await Deno.readTextFile("src/sdl.zig");
+  const imageGenerated = await Deno.readTextFile("src/image.zig");
 
   assertStringIncludes(sdlPin, 'version = "3.4.12"');
   for (
@@ -99,6 +100,10 @@ Deno.test("release baseline retains the pinned SDL, target matrix, and clean cov
   );
   assertStringIncludes(generated, "validateCVarargs(format, args, false)");
   assertStringIncludes(generated, "validateCVarargs(format, args, true)");
+  assertStringIncludes(
+    imageGenerated,
+    "IMG_LoadGIF_IO(if (src) |resource| @ptrCast(resource.value) else null)",
+  );
   assertStringIncludes(generated, "inline fn swap32(x: u32) u32");
   assertStringIncludes(
     generated,

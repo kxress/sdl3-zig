@@ -13492,7 +13492,7 @@ const Window = struct {
     /// - **See also:** video.Window.glCreateContext
     /// Returns `error.SdlFailure` when SDL reports failure.
     pub inline fn glMakeCurrent(self: @This(), context: GlContext) Error!void {
-        if (!c.SDL_GL_MakeCurrent(@ptrCast(self.value), @ptrCast(context))) return error.SdlFailure;
+        if (!c.SDL_GL_MakeCurrent(@ptrCast(self.value), if (context) |resource| @ptrCast(resource.value) else null)) return error.SdlFailure;
     }
 
     /// Update a window with OpenGL rendering.
@@ -22462,7 +22462,7 @@ inline fn bindAudioStreams(devid: AudioDeviceId, streams: ?*const ?*anyopaque, n
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn bindGpuComputePipeline(compute_pass: ?*GpuComputePass, compute_pipeline: ?GpuComputePipeline) void {
-    c.SDL_BindGPUComputePipeline(@ptrCast(compute_pass), if (compute_pipeline) |resource| @ptrCast(resource.value) else null);
+    c.SDL_BindGPUComputePipeline(if (compute_pass) |resource| @ptrCast(resource.value) else null, if (compute_pipeline) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Binds texture-sampler pairs for use on the compute shader.
@@ -22478,7 +22478,7 @@ inline fn bindGpuComputePipeline(compute_pass: ?*GpuComputePass, compute_pipelin
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createComputePipeline
 inline fn bindGpuComputeSamplers(compute_pass: ?*GpuComputePass, first_slot: u32, texture_sampler_bindings: []const GpuTextureSamplerBinding) void {
-    c.SDL_BindGPUComputeSamplers(@ptrCast(compute_pass), first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
+    c.SDL_BindGPUComputeSamplers(if (compute_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
 }
 
 /// Binds storage buffers as readonly for use on the compute pipeline.
@@ -22495,7 +22495,7 @@ inline fn bindGpuComputeSamplers(compute_pass: ?*GpuComputePass, first_slot: u32
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createComputePipeline
 inline fn bindGpuComputeStorageBuffers(compute_pass: ?*GpuComputePass, first_slot: u32, storage_buffers: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUComputeStorageBuffers(@ptrCast(compute_pass), first_slot, @ptrCast(storage_buffers), num_bindings);
+    c.SDL_BindGPUComputeStorageBuffers(if (compute_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_buffers), num_bindings);
 }
 
 /// Binds storage textures as readonly for use on the compute pipeline.
@@ -22512,7 +22512,7 @@ inline fn bindGpuComputeStorageBuffers(compute_pass: ?*GpuComputePass, first_slo
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createComputePipeline
 inline fn bindGpuComputeStorageTextures(compute_pass: ?*GpuComputePass, first_slot: u32, storage_textures: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUComputeStorageTextures(@ptrCast(compute_pass), first_slot, @ptrCast(storage_textures), num_bindings);
+    c.SDL_BindGPUComputeStorageTextures(if (compute_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_textures), num_bindings);
 }
 
 /// Binds texture-sampler pairs for use on the fragment shader.
@@ -22528,7 +22528,7 @@ inline fn bindGpuComputeStorageTextures(compute_pass: ?*GpuComputePass, first_sl
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuFragmentSamplers(render_pass: ?*GpuRenderPass, first_slot: u32, texture_sampler_bindings: []const GpuTextureSamplerBinding) void {
-    c.SDL_BindGPUFragmentSamplers(@ptrCast(render_pass), first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
+    c.SDL_BindGPUFragmentSamplers(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
 }
 
 /// Binds storage buffers for use on the fragment shader.
@@ -22545,7 +22545,7 @@ inline fn bindGpuFragmentSamplers(render_pass: ?*GpuRenderPass, first_slot: u32,
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuFragmentStorageBuffers(render_pass: ?*GpuRenderPass, first_slot: u32, storage_buffers: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUFragmentStorageBuffers(@ptrCast(render_pass), first_slot, @ptrCast(storage_buffers), num_bindings);
+    c.SDL_BindGPUFragmentStorageBuffers(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_buffers), num_bindings);
 }
 
 /// Binds storage textures for use on the fragment shader.
@@ -22562,7 +22562,7 @@ inline fn bindGpuFragmentStorageBuffers(render_pass: ?*GpuRenderPass, first_slot
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuFragmentStorageTextures(render_pass: ?*GpuRenderPass, first_slot: u32, storage_textures: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUFragmentStorageTextures(@ptrCast(render_pass), first_slot, @ptrCast(storage_textures), num_bindings);
+    c.SDL_BindGPUFragmentStorageTextures(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_textures), num_bindings);
 }
 
 /// Binds a graphics pipeline on a render pass to be used in rendering.
@@ -22575,7 +22575,7 @@ inline fn bindGpuFragmentStorageTextures(render_pass: ?*GpuRenderPass, first_slo
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn bindGpuGraphicsPipeline(render_pass: ?*GpuRenderPass, graphics_pipeline: ?GpuGraphicsPipeline) void {
-    c.SDL_BindGPUGraphicsPipeline(@ptrCast(render_pass), if (graphics_pipeline) |resource| @ptrCast(resource.value) else null);
+    c.SDL_BindGPUGraphicsPipeline(if (render_pass) |resource| @ptrCast(resource.value) else null, if (graphics_pipeline) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Binds an index buffer on a command buffer for use with subsequent draw calls.
@@ -22587,7 +22587,7 @@ inline fn bindGpuGraphicsPipeline(render_pass: ?*GpuRenderPass, graphics_pipelin
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn bindGpuIndexBuffer(render_pass: ?*GpuRenderPass, binding: ?*const GpuBufferBinding, index_element_size: GpuIndexElementSize) void {
-    c.SDL_BindGPUIndexBuffer(@ptrCast(render_pass), @ptrCast(binding), @intCast(@intFromEnum(index_element_size)));
+    c.SDL_BindGPUIndexBuffer(if (render_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(binding), @intCast(@intFromEnum(index_element_size)));
 }
 
 /// Binds vertex buffers on a command buffer for use with subsequent draw calls.
@@ -22599,7 +22599,7 @@ inline fn bindGpuIndexBuffer(render_pass: ?*GpuRenderPass, binding: ?*const GpuB
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn bindGpuVertexBuffers(render_pass: ?*GpuRenderPass, first_slot: u32, bindings: []const GpuBufferBinding) void {
-    c.SDL_BindGPUVertexBuffers(@ptrCast(render_pass), first_slot, @ptrCast(bindings.ptr), @intCast(bindings.len));
+    c.SDL_BindGPUVertexBuffers(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(bindings.ptr), @intCast(bindings.len));
 }
 
 /// Binds texture-sampler pairs for use on the vertex shader.
@@ -22615,7 +22615,7 @@ inline fn bindGpuVertexBuffers(render_pass: ?*GpuRenderPass, first_slot: u32, bi
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuVertexSamplers(render_pass: ?*GpuRenderPass, first_slot: u32, texture_sampler_bindings: []const GpuTextureSamplerBinding) void {
-    c.SDL_BindGPUVertexSamplers(@ptrCast(render_pass), first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
+    c.SDL_BindGPUVertexSamplers(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(texture_sampler_bindings.ptr), @intCast(texture_sampler_bindings.len));
 }
 
 /// Binds storage buffers for use on the vertex shader.
@@ -22632,7 +22632,7 @@ inline fn bindGpuVertexSamplers(render_pass: ?*GpuRenderPass, first_slot: u32, t
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuVertexStorageBuffers(render_pass: ?*GpuRenderPass, first_slot: u32, storage_buffers: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUVertexStorageBuffers(@ptrCast(render_pass), first_slot, @ptrCast(storage_buffers), num_bindings);
+    c.SDL_BindGPUVertexStorageBuffers(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_buffers), num_bindings);
 }
 
 /// Binds storage textures for use on the vertex shader.
@@ -22649,7 +22649,7 @@ inline fn bindGpuVertexStorageBuffers(render_pass: ?*GpuRenderPass, first_slot: 
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** gpu.createShader
 inline fn bindGpuVertexStorageTextures(render_pass: ?*GpuRenderPass, first_slot: u32, storage_textures: ?*const ?*anyopaque, num_bindings: u32) void {
-    c.SDL_BindGPUVertexStorageTextures(@ptrCast(render_pass), first_slot, @ptrCast(storage_textures), num_bindings);
+    c.SDL_BindGPUVertexStorageTextures(if (render_pass) |resource| @ptrCast(resource.value) else null, first_slot, @ptrCast(storage_textures), num_bindings);
 }
 
 /// Blits from a source texture region to a destination texture region.
@@ -23212,7 +23212,7 @@ inline fn clearSurface(surface_2: ?*Surface, r: f32, g: f32, b: f32, a: f32) Err
 /// - **Thread safety:** This function should be called on the thread that created the tray.
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn clickTrayEntry(entry: ?*TrayEntry) void {
-    c.SDL_ClickTrayEntry(@ptrCast(entry));
+    c.SDL_ClickTrayEntry(if (entry) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Close a previously-opened audio device.
@@ -23516,7 +23516,7 @@ inline fn copyFile(oldpath: ?[:0]const u8, newpath: ?[:0]const u8) Error!void {
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn copyGpuBufferToBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuBufferLocation, destination: ?*const GpuBufferLocation, size: u32, cycle: bool) void {
-    c.SDL_CopyGPUBufferToBuffer(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination), size, cycle);
+    c.SDL_CopyGPUBufferToBuffer(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination), size, cycle);
 }
 
 /// Performs a texture-to-texture copy.
@@ -23535,7 +23535,7 @@ inline fn copyGpuBufferToBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuBuf
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn copyGpuTextureToTexture(copy_pass: ?*GpuCopyPass, source: ?*const GpuTextureLocation, destination: ?*const GpuTextureLocation, w: u32, h: u32, d: u32, cycle: bool) void {
-    c.SDL_CopyGPUTextureToTexture(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination), w, h, d, cycle);
+    c.SDL_CopyGPUTextureToTexture(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination), w, h, d, cycle);
 }
 
 /// Copy a group of properties.
@@ -24820,7 +24820,7 @@ inline fn createTrayMenu(tray_2: ?Tray) ?*TrayMenu {
 /// - **See also:** tray.getSubmenu
 /// - **See also:** tray.getMenuParentEntry
 inline fn createTraySubmenu(entry: ?*TrayEntry) ?*TrayMenu {
-    const result = c.SDL_CreateTraySubmenu(@ptrCast(entry));
+    const result = c.SDL_CreateTraySubmenu(if (entry) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -25197,7 +25197,7 @@ inline fn disableScreenSaver() Error!void {
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn dispatchGpuCompute(compute_pass: ?*GpuComputePass, groupcount_x: u32, groupcount_y: u32, groupcount_z: u32) void {
-    c.SDL_DispatchGPUCompute(@ptrCast(compute_pass), groupcount_x, groupcount_y, groupcount_z);
+    c.SDL_DispatchGPUCompute(if (compute_pass) |resource| @ptrCast(resource.value) else null, groupcount_x, groupcount_y, groupcount_z);
 }
 
 /// Dispatches compute work with parameters set from a buffer.
@@ -25212,7 +25212,7 @@ inline fn dispatchGpuCompute(compute_pass: ?*GpuComputePass, groupcount_x: u32, 
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn dispatchGpuComputeIndirect(compute_pass: ?*GpuComputePass, buffer: ?GpuBuffer, offset: u32) void {
-    c.SDL_DispatchGPUComputeIndirect(@ptrCast(compute_pass), if (buffer) |resource| @ptrCast(resource.value) else null, offset);
+    c.SDL_DispatchGPUComputeIndirect(if (compute_pass) |resource| @ptrCast(resource.value) else null, if (buffer) |resource| @ptrCast(resource.value) else null, offset);
 }
 
 /// Copies data from a buffer to a transfer buffer on the GPU timeline.
@@ -25226,7 +25226,7 @@ inline fn dispatchGpuComputeIndirect(compute_pass: ?*GpuComputePass, buffer: ?Gp
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn downloadFromGpuBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuBufferRegion, destination: ?*const GpuTransferBufferLocation) void {
-    c.SDL_DownloadFromGPUBuffer(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination));
+    c.SDL_DownloadFromGPUBuffer(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination));
 }
 
 /// Copies data from a texture to a transfer buffer on the GPU timeline.
@@ -25240,7 +25240,7 @@ inline fn downloadFromGpuBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuBuf
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn downloadFromGpuTexture(copy_pass: ?*GpuCopyPass, source: ?*const GpuTextureRegion, destination: ?*const GpuTextureTransferInfo) void {
-    c.SDL_DownloadFromGPUTexture(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination));
+    c.SDL_DownloadFromGPUTexture(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination));
 }
 
 /// Draws data using bound graphics state with an index buffer and instancing enabled.
@@ -25258,7 +25258,7 @@ inline fn downloadFromGpuTexture(copy_pass: ?*GpuCopyPass, source: ?*const GpuTe
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn drawGpuIndexedPrimitives(render_pass: ?*GpuRenderPass, num_indices: u32, num_instances: u32, first_index: u32, vertex_offset: i32, first_instance: u32) void {
-    c.SDL_DrawGPUIndexedPrimitives(@ptrCast(render_pass), num_indices, num_instances, first_index, vertex_offset, first_instance);
+    c.SDL_DrawGPUIndexedPrimitives(if (render_pass) |resource| @ptrCast(resource.value) else null, num_indices, num_instances, first_index, vertex_offset, first_instance);
 }
 
 /// Draws data using bound graphics state with an index buffer enabled and with draw parameters set from a buffer.
@@ -25273,7 +25273,7 @@ inline fn drawGpuIndexedPrimitives(render_pass: ?*GpuRenderPass, num_indices: u3
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn drawGpuIndexedPrimitivesIndirect(render_pass: ?*GpuRenderPass, buffer: ?GpuBuffer, offset: u32, draw_count: u32) void {
-    c.SDL_DrawGPUIndexedPrimitivesIndirect(@ptrCast(render_pass), if (buffer) |resource| @ptrCast(resource.value) else null, offset, draw_count);
+    c.SDL_DrawGPUIndexedPrimitivesIndirect(if (render_pass) |resource| @ptrCast(resource.value) else null, if (buffer) |resource| @ptrCast(resource.value) else null, offset, draw_count);
 }
 
 /// Draws data using bound graphics state.
@@ -25290,7 +25290,7 @@ inline fn drawGpuIndexedPrimitivesIndirect(render_pass: ?*GpuRenderPass, buffer:
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn drawGpuPrimitives(render_pass: ?*GpuRenderPass, num_vertices: u32, num_instances: u32, first_vertex: u32, first_instance: u32) void {
-    c.SDL_DrawGPUPrimitives(@ptrCast(render_pass), num_vertices, num_instances, first_vertex, first_instance);
+    c.SDL_DrawGPUPrimitives(if (render_pass) |resource| @ptrCast(resource.value) else null, num_vertices, num_instances, first_vertex, first_instance);
 }
 
 /// Draws data using bound graphics state and with draw parameters set from a buffer.
@@ -25305,7 +25305,7 @@ inline fn drawGpuPrimitives(render_pass: ?*GpuRenderPass, num_vertices: u32, num
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn drawGpuPrimitivesIndirect(render_pass: ?*GpuRenderPass, buffer: ?GpuBuffer, offset: u32, draw_count: u32) void {
-    c.SDL_DrawGPUPrimitivesIndirect(@ptrCast(render_pass), if (buffer) |resource| @ptrCast(resource.value) else null, offset, draw_count);
+    c.SDL_DrawGPUPrimitivesIndirect(if (render_pass) |resource| @ptrCast(resource.value) else null, if (buffer) |resource| @ptrCast(resource.value) else null, offset, draw_count);
 }
 
 /// Creates a new surface identical to the existing surface.
@@ -25425,7 +25425,7 @@ inline fn enableScreenSaver() Error!void {
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn endGpuComputePass(compute_pass: ?*GpuComputePass) void {
-    c.SDL_EndGPUComputePass(@ptrCast(compute_pass));
+    c.SDL_EndGPUComputePass(if (compute_pass) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Ends the current copy pass.
@@ -25435,7 +25435,7 @@ inline fn endGpuComputePass(compute_pass: ?*GpuComputePass) void {
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn endGpuCopyPass(copy_pass: ?*GpuCopyPass) void {
-    c.SDL_EndGPUCopyPass(@ptrCast(copy_pass));
+    c.SDL_EndGPUCopyPass(if (copy_pass) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Ends the given render pass.
@@ -25447,7 +25447,7 @@ inline fn endGpuCopyPass(copy_pass: ?*GpuCopyPass) void {
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn endGpuRenderPass(render_pass: ?*GpuRenderPass) void {
-    c.SDL_EndGPURenderPass(@ptrCast(render_pass));
+    c.SDL_EndGPURenderPass(if (render_pass) |resource| @ptrCast(resource.value) else null);
 }
 
 /// An entry point for SDL's use in SDL_MAIN_USE_CALLBACKS (C macro outside this module).
@@ -32315,7 +32315,7 @@ inline fn getTouchFingers(allocator_: std.mem.Allocator, touch_id: TouchId) Erro
 /// - **See also:** tray.removeEntry
 /// - **See also:** tray.insertEntryAt
 inline fn getTrayEntries(menu: ?*TrayMenu, count: ?*c_int) ?*?*const TrayEntry {
-    const result = c.SDL_GetTrayEntries(@ptrCast(menu), @ptrCast(count));
+    const result = c.SDL_GetTrayEntries(if (menu) |resource| @ptrCast(resource.value) else null, @ptrCast(count));
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -32333,7 +32333,7 @@ inline fn getTrayEntries(menu: ?*TrayMenu, count: ?*c_int) ?*?*const TrayEntry {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.setEntryChecked
 inline fn getTrayEntryChecked(entry: ?*TrayEntry) bool {
-    return c.SDL_GetTrayEntryChecked(@ptrCast(entry));
+    return c.SDL_GetTrayEntryChecked(if (entry) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Gets whether or not an entry is enabled.
@@ -32348,7 +32348,7 @@ inline fn getTrayEntryChecked(entry: ?*TrayEntry) bool {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.setEntryEnabled
 inline fn getTrayEntryEnabled(entry: ?*TrayEntry) bool {
-    return c.SDL_GetTrayEntryEnabled(@ptrCast(entry));
+    return c.SDL_GetTrayEntryEnabled(if (entry) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Gets the label of an entry.
@@ -32365,7 +32365,7 @@ inline fn getTrayEntryEnabled(entry: ?*TrayEntry) bool {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.setEntryLabel
 inline fn getTrayEntryLabel(entry: ?*TrayEntry) ?[:0]const u8 {
-    const result = c.SDL_GetTrayEntryLabel(@ptrCast(entry));
+    const result = c.SDL_GetTrayEntryLabel(if (entry) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else std.mem.span(@as([*:0]const u8, @ptrCast(result.?)));
 }
 
@@ -32379,7 +32379,7 @@ inline fn getTrayEntryLabel(entry: ?*TrayEntry) ?[:0]const u8 {
 /// - **Since:** This function is available since SDL 3.2.0.
 /// - **See also:** tray.insertEntryAt
 inline fn getTrayEntryParent(entry: ?*TrayEntry) ?*TrayMenu {
-    const result = c.SDL_GetTrayEntryParent(@ptrCast(entry));
+    const result = c.SDL_GetTrayEntryParent(if (entry) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -32415,7 +32415,7 @@ inline fn getTrayMenu(tray_2: ?Tray) ?*TrayMenu {
 /// - **See also:** tray.createSubmenu
 /// - **See also:** tray.getMenuParentTray
 inline fn getTrayMenuParentEntry(menu: ?*TrayMenu) ?*TrayEntry {
-    const result = c.SDL_GetTrayMenuParentEntry(@ptrCast(menu));
+    const result = c.SDL_GetTrayMenuParentEntry(if (menu) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -32432,7 +32432,7 @@ inline fn getTrayMenuParentEntry(menu: ?*TrayMenu) ?*TrayEntry {
 /// - **See also:** tray.Tray.createMenu
 /// - **See also:** tray.getMenuParentEntry
 inline fn getTrayMenuParentTray(menu: ?*TrayMenu) ?Tray {
-    const result = c.SDL_GetTrayMenuParentTray(@ptrCast(menu));
+    const result = c.SDL_GetTrayMenuParentTray(if (menu) |resource| @ptrCast(resource.value) else null);
     return if (result) |value| Tray{ .value = @ptrCast(value) } else null;
 }
 
@@ -32451,7 +32451,7 @@ inline fn getTrayMenuParentTray(menu: ?*TrayMenu) ?Tray {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.createSubmenu
 inline fn getTraySubmenu(entry: ?*TrayEntry) ?*TrayMenu {
-    const result = c.SDL_GetTraySubmenu(@ptrCast(entry));
+    const result = c.SDL_GetTraySubmenu(if (entry) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -33171,7 +33171,7 @@ inline fn glCreateContext(window: ?Window) Error!GlContext {
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
 inline fn glDestroyContext(context: GlContext) Error!void {
-    if (!c.SDL_GL_DestroyContext(@ptrCast(context))) return error.SdlFailure;
+    if (!c.SDL_GL_DestroyContext(if (context) |resource| @ptrCast(resource.value) else null)) return error.SdlFailure;
 }
 
 /// Check if an OpenGL extension is supported for the current context.
@@ -33316,7 +33316,7 @@ inline fn glLoadLibrary(path: ?[:0]const u8) Error!void {
 ///
 /// Returns `error.SdlFailure` when SDL reports failure.
 inline fn glMakeCurrent(window: ?Window, context: GlContext) Error!void {
-    if (!c.SDL_GL_MakeCurrent(if (window) |resource| @ptrCast(resource.value) else null, @ptrCast(context))) return error.SdlFailure;
+    if (!c.SDL_GL_MakeCurrent(if (window) |resource| @ptrCast(resource.value) else null, if (context) |resource| @ptrCast(resource.value) else null)) return error.SdlFailure;
 }
 
 /// Reset all previously set OpenGL context attributes to their default values.
@@ -34506,7 +34506,7 @@ inline fn insertGpuDebugLabel(command_buffer: ?GpuCommandBuffer, text: ?[:0]cons
 /// - **See also:** tray.removeEntry
 /// - **See also:** tray.getEntryParent
 inline fn insertTrayEntryAt(menu: ?*TrayMenu, pos: c_int, label: ?[:0]const u8, flags: TrayEntryFlags) ?*TrayEntry {
-    const result = c.SDL_InsertTrayEntryAt(@ptrCast(menu), pos, if (label != null) @ptrCast(label.?.ptr) else null, @bitCast(flags));
+    const result = c.SDL_InsertTrayEntryAt(if (menu) |resource| @ptrCast(resource.value) else null, pos, if (label != null) @ptrCast(label.?.ptr) else null, @bitCast(flags));
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -38359,7 +38359,7 @@ inline fn removeTimer(id: TimerId) Error!void {
 /// - **See also:** tray.getEntries
 /// - **See also:** tray.insertEntryAt
 inline fn removeTrayEntry(entry: ?*TrayEntry) void {
-    c.SDL_RemoveTrayEntry(@ptrCast(entry));
+    c.SDL_RemoveTrayEntry(if (entry) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Rename a file or directory.
@@ -40249,7 +40249,7 @@ inline fn setGpuAllowedFramesInFlight(device: ?GpuDevice, allowed_frames_in_flig
 /// - **See also:** gpu.BlendFactor.constant_color
 /// - **See also:** gpu.BlendFactor.one_minus_constant_color
 inline fn setGpuBlendConstants(render_pass: ?*GpuRenderPass, blend_constants: FColor) void {
-    c.SDL_SetGPUBlendConstants(@ptrCast(render_pass), @bitCast(blend_constants));
+    c.SDL_SetGPUBlendConstants(if (render_pass) |resource| @ptrCast(resource.value) else null, @bitCast(blend_constants));
 }
 
 /// Sets an arbitrary string constant to label a buffer.
@@ -40311,7 +40311,7 @@ inline fn setGpuRenderStateFragmentUniforms(state: ?GpuRenderState, slot_index: 
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn setGpuScissor(render_pass: ?*GpuRenderPass, scissor: ?*const Rect) void {
-    c.SDL_SetGPUScissor(@ptrCast(render_pass), @ptrCast(scissor));
+    c.SDL_SetGPUScissor(if (render_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(scissor));
 }
 
 /// Sets the current stencil reference value on a command buffer.
@@ -40322,7 +40322,7 @@ inline fn setGpuScissor(render_pass: ?*GpuRenderPass, scissor: ?*const Rect) voi
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn setGpuStencilReference(render_pass: ?*GpuRenderPass, reference: u8) void {
-    c.SDL_SetGPUStencilReference(@ptrCast(render_pass), reference);
+    c.SDL_SetGPUStencilReference(if (render_pass) |resource| @ptrCast(resource.value) else null, reference);
 }
 
 /// Changes the swapchain parameters for the given claimed window.
@@ -40368,7 +40368,7 @@ inline fn setGpuTextureName(device: ?GpuDevice, texture: ?GpuTexture, text: ?[:0
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn setGpuViewport(render_pass: ?*GpuRenderPass, viewport: ?*const GpuViewport) void {
-    c.SDL_SetGPUViewport(@ptrCast(render_pass), @ptrCast(viewport));
+    c.SDL_SetGPUViewport(if (render_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(viewport));
 }
 
 /// Set the global autocenter of the device.
@@ -41514,7 +41514,7 @@ inline fn setTls(id: *TlsId, value: ?*const anyopaque, destructor: TlsDestructor
 /// - **See also:** tray.getEntries
 /// - **See also:** tray.insertEntryAt
 inline fn setTrayEntryCallback(entry: ?*TrayEntry, callback: TrayCallback, userdata: ?*anyopaque) void {
-    c.SDL_SetTrayEntryCallback(@ptrCast(entry), @ptrCast(callback), @ptrCast(userdata));
+    c.SDL_SetTrayEntryCallback(if (entry) |resource| @ptrCast(resource.value) else null, @ptrCast(callback), @ptrCast(userdata));
 }
 
 /// Sets whether or not an entry is checked.
@@ -41531,7 +41531,7 @@ inline fn setTrayEntryCallback(entry: ?*TrayEntry, callback: TrayCallback, userd
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.getEntryChecked
 inline fn setTrayEntryChecked(entry: ?*TrayEntry, checked: bool) void {
-    c.SDL_SetTrayEntryChecked(@ptrCast(entry), checked);
+    c.SDL_SetTrayEntryChecked(if (entry) |resource| @ptrCast(resource.value) else null, checked);
 }
 
 /// Sets whether or not an entry is enabled.
@@ -41546,7 +41546,7 @@ inline fn setTrayEntryChecked(entry: ?*TrayEntry, checked: bool) void {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.getEntryEnabled
 inline fn setTrayEntryEnabled(entry: ?*TrayEntry, enabled: bool) void {
-    c.SDL_SetTrayEntryEnabled(@ptrCast(entry), enabled);
+    c.SDL_SetTrayEntryEnabled(if (entry) |resource| @ptrCast(resource.value) else null, enabled);
 }
 
 /// Sets the label of an entry.
@@ -41563,7 +41563,7 @@ inline fn setTrayEntryEnabled(entry: ?*TrayEntry, enabled: bool) void {
 /// - **See also:** tray.insertEntryAt
 /// - **See also:** tray.getEntryLabel
 inline fn setTrayEntryLabel(entry: ?*TrayEntry, label: ?[:0]const u8) void {
-    c.SDL_SetTrayEntryLabel(@ptrCast(entry), if (label != null) @ptrCast(label.?.ptr) else null);
+    c.SDL_SetTrayEntryLabel(if (entry) |resource| @ptrCast(resource.value) else null, if (label != null) @ptrCast(label.?.ptr) else null);
 }
 
 /// Updates the system tray icon's icon.
@@ -44217,7 +44217,7 @@ inline fn updateYuvTexture(texture: ?*Texture, rect_2: ?*const Rect, yplane: ?*c
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn uploadToGpuBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuTransferBufferLocation, destination: ?*const GpuBufferRegion, cycle: bool) void {
-    c.SDL_UploadToGPUBuffer(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination), cycle);
+    c.SDL_UploadToGPUBuffer(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination), cycle);
 }
 
 /// Uploads data from a transfer buffer to a texture.
@@ -44233,7 +44233,7 @@ inline fn uploadToGpuBuffer(copy_pass: ?*GpuCopyPass, source: ?*const GpuTransfe
 ///
 /// - **Since:** This function is available since SDL 3.2.0.
 inline fn uploadToGpuTexture(copy_pass: ?*GpuCopyPass, source: ?*const GpuTextureTransferInfo, destination: ?*const GpuTextureRegion, cycle: bool) void {
-    c.SDL_UploadToGPUTexture(@ptrCast(copy_pass), @ptrCast(source), @ptrCast(destination), cycle);
+    c.SDL_UploadToGPUTexture(if (copy_pass) |resource| @ptrCast(resource.value) else null, @ptrCast(source), @ptrCast(destination), cycle);
 }
 
 /// Copy an UTF-8 string.

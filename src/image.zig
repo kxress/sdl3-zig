@@ -302,7 +302,7 @@ pub inline fn createAnimationDecoder(file: ?[:0]const u8) sdl.Error!AnimationDec
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn createAnimationDecoderIo(src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) sdl.Error!AnimationDecoder {
-    const result = c.IMG_CreateAnimationDecoder_IO(@ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
+    const result = c.IMG_CreateAnimationDecoder_IO(if (src) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
     if (result == null) return error.SdlFailure;
     return AnimationDecoder{ .value = @ptrCast(result.?) };
 }
@@ -392,7 +392,7 @@ pub inline fn createAnimationEncoder(file: ?[:0]const u8) sdl.Error!AnimationEnc
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn createAnimationEncoderIo(dst: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) sdl.Error!AnimationEncoder {
-    const result = c.IMG_CreateAnimationEncoder_IO(@ptrCast(dst), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
+    const result = c.IMG_CreateAnimationEncoder_IO(if (dst) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
     if (result == null) return error.SdlFailure;
     return AnimationEncoder{ .value = @ptrCast(result.?) };
 }
@@ -550,7 +550,7 @@ pub inline fn getClipboardImage() ?*sdl.surface.Surface {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isAni(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isANI(@ptrCast(src));
+    return c.IMG_isANI(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect AVIF image data on a readable/seekable sdl.ioStream.IoStream.
@@ -584,7 +584,7 @@ pub inline fn isAni(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isAvif(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isAVIF(@ptrCast(src));
+    return c.IMG_isAVIF(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect BMP image data on a readable/seekable sdl.ioStream.IoStream.
@@ -618,7 +618,7 @@ pub inline fn isAvif(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isBmp(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isBMP(@ptrCast(src));
+    return c.IMG_isBMP(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect CUR image data on a readable/seekable sdl.ioStream.IoStream.
@@ -652,7 +652,7 @@ pub inline fn isBmp(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isCur(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isCUR(@ptrCast(src));
+    return c.IMG_isCUR(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect GIF image data on a readable/seekable sdl.ioStream.IoStream.
@@ -686,7 +686,7 @@ pub inline fn isCur(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isGif(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isGIF(@ptrCast(src));
+    return c.IMG_isGIF(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect ICO image data on a readable/seekable sdl.ioStream.IoStream.
@@ -720,7 +720,7 @@ pub inline fn isGif(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isIco(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isICO(@ptrCast(src));
+    return c.IMG_isICO(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect JPG image data on a readable/seekable sdl.ioStream.IoStream.
@@ -754,7 +754,7 @@ pub inline fn isIco(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isJpg(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isJPG(@ptrCast(src));
+    return c.IMG_isJPG(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect JXL image data on a readable/seekable sdl.ioStream.IoStream.
@@ -788,7 +788,7 @@ pub inline fn isJpg(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isJxl(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isJXL(@ptrCast(src));
+    return c.IMG_isJXL(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect LBM image data on a readable/seekable sdl.ioStream.IoStream.
@@ -822,7 +822,7 @@ pub inline fn isJxl(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isLbm(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isLBM(@ptrCast(src));
+    return c.IMG_isLBM(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect PCX image data on a readable/seekable sdl.ioStream.IoStream.
@@ -856,7 +856,7 @@ pub inline fn isLbm(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isPcx(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isPCX(@ptrCast(src));
+    return c.IMG_isPCX(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect PNG image data on a readable/seekable sdl.ioStream.IoStream.
@@ -890,7 +890,7 @@ pub inline fn isPcx(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isPng(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isPNG(@ptrCast(src));
+    return c.IMG_isPNG(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect PNM image data on a readable/seekable sdl.ioStream.IoStream.
@@ -924,7 +924,7 @@ pub inline fn isPng(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isPnm(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isPNM(@ptrCast(src));
+    return c.IMG_isPNM(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect QOI image data on a readable/seekable sdl.ioStream.IoStream.
@@ -958,7 +958,7 @@ pub inline fn isPnm(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isQoi(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isQOI(@ptrCast(src));
+    return c.IMG_isQOI(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect SVG image data on a readable/seekable sdl.ioStream.IoStream.
@@ -992,7 +992,7 @@ pub inline fn isQoi(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isSvg(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isSVG(@ptrCast(src));
+    return c.IMG_isSVG(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect TIFF image data on a readable/seekable sdl.ioStream.IoStream.
@@ -1026,7 +1026,7 @@ pub inline fn isSvg(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isTif(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isTIF(@ptrCast(src));
+    return c.IMG_isTIF(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect WEBP image data on a readable/seekable sdl.ioStream.IoStream.
@@ -1060,7 +1060,7 @@ pub inline fn isTif(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isWebp(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isWEBP(@ptrCast(src));
+    return c.IMG_isWEBP(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect XCF image data on a readable/seekable sdl.ioStream.IoStream.
@@ -1094,7 +1094,7 @@ pub inline fn isWebp(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXpm
 /// - **See also:** isXv
 pub inline fn isXcf(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isXCF(@ptrCast(src));
+    return c.IMG_isXCF(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect XPM image data on a readable/seekable sdl.ioStream.IoStream.
@@ -1128,7 +1128,7 @@ pub inline fn isXcf(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXcf
 /// - **See also:** isXv
 pub inline fn isXpm(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isXPM(@ptrCast(src));
+    return c.IMG_isXPM(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Detect XV image data on a readable/seekable sdl.ioStream.IoStream.
@@ -1162,7 +1162,7 @@ pub inline fn isXpm(src: ?*sdl.ioStream.IoStream) bool {
 /// - **See also:** isXcf
 /// - **See also:** isXpm
 pub inline fn isXv(src: ?*sdl.ioStream.IoStream) bool {
-    return c.IMG_isXV(@ptrCast(src));
+    return c.IMG_isXV(if (src) |resource| @ptrCast(resource.value) else null);
 }
 
 /// Load an image from a filesystem path into a software surface.
@@ -1206,7 +1206,7 @@ pub inline fn load(file: ?[:0]const u8) ?*sdl.surface.Surface {
 /// - **See also:** load
 /// - **See also:** loadTypedIo
 pub inline fn loadIo(src: ?*sdl.ioStream.IoStream, closeio: bool) ?*sdl.surface.Surface {
-    const result = c.IMG_Load_IO(@ptrCast(src), closeio);
+    const result = c.IMG_Load_IO(if (src) |resource| @ptrCast(resource.value) else null, closeio);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1230,7 +1230,7 @@ pub inline fn loadIo(src: ?*sdl.ioStream.IoStream, closeio: bool) ?*sdl.surface.
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadAniAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
-    const result = c.IMG_LoadANIAnimation_IO(@ptrCast(src));
+    const result = c.IMG_LoadANIAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1278,7 +1278,7 @@ pub inline fn loadAnimation(file: ?[:0]const u8) ?*Animation {
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadAnimationIo(src: ?*sdl.ioStream.IoStream, closeio: bool) ?*Animation {
-    const result = c.IMG_LoadAnimation_IO(@ptrCast(src), closeio);
+    const result = c.IMG_LoadAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null, closeio);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1305,7 +1305,7 @@ pub inline fn loadAnimationIo(src: ?*sdl.ioStream.IoStream, closeio: bool) ?*Ani
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadAnimationTypedIo(src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) ?*Animation {
-    const result = c.IMG_LoadAnimationTyped_IO(@ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
+    const result = c.IMG_LoadAnimationTyped_IO(if (src) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1329,7 +1329,7 @@ pub inline fn loadAnimationTypedIo(src: ?*sdl.ioStream.IoStream, closeio: bool, 
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadApngAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
-    const result = c.IMG_LoadAPNGAnimation_IO(@ptrCast(src));
+    const result = c.IMG_LoadAPNGAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1361,7 +1361,7 @@ pub inline fn loadApngAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadAvifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadAVIF_IO(@ptrCast(src));
+    const result = c.IMG_LoadAVIF_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1385,7 +1385,7 @@ pub inline fn loadAvifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadAvifAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
-    const result = c.IMG_LoadAVIFAnimation_IO(@ptrCast(src));
+    const result = c.IMG_LoadAVIFAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1417,7 +1417,7 @@ pub inline fn loadAvifAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadBmpIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadBMP_IO(@ptrCast(src));
+    const result = c.IMG_LoadBMP_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1449,7 +1449,7 @@ pub inline fn loadBmpIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadCurIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadCUR_IO(@ptrCast(src));
+    const result = c.IMG_LoadCUR_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1481,7 +1481,7 @@ pub inline fn loadCurIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadGifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadGIF_IO(@ptrCast(src));
+    const result = c.IMG_LoadGIF_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1504,7 +1504,7 @@ pub inline fn loadGifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadWebpAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadGifAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
-    const result = c.IMG_LoadGIFAnimation_IO(@ptrCast(src));
+    const result = c.IMG_LoadGIFAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1526,7 +1526,7 @@ pub inline fn loadGifAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
 /// - **See also:** loadGpuTextureTypedIo
 /// - **See also:** loadGpuTextureIo
 pub inline fn loadGpuTexture(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.CopyPass, file: ?[:0]const u8, width: ?*c_int, height: ?*c_int) ?*sdl.gpu.Texture {
-    const result = c.IMG_LoadGPUTexture(@ptrCast(device), @ptrCast(copy_pass), if (file != null) @ptrCast(file.?.ptr) else null, @ptrCast(width), @ptrCast(height));
+    const result = c.IMG_LoadGPUTexture(if (device) |resource| @ptrCast(resource.value) else null, if (copy_pass) |resource| @ptrCast(resource.value) else null, if (file != null) @ptrCast(file.?.ptr) else null, @ptrCast(width), @ptrCast(height));
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1567,7 +1567,7 @@ pub inline fn loadGpuTexture(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.Copy
 /// - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
 /// - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
 pub inline fn loadGpuTextureIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.CopyPass, src: ?*sdl.ioStream.IoStream, closeio: bool, width: ?*c_int, height: ?*c_int) ?*sdl.gpu.Texture {
-    const result = c.IMG_LoadGPUTexture_IO(@ptrCast(device), @ptrCast(copy_pass), @ptrCast(src), closeio, @ptrCast(width), @ptrCast(height));
+    const result = c.IMG_LoadGPUTexture_IO(if (device) |resource| @ptrCast(resource.value) else null, if (copy_pass) |resource| @ptrCast(resource.value) else null, if (src) |resource| @ptrCast(resource.value) else null, closeio, @ptrCast(width), @ptrCast(height));
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1615,7 +1615,7 @@ pub inline fn loadGpuTextureIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.Co
 /// - `width`: a pointer filled in with the width of the GPU texture. may be NULL.
 /// - `height`: a pointer filled in with the width of the GPU texture. may be NULL.
 pub inline fn loadGpuTextureTypedIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.gpu.CopyPass, src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8, width: ?*c_int, height: ?*c_int) ?*sdl.gpu.Texture {
-    const result = c.IMG_LoadGPUTextureTyped_IO(@ptrCast(device), @ptrCast(copy_pass), @ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null, @ptrCast(width), @ptrCast(height));
+    const result = c.IMG_LoadGPUTextureTyped_IO(if (device) |resource| @ptrCast(resource.value) else null, if (copy_pass) |resource| @ptrCast(resource.value) else null, if (src) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null, @ptrCast(width), @ptrCast(height));
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1647,7 +1647,7 @@ pub inline fn loadGpuTextureTypedIo(device: ?*sdl.gpu.Device, copy_pass: ?*sdl.g
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadIcoIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadICO_IO(@ptrCast(src));
+    const result = c.IMG_LoadICO_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1679,7 +1679,7 @@ pub inline fn loadIcoIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadJpgIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadJPG_IO(@ptrCast(src));
+    const result = c.IMG_LoadJPG_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1711,7 +1711,7 @@ pub inline fn loadJpgIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadJxlIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadJXL_IO(@ptrCast(src));
+    const result = c.IMG_LoadJXL_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1743,7 +1743,7 @@ pub inline fn loadJxlIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadLbmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadLBM_IO(@ptrCast(src));
+    const result = c.IMG_LoadLBM_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1775,7 +1775,7 @@ pub inline fn loadLbmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadPcxIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadPCX_IO(@ptrCast(src));
+    const result = c.IMG_LoadPCX_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1807,7 +1807,7 @@ pub inline fn loadPcxIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadPngIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadPNG_IO(@ptrCast(src));
+    const result = c.IMG_LoadPNG_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1839,7 +1839,7 @@ pub inline fn loadPngIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadPnmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadPNM_IO(@ptrCast(src));
+    const result = c.IMG_LoadPNM_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1871,7 +1871,7 @@ pub inline fn loadPnmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadQoiIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadQOI_IO(@ptrCast(src));
+    const result = c.IMG_LoadQOI_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1890,7 +1890,7 @@ pub inline fn loadQoiIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **Since:** This function is available since SDL_image 3.0.0.
 /// - **See also:** loadSvgIo
 pub inline fn loadSizedSvgIo(src: ?*sdl.ioStream.IoStream, width: c_int, height: c_int) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadSizedSVG_IO(@ptrCast(src), width, height);
+    const result = c.IMG_LoadSizedSVG_IO(if (src) |resource| @ptrCast(resource.value) else null, width, height);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1923,7 +1923,7 @@ pub inline fn loadSizedSvgIo(src: ?*sdl.ioStream.IoStream, width: c_int, height:
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadSvgIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadSVG_IO(@ptrCast(src));
+    const result = c.IMG_LoadSVG_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1944,7 +1944,7 @@ pub inline fn loadSvgIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadTextureTypedIo
 /// - **See also:** loadTextureIo
 pub inline fn loadTexture(renderer: ?*sdl.render.Renderer, file: ?[:0]const u8) ?*sdl.render.Texture {
-    const result = c.IMG_LoadTexture(@ptrCast(renderer), if (file != null) @ptrCast(file.?.ptr) else null);
+    const result = c.IMG_LoadTexture(if (renderer) |resource| @ptrCast(resource.value) else null, if (file != null) @ptrCast(file.?.ptr) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1968,7 +1968,7 @@ pub inline fn loadTexture(renderer: ?*sdl.render.Renderer, file: ?[:0]const u8) 
 /// - **See also:** loadTexture
 /// - **See also:** loadTextureTypedIo
 pub inline fn loadTextureIo(renderer: ?*sdl.render.Renderer, src: ?*sdl.ioStream.IoStream, closeio: bool) ?*sdl.render.Texture {
-    const result = c.IMG_LoadTexture_IO(@ptrCast(renderer), @ptrCast(src), closeio);
+    const result = c.IMG_LoadTexture_IO(if (renderer) |resource| @ptrCast(resource.value) else null, if (src) |resource| @ptrCast(resource.value) else null, closeio);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -1994,7 +1994,7 @@ pub inline fn loadTextureIo(renderer: ?*sdl.render.Renderer, src: ?*sdl.ioStream
 /// - **See also:** loadTexture
 /// - **See also:** loadTextureIo
 pub inline fn loadTextureTypedIo(renderer: ?*sdl.render.Renderer, src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) ?*sdl.render.Texture {
-    const result = c.IMG_LoadTextureTyped_IO(@ptrCast(renderer), @ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
+    const result = c.IMG_LoadTextureTyped_IO(if (renderer) |resource| @ptrCast(resource.value) else null, if (src) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2026,7 +2026,7 @@ pub inline fn loadTextureTypedIo(renderer: ?*sdl.render.Renderer, src: ?*sdl.ioS
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadTgaIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadTGA_IO(@ptrCast(src));
+    const result = c.IMG_LoadTGA_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2058,7 +2058,7 @@ pub inline fn loadTgaIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadTifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadTIF_IO(@ptrCast(src));
+    const result = c.IMG_LoadTIF_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2084,7 +2084,7 @@ pub inline fn loadTifIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** load
 /// - **See also:** loadIo
 pub inline fn loadTypedIo(src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadTyped_IO(@ptrCast(src), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
+    const result = c.IMG_LoadTyped_IO(if (src) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2116,7 +2116,7 @@ pub inline fn loadTypedIo(src: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadWebpIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadWEBP_IO(@ptrCast(src));
+    const result = c.IMG_LoadWEBP_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2139,7 +2139,7 @@ pub inline fn loadWebpIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadGifAnimationIo
 /// - **See also:** freeAnimation
 pub inline fn loadWebpAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
-    const result = c.IMG_LoadWEBPAnimation_IO(@ptrCast(src));
+    const result = c.IMG_LoadWEBPAnimation_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2171,7 +2171,7 @@ pub inline fn loadWebpAnimationIo(src: ?*sdl.ioStream.IoStream) ?*Animation {
 /// - **See also:** loadXpmIo
 /// - **See also:** loadXvIo
 pub inline fn loadXcfIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadXCF_IO(@ptrCast(src));
+    const result = c.IMG_LoadXCF_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2203,7 +2203,7 @@ pub inline fn loadXcfIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXcfIo
 /// - **See also:** loadXvIo
 pub inline fn loadXpmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadXPM_IO(@ptrCast(src));
+    const result = c.IMG_LoadXPM_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2235,7 +2235,7 @@ pub inline fn loadXpmIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
 /// - **See also:** loadXcfIo
 /// - **See also:** loadXpmIo
 pub inline fn loadXvIo(src: ?*sdl.ioStream.IoStream) ?*sdl.surface.Surface {
-    const result = c.IMG_LoadXV_IO(@ptrCast(src));
+    const result = c.IMG_LoadXV_IO(if (src) |resource| @ptrCast(resource.value) else null);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -2471,7 +2471,7 @@ pub inline fn saveAvif(surface: ?*sdl.surface.Surface, file: ?[:0]const u8, qual
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveAvifIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool, quality: c_int) sdl.Error!void {
-    if (!c.IMG_SaveAVIF_IO(@ptrCast(surface), @ptrCast(dst), closeio, quality)) return error.SdlFailure;
+    if (!c.IMG_SaveAVIF_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio, quality)) return error.SdlFailure;
 }
 
 /// Named output values.
@@ -2539,7 +2539,7 @@ pub inline fn saveBmp(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveBmpIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SaveBMP_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SaveBMP_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a CUR image file.
@@ -2575,7 +2575,7 @@ pub inline fn saveCur(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveCurIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SaveCUR_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SaveCUR_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a GIF image file.
@@ -2611,7 +2611,7 @@ pub inline fn saveGif(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveGifIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SaveGIF_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SaveGIF_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Named output values.
@@ -2678,7 +2678,7 @@ pub inline fn saveIco(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveIcoIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SaveICO_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SaveICO_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a JPEG image file.
@@ -2716,7 +2716,7 @@ pub inline fn saveJpg(surface: ?*sdl.surface.Surface, file: ?[:0]const u8, quali
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveJpgIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool, quality: c_int) sdl.Error!void {
-    if (!c.IMG_SaveJPG_IO(@ptrCast(surface), @ptrCast(dst), closeio, quality)) return error.SdlFailure;
+    if (!c.IMG_SaveJPG_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio, quality)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a PNG image file.
@@ -2752,7 +2752,7 @@ pub inline fn savePng(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn savePngIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SavePNG_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SavePNG_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a TGA image file.
@@ -2788,7 +2788,7 @@ pub inline fn saveTga(surface: ?*sdl.surface.Surface, file: ?[:0]const u8) sdl.E
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveTgaIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.IMG_SaveTGA_IO(@ptrCast(surface), @ptrCast(dst), closeio)) return error.SdlFailure;
+    if (!c.IMG_SaveTGA_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into formatted image data, via an sdl.ioStream.IoStream.
@@ -2818,7 +2818,7 @@ pub inline fn saveTgaIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoSt
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveTypedIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool, type_: ?[:0]const u8) sdl.Error!void {
-    if (!c.IMG_SaveTyped_IO(@ptrCast(surface), @ptrCast(dst), closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null)) return error.SdlFailure;
+    if (!c.IMG_SaveTyped_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio, if (type_ != null) @ptrCast(type_.?.ptr) else null)) return error.SdlFailure;
 }
 
 /// Save an sdl.surface.Surface into a WEBP image file.
@@ -2856,7 +2856,7 @@ pub inline fn saveWebp(surface: ?*sdl.surface.Surface, file: ?[:0]const u8, qual
 ///
 /// Returns `error.SdlFailure` when SDL_image reports failure.
 pub inline fn saveWebpIo(surface: ?*sdl.surface.Surface, dst: ?*sdl.ioStream.IoStream, closeio: bool, quality: f32) sdl.Error!void {
-    if (!c.IMG_SaveWEBP_IO(@ptrCast(surface), @ptrCast(dst), closeio, quality)) return error.SdlFailure;
+    if (!c.IMG_SaveWEBP_IO(@ptrCast(surface), if (dst) |resource| @ptrCast(resource.value) else null, closeio, quality)) return error.SdlFailure;
 }
 
 /// Named output values.

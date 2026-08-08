@@ -965,7 +965,7 @@ pub const Track = struct {
     /// - **Since:** This function is available since SDL_mixer 3.0.0.
     /// Returns `error.SdlFailure` when SDL_mixer reports failure.
     pub inline fn setAudioStream(self: @This(), stream: ?*sdl.audio.Stream) sdl.Error!void {
-        if (!c.MIX_SetTrackAudioStream(@ptrCast(self.value), @ptrCast(stream))) return error.SdlFailure;
+        if (!c.MIX_SetTrackAudioStream(@ptrCast(self.value), if (stream) |resource| @ptrCast(resource.value) else null)) return error.SdlFailure;
     }
 
     /// Set a callback that fires when the mixer has transformed a track's audio.
@@ -1066,7 +1066,7 @@ pub const Track = struct {
     /// - **See also:** Track.setRawIoStream
     /// Returns `error.SdlFailure` when SDL_mixer reports failure.
     pub inline fn setIoStream(self: @This(), io: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-        if (!c.MIX_SetTrackIOStream(@ptrCast(self.value), @ptrCast(io), closeio)) return error.SdlFailure;
+        if (!c.MIX_SetTrackIOStream(@ptrCast(self.value), if (io) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
     }
 
     /// Change the number of times a currently-playing track will loop.
@@ -1171,7 +1171,7 @@ pub const Track = struct {
     /// - **See also:** Track.setIoStream
     /// Returns `error.SdlFailure` when SDL_mixer reports failure.
     pub inline fn setRawIoStream(self: @This(), io: ?*sdl.ioStream.IoStream, spec: ?*const sdl.audio.Spec, closeio: bool) sdl.Error!void {
-        if (!c.MIX_SetTrackRawIOStream(@ptrCast(self.value), @ptrCast(io), @ptrCast(spec), closeio)) return error.SdlFailure;
+        if (!c.MIX_SetTrackRawIOStream(@ptrCast(self.value), if (io) |resource| @ptrCast(resource.value) else null, @ptrCast(spec), closeio)) return error.SdlFailure;
     }
 
     /// Force a track to stereo output, with optionally left/right panning.
@@ -1578,7 +1578,7 @@ pub inline fn createAudioDecoder(path: ?[:0]const u8, props: sdl.properties.Id) 
 /// - **See also:** AudioDecoder.decode
 /// - **See also:** AudioDecoder.deinit
 pub inline fn createAudioDecoderIo(io: ?*sdl.ioStream.IoStream, closeio: bool, props: sdl.properties.Id) ?AudioDecoder {
-    const result = c.MIX_CreateAudioDecoder_IO(@ptrCast(io), closeio, props);
+    const result = c.MIX_CreateAudioDecoder_IO(if (io) |resource| @ptrCast(resource.value) else null, closeio, props);
     return if (result) |value| AudioDecoder{ .value = @ptrCast(value) } else null;
 }
 
@@ -2344,7 +2344,7 @@ pub inline fn loadAudio(mixer: ?Mixer, path: ?[:0]const u8, predecode: bool) sdl
 ///
 /// Returns `error.SdlFailure` when SDL_mixer reports failure.
 pub inline fn loadAudioIo(mixer: ?Mixer, io: ?*sdl.ioStream.IoStream, predecode: bool, closeio: bool) sdl.Error!Audio {
-    const result = c.MIX_LoadAudio_IO(if (mixer) |resource| @ptrCast(resource.value) else null, @ptrCast(io), predecode, closeio);
+    const result = c.MIX_LoadAudio_IO(if (mixer) |resource| @ptrCast(resource.value) else null, if (io) |resource| @ptrCast(resource.value) else null, predecode, closeio);
     if (result == null) return error.SdlFailure;
     return Audio{ .value = @ptrCast(result.?) };
 }
@@ -2461,7 +2461,7 @@ pub inline fn loadRawAudio(mixer: ?Mixer, data: []const u8, spec: ?*const sdl.au
 ///
 /// Returns `error.SdlFailure` when SDL_mixer reports failure.
 pub inline fn loadRawAudioIo(mixer: ?Mixer, io: ?*sdl.ioStream.IoStream, spec: ?*const sdl.audio.Spec, closeio: bool) sdl.Error!Audio {
-    const result = c.MIX_LoadRawAudio_IO(if (mixer) |resource| @ptrCast(resource.value) else null, @ptrCast(io), @ptrCast(spec), closeio);
+    const result = c.MIX_LoadRawAudio_IO(if (mixer) |resource| @ptrCast(resource.value) else null, if (io) |resource| @ptrCast(resource.value) else null, @ptrCast(spec), closeio);
     if (result == null) return error.SdlFailure;
     return Audio{ .value = @ptrCast(result.?) };
 }
@@ -2928,7 +2928,7 @@ pub inline fn setTrackAudio(track: ?Track, audio: ?Audio) sdl.Error!void {
 ///
 /// Returns `error.SdlFailure` when SDL_mixer reports failure.
 pub inline fn setTrackAudioStream(track: ?Track, stream: ?*sdl.audio.Stream) sdl.Error!void {
-    if (!c.MIX_SetTrackAudioStream(if (track) |resource| @ptrCast(resource.value) else null, @ptrCast(stream))) return error.SdlFailure;
+    if (!c.MIX_SetTrackAudioStream(if (track) |resource| @ptrCast(resource.value) else null, if (stream) |resource| @ptrCast(resource.value) else null)) return error.SdlFailure;
 }
 
 /// Set a callback that fires when the mixer has transformed a track's audio.
@@ -3039,7 +3039,7 @@ pub inline fn setTrackGroup(track: ?Track, group: ?Group) sdl.Error!void {
 ///
 /// Returns `error.SdlFailure` when SDL_mixer reports failure.
 pub inline fn setTrackIoStream(track: ?Track, io: ?*sdl.ioStream.IoStream, closeio: bool) sdl.Error!void {
-    if (!c.MIX_SetTrackIOStream(if (track) |resource| @ptrCast(resource.value) else null, @ptrCast(io), closeio)) return error.SdlFailure;
+    if (!c.MIX_SetTrackIOStream(if (track) |resource| @ptrCast(resource.value) else null, if (io) |resource| @ptrCast(resource.value) else null, closeio)) return error.SdlFailure;
 }
 
 /// Change the number of times a currently-playing track will loop.
@@ -3154,7 +3154,7 @@ pub inline fn setTrackRawCallback(track: ?Track, cb: TrackMixCallback, userdata:
 ///
 /// Returns `error.SdlFailure` when SDL_mixer reports failure.
 pub inline fn setTrackRawIoStream(track: ?Track, io: ?*sdl.ioStream.IoStream, spec: ?*const sdl.audio.Spec, closeio: bool) sdl.Error!void {
-    if (!c.MIX_SetTrackRawIOStream(if (track) |resource| @ptrCast(resource.value) else null, @ptrCast(io), @ptrCast(spec), closeio)) return error.SdlFailure;
+    if (!c.MIX_SetTrackRawIOStream(if (track) |resource| @ptrCast(resource.value) else null, if (io) |resource| @ptrCast(resource.value) else null, @ptrCast(spec), closeio)) return error.SdlFailure;
 }
 
 /// Force a track to stereo output, with optionally left/right panning.

@@ -174,7 +174,7 @@ const prop_spirv_pssl_compatibility_boolean = c.SDL_SHADERCROSS_PROP_SPIRV_PSSL_
 /// - **Returns:** a compiled sdl.gpu.ComputePipeline.
 /// - **Thread safety:** It is safe to call this function from any thread.
 inline fn compileComputePipelineFromSpirv(device: ?*sdl.gpu.Device, info: ?*const SpirvInfo, metadata: ?*const ComputePipelineMetadata, props: sdl.properties.Id) ?*sdl.gpu.ComputePipeline {
-    const result = c.SDL_ShaderCross_CompileComputePipelineFromSPIRV(@ptrCast(device), @ptrCast(info), @ptrCast(metadata), props);
+    const result = c.SDL_ShaderCross_CompileComputePipelineFromSPIRV(if (device) |resource| @ptrCast(resource.value) else null, @ptrCast(info), @ptrCast(metadata), props);
     return if (result == null) null else @ptrCast(result);
 }
 
@@ -257,7 +257,7 @@ inline fn compileDxilFromSpirv(info: ?*const SpirvInfo, size: ?*usize) ?*anyopaq
 /// - **Returns:** a compiled sdl.gpu.Shader.
 /// - **Thread safety:** It is safe to call this function from any thread.
 inline fn compileGraphicsShaderFromSpirv(device: ?*sdl.gpu.Device, info: ?*const SpirvInfo, resource_info: ?*const GraphicsShaderResourceInfo, props: sdl.properties.Id) ?*sdl.gpu.Shader {
-    const result = c.SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(@ptrCast(device), @ptrCast(info), @ptrCast(resource_info), props);
+    const result = c.SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(if (device) |resource| @ptrCast(resource.value) else null, @ptrCast(info), @ptrCast(resource_info), props);
     return if (result == null) null else @ptrCast(result);
 }
 
