@@ -4,12 +4,12 @@ Use the repository root or the `examples/` directory. For each item, build the e
 
 ## SDL examples
 
-- [ ] Can we build `sdl-asyncio-load-bitmaps`, run `run-sdl-asyncio-load-bitmaps`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-asyncio-load-bitmaps`, run `run-sdl-asyncio-load-bitmaps`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-audio-simple-playback`, run `run-sdl-audio-simple-playback`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-audio-simple-playback-callback`, run `run-sdl-audio-simple-playback-callback`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-audio-load-wav`, run `run-sdl-audio-load-wav`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-audio-multiple-streams`, run `run-sdl-audio-multiple-streams`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-audio-planar-data`, run `run-sdl-audio-planar-data`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-audio-planar-data`, run `run-sdl-audio-planar-data`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-camera-read-and-draw`, run `run-sdl-camera-read-and-draw`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-demo-snake`, run `run-sdl-demo-snake`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-demo-woodeneye-008`, run `run-sdl-demo-woodeneye-008`, and stop it immediately after confirming it does not raise a startup error?
@@ -29,18 +29,18 @@ Use the repository root or the `examples/` directory. For each item, build the e
 - [x] Can we build `sdl-renderer-lines`, run `run-sdl-renderer-lines`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-points`, run `run-sdl-renderer-points`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-rectangles`, run `run-sdl-renderer-rectangles`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-textures`, run `run-sdl-renderer-textures`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-textures`, run `run-sdl-renderer-textures`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-streaming-textures`, run `run-sdl-renderer-streaming-textures`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-rotating-textures`, run `run-sdl-renderer-rotating-textures`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-scaling-textures`, run `run-sdl-renderer-scaling-textures`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-rotating-textures`, run `run-sdl-renderer-rotating-textures`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-scaling-textures`, run `run-sdl-renderer-scaling-textures`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-geometry`, run `run-sdl-renderer-geometry`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-color-mods`, run `run-sdl-renderer-color-mods`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-color-mods`, run `run-sdl-renderer-color-mods`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-viewport`, run `run-sdl-renderer-viewport`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-cliprect`, run `run-sdl-renderer-cliprect`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-read-pixels`, run `run-sdl-renderer-read-pixels`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-renderer-debug-text`, run `run-sdl-renderer-debug-text`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-affine-textures`, run `run-sdl-renderer-affine-textures`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `sdl-renderer-blending`, run `run-sdl-renderer-blending`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-affine-textures`, run `run-sdl-renderer-affine-textures`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `sdl-renderer-blending`, run `run-sdl-renderer-blending`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-shader-device-load`, run `run-sdl-shader-device-load`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `sdl-storage-user`, run `run-sdl-storage-user`, and stop it immediately after confirming it does not raise a startup error?
 
@@ -68,7 +68,7 @@ Use the repository root or the `examples/` directory. For each item, build the e
 - [x] Can we build `raylib-text-input-box`, run `run-raylib-text-input-box`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `raylib-text-words-alignment`, run `run-raylib-text-words-alignment`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `raylib-text-writing-anim`, run `run-raylib-text-writing-anim`, and stop it immediately after confirming it does not raise a startup error?
-- [ ] Can we build `raylib-audio-module-playing`, run `run-raylib-audio-module-playing`, and stop it immediately after confirming it does not raise a startup error?
+- [x] Can we build `raylib-audio-module-playing`, run `run-raylib-audio-module-playing`, and stop it immediately after confirming it does not raise a startup error?
 - [x] Can we build `raylib-audio-music-stream`, run `run-raylib-audio-music-stream`, and stop it immediately after confirming it does not raise a startup error?
 
 ## Check results
