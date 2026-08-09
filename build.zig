@@ -379,6 +379,7 @@ pub fn addRepositoryModulesWithOptions(
             .mixer = if (options.mixer) modules.mixer else null,
             .net = if (options.net) modules.net else null,
             .optional_codecs = false,
+            .shadercross_dxc = .disabled,
         });
     }
     if (distribution == .source and options.install_runtime) {
@@ -523,7 +524,19 @@ fn prebuiltAvailable(
     for (sdl_metadata.libraries) |configuration| {
         if (!linkOptionEnabled(configuration, options)) continue;
         if (!configuration.prebuilt) return false;
-        const root = if (std.mem.eql(u8, policy.family, "macos"))
+        if (configuration.prebuilt_kind == .static) {
+            const path = prebuiltStaticLibraryPath(&configuration, policy) catch return false;
+            defer std.heap.page_allocator.free(path);
+            b.build_root.handle.access(b.graph.io, path, .{}) catch return false;
+            continue;
+        }
+        const root = if (std.mem.eql(u8, policy.family, "macos") and
+            std.mem.eql(u8, configuration.key, "shadercross"))
+            std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/macos/lib/lib{s}.dylib", .{
+                configuration.key,
+                configuration.library_name,
+            }) catch return false
+        else if (std.mem.eql(u8, policy.family, "macos"))
             std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/macos/frameworks/{s}.framework", .{
                 configuration.key,
                 configuration.framework_name,
@@ -1117,6 +1130,7 @@ pub fn build(b: *std.Build) void {
             .mixer = if (link_mixer) mixer else null,
             .net = if (link_net) net else null,
             .optional_codecs = optional_codecs,
+            .shadercross_dxc = shadercross_dxc,
         });
     }
 
@@ -1756,6 +1770,7 @@ const PrebuiltModules = struct {
     mixer: ?*std.Build.Module,
     net: ?*std.Build.Module,
     optional_codecs: bool,
+    shadercross_dxc: ShadercrossDxc,
 };
 
 const PrebuiltFamily = enum {
@@ -1829,6 +1844,20 @@ fn configurePrebuilt(
                 .{selection.library.id},
             );
         }
+        if (selection.library.prebuilt_kind == .static) {
+            module.addObjectFile(b.path(prebuiltStaticLibraryPath(selection.library, policy) catch @panic("OOM")));
+            if (std.mem.eql(u8, selection.library.key, "controller_image")) {
+                b.addNamedLazyPath(
+                    "prebuilt-controller-image-data-directory",
+                    b.path("prebuilt/controller_image/share/ControllerImage"),
+                );
+            }
+            b.addNamedLazyPath(
+                b.fmt("license-{s}", .{selection.library.key}),
+                b.path(b.fmt("vendor/{s}/LICENSE.txt", .{selection.library.id})),
+            );
+            continue;
+        }
         switch (family) {
             .mingw => {
                 const library_root = b.fmt(
@@ -1871,14 +1900,19 @@ fn configurePrebuilt(
             },
             .macos => {
                 const library_root = b.fmt("prebuilt/{s}/macos", .{selection.library.key});
-                module.addFrameworkPath(b.path(b.fmt("{s}/frameworks", .{library_root})));
-                module.linkFramework(selection.library.framework_name, .{});
+                if (std.mem.eql(u8, selection.library.key, "shadercross")) {
+                    module.addLibraryPath(b.path(b.fmt("{s}/lib", .{library_root})));
+                    module.linkSystemLibrary(selection.library.library_name, .{});
+                } else {
+                    module.addFrameworkPath(b.path(b.fmt("{s}/frameworks", .{library_root})));
+                    module.linkFramework(selection.library.framework_name, .{});
+                }
                 b.addNamedLazyPath(
                     b.fmt("runtime-{s}", .{selection.library.key}),
-                    b.path(b.fmt(
-                        "{s}/frameworks/{s}.framework",
-                        .{ library_root, selection.library.framework_name },
-                    )),
+                    b.path(if (std.mem.eql(u8, selection.library.key, "shadercross"))
+                        b.fmt("{s}/lib/lib{s}.dylib", .{ library_root, selection.library.library_name })
+                    else
+                        b.fmt("{s}/frameworks/{s}.framework", .{ library_root, selection.library.framework_name })),
                 );
                 if (modules.optional_codecs and
                     selection.library.macos_optional_frameworks.len != 0)
@@ -1926,6 +1960,16 @@ fn configurePrebuilt(
             );
         }
     }
+    if (modules.shadercross != null and modules.shadercross_dxc != .disabled) {
+        if (modules.shadercross_dxc != .bundled or target.result.os.tag != .windows) {
+            @panic("package-local SDL_shadercross DXC supports only shadercross_dxc=bundled on Windows");
+        }
+        const root = b.fmt("prebuilt/shadercross/{s}/{s}/dxc", .{ policy.package_family, policy.arch });
+        b.addNamedLazyPath("runtime-shadercross-dxc-dxcompiler", b.path(b.fmt("{s}/dxcompiler.dll", .{root})));
+        b.addNamedLazyPath("runtime-shadercross-dxc-dxil", b.path(b.fmt("{s}/dxil.dll", .{root})));
+        b.addNamedLazyPath("license-shadercross-dxc", b.path(b.fmt("{s}/LICENSE.TXT", .{root})));
+        b.addNamedLazyPath("notices-shadercross-dxc", b.path(b.fmt("{s}/ThirdPartyNotices.txt", .{root})));
+    }
 }
 
 fn containsString(values: []const []const u8, expected: []const u8) bool {
@@ -1933,6 +1977,29 @@ fn containsString(values: []const []const u8, expected: []const u8) bool {
         if (std.mem.eql(u8, value, expected)) return true;
     }
     return false;
+}
+
+fn prebuiltStaticLibraryPath(
+    library: *const sdl_metadata.Library,
+    target: *const sdl_metadata.PrebuiltTarget,
+) ![]u8 {
+    const filename = if (std.mem.eql(u8, target.family, "msvc"))
+        try std.fmt.allocPrint(std.heap.page_allocator, "{s}.lib", .{library.library_name})
+    else
+        try std.fmt.allocPrint(std.heap.page_allocator, "lib{s}.a", .{library.library_name});
+    defer std.heap.page_allocator.free(filename);
+    if (std.mem.eql(u8, target.family, "macos")) {
+        return std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/macos/lib/{s}", .{
+            library.key,
+            filename,
+        });
+    }
+    return std.fmt.allocPrint(std.heap.page_allocator, "prebuilt/{s}/{s}/{s}/lib/{s}", .{
+        library.key,
+        target.package_family,
+        target.arch,
+        filename,
+    });
 }
 
 fn findPrebuiltTarget(
@@ -1963,6 +2030,9 @@ fn installRuntime(
         library: *const sdl_metadata.Library,
     }{
         .{ .selected = true, .library = sdl_metadata.byKey("sdl") },
+        .{ .selected = options.sdl3_test, .library = sdl_metadata.byKey("test") },
+        .{ .selected = options.controller_image, .library = sdl_metadata.byKey("controller_image") },
+        .{ .selected = options.shadercross, .library = sdl_metadata.byKey("shadercross") },
         .{ .selected = options.image, .library = sdl_metadata.byKey("image") },
         .{ .selected = options.ttf, .library = sdl_metadata.byKey("ttf") },
         .{ .selected = options.mixer, .library = sdl_metadata.byKey("mixer") },
@@ -1970,6 +2040,14 @@ fn installRuntime(
     };
     for (selections) |selection| {
         if (!selection.selected) continue;
+        if (selection.library.prebuilt_kind == .static) {
+            const license = b.addInstallFile(
+                dependency.namedLazyPath(b.fmt("license-{s}", .{selection.library.key})),
+                b.fmt("share/licenses/{s}/LICENSE.txt", .{selection.library.id}),
+            );
+            b.getInstallStep().dependOn(&license.step);
+            continue;
+        }
         const runtime = dependency.namedLazyPath(b.fmt("runtime-{s}", .{selection.library.key}));
         switch (target.result.os.tag) {
             .windows => {
@@ -1980,12 +2058,17 @@ fn installRuntime(
                 b.getInstallStep().dependOn(&install.step);
             },
             .macos => {
-                const install = b.addInstallDirectory(.{
-                    .source_dir = runtime,
-                    .install_dir = .lib,
-                    .install_subdir = b.fmt("{s}.framework", .{selection.library.framework_name}),
-                });
-                b.getInstallStep().dependOn(&install.step);
+                if (std.mem.eql(u8, selection.library.key, "shadercross")) {
+                    const install = b.addInstallFile(runtime, "libSDL3_shadercross.dylib");
+                    b.getInstallStep().dependOn(&install.step);
+                } else {
+                    const install = b.addInstallDirectory(.{
+                        .source_dir = runtime,
+                        .install_dir = .lib,
+                        .install_subdir = b.fmt("{s}.framework", .{selection.library.framework_name}),
+                    });
+                    b.getInstallStep().dependOn(&install.step);
+                }
             },
             else => unreachable,
         }
@@ -1994,6 +2077,37 @@ fn installRuntime(
             b.fmt("share/licenses/{s}/LICENSE.txt", .{selection.library.id}),
         );
         b.getInstallStep().dependOn(&license.step);
+    }
+
+    if (options.controller_image and options.install_controller_image_data) {
+        const data = b.addInstallDirectory(.{
+            .source_dir = dependency.namedLazyPath("prebuilt-controller-image-data-directory"),
+            .install_dir = .prefix,
+            .install_subdir = "share/ControllerImage",
+        });
+        b.getInstallStep().dependOn(&data.step);
+    }
+
+    if (options.shadercross and options.shadercross_dxc == .bundled) {
+        if (target.result.os.tag != .windows) {
+            @panic("package-local SDL_shadercross bundled DXC supports only Windows");
+        }
+        for ([_][]const u8{ "dxcompiler.dll", "dxil.dll" }) |name| {
+            const install = b.addInstallBinFile(
+                dependency.namedLazyPath(b.fmt("runtime-shadercross-dxc-{s}", .{
+                    if (std.mem.eql(u8, name, "dxcompiler.dll")) "dxcompiler" else "dxil",
+                })),
+                name,
+            );
+            b.getInstallStep().dependOn(&install.step);
+        }
+        for ([_]struct { source: []const u8, destination: []const u8 }{
+            .{ .source = "license-shadercross-dxc", .destination = "share/licenses/DirectXShaderCompiler/LICENSE.TXT" },
+            .{ .source = "notices-shadercross-dxc", .destination = "share/licenses/DirectXShaderCompiler/ThirdPartyNotices.txt" },
+        }) |notice| {
+            const install = b.addInstallFile(dependency.namedLazyPath(notice.source), notice.destination);
+            b.getInstallStep().dependOn(&install.step);
+        }
     }
 
     if (!options.optional_codecs) return;

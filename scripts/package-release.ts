@@ -27,13 +27,14 @@ const localBuildRoots = new Set([
 
 export async function stageReleaseTree(
   destination: string,
+  supplementalPrebuilts?: string,
 ): Promise<string> {
   const release = await loadSdlRelease();
   await requirePreparedInputs(release);
   const packageRoot = `${destination}/sdl3-${releaseVersion(release)}`;
   await Deno.mkdir(packageRoot, { recursive: true });
   await copyPackageSources(release, packageRoot);
-  await stagePrebuilts(release, packageRoot, destination);
+  await stagePrebuilts(release, packageRoot, destination, supplementalPrebuilts);
   await validateReleaseTree(packageRoot);
   return packageRoot;
 }
@@ -57,6 +58,7 @@ async function requirePreparedInputs(release: SdlRelease): Promise<void> {
 
 export async function packageRelease(
   outputRoot = `${repositoryRoot}/zig-out/release`,
+  supplementalPrebuilts = Deno.env.get("SDL3_SUPPLEMENTAL_PREBUILTS"),
 ) {
   if (Deno.build.os === "windows") {
     throw new Error("package:release requires GNU tar under Linux, macOS, or WSL");
@@ -69,7 +71,7 @@ export async function packageRelease(
     prefix: "release-package-",
   });
   try {
-    const packageRoot = await stageReleaseTree(temporary);
+    const packageRoot = await stageReleaseTree(temporary, supplementalPrebuilts);
     const packageName = packageRoot.slice(packageRoot.lastIndexOf("/") + 1);
 
     const archive = `${outputRoot}/${packageName}.tar.gz`;
@@ -225,8 +227,11 @@ async function stagePrebuilts(
   release: SdlRelease,
   packageRoot: string,
   temporary: string,
+  supplementalPrebuilts?: string,
 ): Promise<void> {
-  const prebuiltComponents = release.components.filter((component) => component.prebuilt);
+  const prebuiltComponents = release.components.filter((component) =>
+    component.prebuilt === "upstream"
+  );
   const names = prebuiltComponents.flatMap(binaryArtifactNames);
   const installations = await installArtifacts(names);
   for (const component of prebuiltComponents) {
@@ -251,6 +256,16 @@ async function stagePrebuilts(
     await stageMSVC(component, msvc, packageRoot);
     await stageMacOS(component, macos, packageRoot);
     console.log(`Staged ${component.id} ${component.version} prebuilts.`);
+  }
+  if (supplementalPrebuilts) {
+    const source = resolve(repositoryRoot, supplementalPrebuilts);
+    const nested = `${source}/prebuilt`;
+    const sourceRoot = await Deno.stat(nested).then((stat) => stat.isDirectory ? nested : source)
+      .catch(() => source);
+    for await (const entry of Deno.readDir(sourceRoot)) {
+      await copyTo(`${sourceRoot}/${entry.name}`, `${packageRoot}/prebuilt/${entry.name}`);
+    }
+    console.log(`Staged CI-built supplemental prebuilts from ${source}.`);
   }
 }
 
@@ -386,11 +401,21 @@ export async function validateReleaseTree(root: string, relative = ""): Promise<
 
 if (import.meta.main) {
   const args = Deno.args[0] === "--" ? Deno.args.slice(1) : Deno.args;
-  if (
-    args.length !== 0 &&
-    (args.length !== 2 || args[0] !== "--output" || args[1].startsWith("-"))
-  ) {
-    throw new Error("usage: package-release.ts [--output <directory>]");
+  let output: string | undefined;
+  let supplemental: string | undefined;
+  for (let index = 0; index < args.length; index += 2) {
+    const option = args[index];
+    const value = args[index + 1];
+    if (
+      !value || value.startsWith("-") ||
+      (option !== "--output" && option !== "--supplemental-prebuilts")
+    ) {
+      throw new Error(
+        "usage: package-release.ts [--output <directory>] [--supplemental-prebuilts <prebuilt-directory>]",
+      );
+    }
+    if (option === "--output") output = value;
+    else supplemental = value;
   }
-  await packageRelease(args[1]);
+  await packageRelease(output, supplemental);
 }

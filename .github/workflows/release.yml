@@ -1,0 +1,157 @@
+name: Release package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing validated release tag (for example v3.4.12+9)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  supplemental-windows-msvc:
+    name: Supplemental prebuilts (Windows MSVC ${{ matrix.target }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86-windows-msvc, x86_64-windows-msvc, aarch64-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Fetch verified sources and DXC runtime
+        shell: pwsh
+        run: |
+          deno task fetch
+          mise --quiet -E sdl install http:dxc-windows-runtime
+          "DXC_ROOT=$(mise --quiet -E sdl where http:dxc-windows-runtime)" >> $env:GITHUB_ENV
+      - name: Build supplemental prebuilts
+        shell: pwsh
+        run: deno run --allow-env=DXC_ROOT --allow-read --allow-write --allow-run scripts/build-supplemental-prebuilts.ts --target ${{ matrix.target }} --output prebuilt --dxc-root $env:DXC_ROOT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supplemental-${{ matrix.target }}
+          path: prebuilt
+          if-no-files-found: error
+
+  supplemental-windows-mingw:
+    name: Supplemental prebuilts (Windows MinGW ${{ matrix.target }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86-windows-gnu, x86_64-windows-gnu]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-i686-toolchain mingw-w64-x86_64-toolchain
+      - uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - name: Fetch verified sources and DXC runtime
+        shell: pwsh
+        run: |
+          deno task fetch
+          mise --quiet -E sdl install http:dxc-windows-runtime
+          "DXC_ROOT=$(mise --quiet -E sdl where http:dxc-windows-runtime)" >> $env:GITHUB_ENV
+      - name: Build supplemental prebuilts
+        shell: pwsh
+        run: |
+          $prefix = if ('${{ matrix.target }}' -eq 'x86-windows-gnu') { 'mingw32' } else { 'mingw64' }
+          $env:PATH = "C:\msys64\$prefix\bin;" + $env:PATH
+          deno run --allow-env=DXC_ROOT --allow-read --allow-write --allow-run scripts/build-supplemental-prebuilts.ts --target ${{ matrix.target }} --output prebuilt --dxc-root $env:DXC_ROOT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supplemental-${{ matrix.target }}
+          path: prebuilt
+          if-no-files-found: error
+
+  supplemental-macos:
+    name: Supplemental prebuilts (macOS universal)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - run: deno task fetch
+      - run: >-
+          deno run --allow-read --allow-write --allow-run
+          scripts/build-supplemental-prebuilts.ts --target macos --output prebuilt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supplemental-macos
+          path: prebuilt
+          if-no-files-found: error
+
+  publish:
+    name: Validate and publish release archive
+    needs: [supplemental-windows-msvc, supplemental-windows-mingw, supplemental-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Verify tag and package version
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n1 "$TAG")"
+          version=$(sed -n 's/^[[:space:]]*\.version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' build.zig.zon | head -n1)
+          test "$TAG" = "v$version"
+      - uses: jdx/mise-action@v3
+        with:
+          version: 2026.7.15
+          install: true
+          cache: false
+      - run: deno task fetch
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: supplemental-*
+          path: .release-prebuilt
+          merge-multiple: true
+      - name: Validate, package, and reproduce the exact release archive
+        env:
+          SDL3_SUPPLEMENTAL_PREBUILTS: .release-prebuilt
+        run: deno task release-check
+      - name: Build release assets
+        env:
+          SDL3_SUPPLEMENTAL_PREBUILTS: .release-prebuilt
+        run: deno task package:release
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: zig-out/release/*
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release create "$TAG" zig-out/release/* --title "$TAG" --generate-notes

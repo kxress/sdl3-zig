@@ -9,6 +9,9 @@ export interface WindowsOptionalRuntime {
   licenses: string[];
 }
 
+export type PrebuiltSource = "upstream" | "release" | false;
+export type PrebuiltKind = "shared" | "static";
+
 export interface SdlComponent {
   id: string;
   key: string;
@@ -16,7 +19,8 @@ export interface SdlComponent {
   vendorId: string;
   libraryName?: string;
   pkgConfigName: string;
-  prebuilt: boolean;
+  prebuilt: PrebuiltSource;
+  prebuiltKind?: PrebuiltKind;
   sourceBuildDirectory?: string;
   macosOptionalFrameworks?: string[];
   windowsOptionalRuntime?: WindowsOptionalRuntime;
@@ -41,13 +45,14 @@ const miseEnvironment = "sdl";
 const bindingRevision: number = 9;
 
 const definitions: ComponentDefinition[] = [
-  { id: "SDL3", key: "sdl", vendorId: "SDL3", pkgConfigName: "sdl3", prebuilt: true },
+  { id: "SDL3", key: "sdl", vendorId: "SDL3", pkgConfigName: "sdl3", prebuilt: "upstream" },
   {
     id: "SDL3_test",
     key: "test",
     vendorId: "SDL3",
     pkgConfigName: "SDL3_test",
-    prebuilt: false,
+    prebuilt: "release",
+    prebuiltKind: "static",
     sourceArtifact: "http:sdl-source",
   },
   {
@@ -56,7 +61,8 @@ const definitions: ComponentDefinition[] = [
     vendorId: "ControllerImage",
     libraryName: "controllerimage",
     pkgConfigName: "ControllerImage",
-    prebuilt: false,
+    prebuilt: "release",
+    prebuiltKind: "static",
     sourceArtifact: "http:controller-image-source",
     sourceBuildDirectory: "ControllerImage",
   },
@@ -65,7 +71,8 @@ const definitions: ComponentDefinition[] = [
     key: "shadercross",
     vendorId: "SDL3_shadercross",
     pkgConfigName: "SDL3_shadercross",
-    prebuilt: false,
+    prebuilt: "release",
+    prebuiltKind: "shared",
     sourceArtifact: "http:sdl-shadercross-source",
   },
   {
@@ -73,7 +80,7 @@ const definitions: ComponentDefinition[] = [
     key: "image",
     vendorId: "SDL3_image",
     pkgConfigName: "SDL3_image",
-    prebuilt: true,
+    prebuilt: "upstream",
     macosOptionalFrameworks: ["avif", "jxl", "png", "webp"],
     windowsOptionalRuntime: {
       dlls: [
@@ -99,14 +106,14 @@ const definitions: ComponentDefinition[] = [
     key: "ttf",
     vendorId: "SDL3_ttf",
     pkgConfigName: "SDL3_ttf",
-    prebuilt: true,
+    prebuilt: "upstream",
   },
   {
     id: "SDL3_mixer",
     key: "mixer",
     vendorId: "SDL3_mixer",
     pkgConfigName: "SDL3_mixer",
-    prebuilt: true,
+    prebuilt: "upstream",
     macosOptionalFrameworks: ["gme", "ogg", "opus", "wavpack", "xmp"],
     windowsOptionalRuntime: {
       dlls: [
@@ -132,7 +139,7 @@ const definitions: ComponentDefinition[] = [
     key: "net",
     vendorId: "SDL3_net",
     pkgConfigName: "SDL3_net",
-    prebuilt: true,
+    prebuilt: "upstream",
   },
 ];
 
@@ -194,7 +201,7 @@ export function artifactName(
 function componentArtifactNames(component: ComponentDefinition): string[] {
   return [
     component.sourceArtifact ?? artifactName(component, "source"),
-    ...(component.prebuilt ? binaryArtifactNames(component) : []),
+    ...(component.prebuilt === "upstream" ? binaryArtifactNames(component) : []),
   ];
 }
 

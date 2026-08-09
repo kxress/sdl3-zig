@@ -70,7 +70,8 @@ function renderSdlMetadata(
     `        .framework_name = ${quote(component.id)},`,
     `        .pkg_config_name = ${quote(component.pkgConfigName)},`,
     `        .minimum_version = ${quote(component.version)},`,
-    `        .prebuilt = ${component.prebuilt},`,
+    `        .prebuilt = ${component.prebuilt !== false},`,
+    `        .prebuilt_kind = .${component.prebuiltKind ?? "shared"},`,
     `        .source_build_directory = ${quote(component.sourceBuildDirectory ?? "")},`,
     `        .macos_optional_frameworks = ${
       renderStrings(component.macosOptionalFrameworks ?? [])
@@ -115,6 +116,8 @@ function renderSdlMetadata(
     "    licenses: []const []const u8,",
     "};",
     "",
+    "pub const PrebuiltKind = enum { shared, static };",
+    "",
     "pub const Library = struct {",
     "    key: []const u8,",
     "    id: []const u8,",
@@ -129,6 +132,7 @@ function renderSdlMetadata(
     "    pkg_config_name: []const u8,",
     "    minimum_version: []const u8,",
     "    prebuilt: bool,",
+    "    prebuilt_kind: PrebuiltKind,",
     "    source_build_directory: []const u8,",
     "    macos_optional_frameworks: []const []const u8,",
     "    windows_optional_runtime: ?WindowsOptionalRuntime,",

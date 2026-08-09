@@ -20,14 +20,13 @@ documentation describe the API instead of merely exposing translated declaration
 | SDL3_ttf        | `ttf`, `sdl3.ttf`                           | `.ttf = true`              | auto, system, official prebuilt, or source |
 | SDL3_mixer      | `mixer`, `sdl3.mixer`                       | `.mixer = true`            | auto, system, official prebuilt, or source |
 | SDL3_net        | `net`, `sdl3.net`                           | `.net = true`              | auto, system, official prebuilt, or source |
-| SDL3_test       | `test`, `sdl3.@"test"`                      | `.sdl3_test = true`        | system or source                           |
-| ControllerImage | `controller_image`, `sdl3.controller_image` | `.controller_image = true` | system or source                           |
-| SDL_shadercross | `shadercross`, `sdl3.shadercross`           | `.shadercross = true`      | system or source                           |
+| SDL3_test       | `test`, `sdl3.@"test"`                      | `.sdl3_test = true`        | package prebuilt, system, or source        |
+| ControllerImage | `controller_image`, `sdl3.controller_image` | `.controller_image = true` | package prebuilt, system, or source        |
+| SDL_shadercross | `shadercross`, `sdl3.shadercross`           | `.shadercross = true`      | package prebuilt, system, or source        |
 
-SDL3_test, ControllerImage, and SDL_shadercross are optional source-only SDL packages.
-
-“Official prebuilt” means a binary published by the upstream SDL project. This project does not
-publish binaries it built itself. Source builds happen in the consuming application's Zig cache.
+SDL3_test and ControllerImage are linked from package-local static archives. SDL_shadercross is a
+package-local shared runtime. The remaining desktop prebuilts are published by upstream SDL. Source
+builds remain available in the consuming application's Zig cache.
 
 ## Install
 
@@ -213,13 +212,13 @@ returned by `addTo`, for example `sdl3.sourceRuntimeArtifact(b, dependency, .sdl
 artifact is staged as a regular loader-facing file after CMake completes, so packaging does not
 depend on the private CMake or Zig cache layout.
 
-When ControllerImage is enabled for a source distribution, set
+When ControllerImage is enabled for a source or package-prebuilt distribution, set
 `install_controller_image_data = true` to install the generated databases at
 `share/ControllerImage/controllerimage-standard.bin` and
 `share/ControllerImage/controllerimage-kenney.bin`. The standard database is also available to a
 custom packager as `sdl3.sourceControllerImageDataArtifact(b, dependency)`; both files are generated
-only from the verified `vendor/ControllerImage/art` tree. This option is source-only and has no
-effect for `.system`, where the application owns the ControllerImage data deployment.
+only from the verified `vendor/ControllerImage/art` tree. It has no effect for `.system`, where the
+application owns the ControllerImage data deployment.
 
 SDL source builds use the explicit `headless` feature profile by default. It disables SDL's audio,
 video, GPU, renderer, and camera subsystems so a source build does not silently depend on a display
@@ -272,10 +271,12 @@ passing them to the other source builds. For example, `-DSDLMIXER_MP3=ON` enable
 self-contained `dr_mp3` decoder; use Mixer’s `SDLMIXER_VENDORED` and backend-specific CMake options
 when selecting bundled or system codec libraries.
 
-### Optional source-only SDL packages
+### Optional supplemental SDL packages
 
-`SDL3_test`, ControllerImage, and SDL_shadercross have no official package-local prebuilts. Use
-`.system` when the application supplies the libraries, or `.source` to build the verified sources.
+`SDL3_test`, ControllerImage, and SDL_shadercross have package-local prebuilts for the supported
+Windows and macOS desktop targets. SDL3_test and ControllerImage are static companions even when
+`.linkage = .shared` selects the shared SDL3 runtime. Use `.system` when the application supplies
+the libraries, or `.source` to build the verified sources.
 
 ```zig
 _ = sdl3.addTo(b, exe, .{
@@ -300,8 +301,9 @@ _ = sdl3.addTo(b, exe, .{
   Windows targets; unsupported pairs are rejected before CMake. For those modes, `install_runtime`
   also installs `dxcompiler` and `dxil` beside the selected SDL runtimes, while custom packagers can
   obtain them with `sourceRuntimeArtifact(b, dependency, .shadercross_dxc_dxcompiler)` and
-  `sourceRuntimeArtifact(b, dependency, .shadercross_dxc_dxil)`. This project does not release
-  locally built DXC or shadercross binaries.
+  `sourceRuntimeArtifact(b, dependency, .shadercross_dxc_dxil)`. Windows package prebuilts also
+  support `.shadercross_dxc = .bundled`; the release archive retains the exact DXC license and
+  third-party notices from the pinned Microsoft runtime archive.
 - The opt-in [shader build helper](examples/shaders/README.md) consumes checked-in GLSL, HLSL, or
   Zig shader inputs and emits SPIR-V, DXIL, MSL, and reflection metadata. It is a small artifact
   workflow, not a rendering framework; GLSL requires an external `glslangValidator`, and DXIL
