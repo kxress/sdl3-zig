@@ -645,3 +645,11 @@ family changes; do not silently treat an upstream source change as a documentati
 - **2026-08-09 pass 2:** A second independent fresh luna-medium comparison covered all 64 upstream
   modules plus 6 `extras` files and found no concrete improvement missing from this document. It
   revalidated the same upstream tip and made no source changes.
+- **2026-08-09 pass 3:** A fresh exhaustive luna-medium comparison covered the complete public API
+  surface and found no concrete improvement missing from this document. It revalidated upstream
+  commit `69cf1fba` (including the already-recorded GPU texture-default change) and made no source
+  changes.
+- **2026-08-09 pass 4:** A second fresh exhaustive luna-medium comparison covered all upstream
+  public modules and declarations and found zero new concrete improvements. It revalidated commit
+  `69cf1fba`, including the already-recorded `TextureCreateInfo` defaults, and made no source
+  changes.
