@@ -8,6 +8,13 @@ consistency and breadth of its hand-written ergonomic layer. The list below reco
 API differences, not general style suggestions. “Add” means add an ergonomic facade while retaining
 our generated ABI layer.
 
+The comparison scope is the complete public source surface at that commit: 64 top-level `src/*.zig`
+modules plus the 6 public files under `src/extras/`, compared with the 58 generated core namespaces
+in our `src/sdl.zig` and our separately exported companion modules. Every Codeberg module is listed
+in the declaration audit below, including modules where no material advantage was found. The audit
+compares exported types, methods, constructors, conversions, callback factories, ownership, and
+return shapes; it does not compare documentation or function bodies.
+
 ## High-value API gaps
 
 - **Resource structs with lifecycle constructors.** `video.Window`, `render.Renderer`,
@@ -178,12 +185,11 @@ APIs in the referenced commit and should be included in the backlog:
   returns `!Event`. Our `SDL_Event` mirror leaves this decoding and the lifetime of drop-file
   strings to every caller.
 
-- **Filesystem has path and metadata value types.** `filesystem.Path` owns a sentinel path and
-  offers `init`, `deinit`, `clone`, `join`, `parent`, `basename`, `extension`, and `toZ`; `PathInfo`
-  and `GlobFlags` model metadata and search options. The module also provides typed `getPathInfo`,
-  `globDirectory`, `enumerateDirectory`, `getAllDirectoryItems`, and `freeAllDirectoryItems`
-  helpers. Our filesystem bindings expose C strings and raw structs with no path ownership or
-  composition API.
+- **Filesystem has a path value type.** `filesystem.Path` owns a sentinel path and offers `init`,
+  `get`, `baseName`, `join`, `parent`, and `deinit`; `PathInfo` and `GlobFlags` model metadata and
+  search options. The module also provides typed `getPathInfo`, `globDirectory`,
+  `enumerateDirectory`, `getAllDirectoryItems`, and `freeAllDirectoryItems` helpers. Our filesystem
+  bindings expose C strings and raw structs with no path ownership or composition API.
 
 - **Gamepads and joysticks are receiver-oriented objects.** Their `Gamepad` and `Joystick` types
   provide open/close, button/axis queries, mappings, sensors, rumble, LEDs, player index, and
@@ -241,10 +247,11 @@ does not mistake organization or naming for missing SDL functionality.
 
 ### Core lifecycle and ownership modules
 
-- **`async_io`:** Codeberg has `File.init`, `File.read`, `File.write`, `File.closeFile`, and
-  fallible `Queue.init`/`deinit`, plus `Outcome` and `IoMode`. Ours has `AsyncIo`, `Queue`, and free
-  `asyncIoFromFile`/`read`/`write`/`loadFileAsync` operations, but no `File` facade or receiver
-  constructor. Add `async_io.File` and make queue/task ownership explicit.
+- **`async_io`:** Codeberg has `File.init`/`getSize`; `Queue.closeFile` closes a `File`, and
+  fallible `Queue.init`/`deinit` plus `Queue.loadFile` make queue/task ownership explicit. Ours has
+  `AsyncIo`, `Queue`, and free `asyncIoFromFile`/`read`/`write`/`loadFileAsync` operations, but no
+  `File` facade or receiver constructor. Add `async_io.File` and preserve the queue-owned close
+  operation rather than inventing a `File.closeFile` method.
 - **`audio`:** Codeberg separates a typed physical/logical `Device` from `Stream`, gives both
   receiver-oriented operations, and adds `Stream.init`, `Device.open`, `Device.openStream`,
   `Spec.fromSdl`/`toSdl`, generic callback factories, and `![]Device` enumeration. Ours has
@@ -254,11 +261,10 @@ does not mistake organization or naming for missing SDL functionality.
 - **`camera`:** Codeberg uses `Camera.init`/`deinit`, typed `Specification` conversion, and `![]Id`
   enumeration. Ours has `Camera.close`, `open`, and `Spec`; normalize the names and make the
   specification and device list typed values.
-- **`filesystem`:** Codeberg's allocator-backed `Path` supports `init`, `deinit`, `clone`, `join`,
-  `parent`, `baseName`, `extension`, and sentinel conversion; `PathInfo`, `PathType`, `GlobFlags`,
-  `EnumerationResult`, callback userdata, and list-freeing APIs complete the value layer. Ours
-  exposes `PathInfo` and C-string-based directory functions, but no owned `Path` or generic
-  enumeration callback.
+- **`filesystem`:** Codeberg's allocator-backed `Path` supports `init`, `get`, `baseName`, `join`,
+  `parent`, and `deinit`; `getSeparator`, `PathInfo`, `PathType`, `GlobFlags`, `EnumerationResult`,
+  callback userdata, and list-freeing APIs complete the value layer. Ours exposes `PathInfo` and
+  C-string-based directory functions, but no owned `Path` or generic enumeration callback.
 - **`gamepad`:** Codeberg's `Gamepad` has `init`/`deinit`, while `Axis`, `Button`, `Binding`,
   `BindingType`, `ButtonLabel`, and `Type` provide typed mapping/value APIs. Ours has a `Gamepad`
   handle with `close` and the raw `GamepadBinding`; add the constructor naming, mapping records,
@@ -477,6 +483,59 @@ items above concrete enough to turn into black-box API tests:
   distinguishes generic, typed, GIF, and WEBP IO constructors. We should retain this naming
   distinction in any facade so copying and borrowing are visible at the call site.
 
+## Additional declaration-level findings
+
+These are smaller public API wins from the same exhaustive pass. They are listed separately so they
+do not disappear behind the larger lifecycle and conversion themes:
+
+- **Audio format values are useful objects.** Codeberg's `audio.Format` has `define`,
+  `getBitwidth`, `getByteSize`, `getName`, `getSilenceValue`, and signedness, endian, integer, and
+  floating-point predicates. Its `Device` also has receiver methods for format, channel map, gain,
+  pause state, physical/playback classification, binding, and postmix callbacks. Add these as
+  methods on our generated format/device facade rather than leaving them as unrelated C-shaped
+  calls.
+- **Camera IDs carry their own queries.** `camera.Id` exposes `getName`, `getPosition`, and
+  `getSupportedFormats`, while `camera.Specification` round-trips through `fromSdl`/`toSdl`.
+  Enumeration returning `![]Id` and the ID methods should be one typed camera-discovery API.
+- **Video configuration is composed of typed values.** Codeberg adds `Display.Mode` and
+  `Display.Orientation` conversions, `Window.CreateProperties`, `Window.Flags`, `Window.Position`,
+  `Window.Properties`, `VSync`, and an owned `gl.Context` with `init`/`deinit`. Our generated
+  window/display/GL declarations cover the SDL calls but not this configuration and ownership
+  layer.
+- **Properties callbacks are typed too.** In addition to `properties.Group`'s `get`, `getAll`,
+  `set`, `clear`, `copyTo`, `lock`, `unlock`, and `enumerateProperties`, Codeberg exposes generic
+  `CleanupCallback(UserData, ValueType)` and `EnumerateCallback(UserData)` factories. Include these
+  in the callback audit; the advantage is not only the property union.
+- **Events include utilities around the tagged union.** `events` also provides `Iterator`,
+  `iterator`, `eventIn`, `minMax`, event groups, `flushGroup`, `hasGroup`, and a generic `Filter`
+  trampoline. Add the decode union and these typed helpers as one event facade, rather than only
+  changing `pollEvent`'s return type.
+- **Haptic effects are a typed union family.** `Direction`, `Condition`, `Constant`, `Custom`,
+  `Periodic`, `Ramp`, `Effect`, and `Features` each have explicit conversion behavior, alongside
+  `Haptic.init`, `initFromJoystick`, `initFromMouse`, `initRumble`, and `deinit`. This is a model
+  for all SDL APIs whose C surface is a tagged or nested union.
+- **Mouse state and callbacks are grouped.** `getState`, `getGlobalState`, and `getRelativeState`
+  return grouped typed values containing `ButtonFlags` and coordinates, and
+  `MotionTransformCallback` is a typed callback factory. Our individual output fields and raw
+  callback signature should gain equivalent grouped/adapted forms.
+- **Process and storage expose complete value/configuration contracts.** Codeberg's
+  `process.Process` includes `Io`, `CreateProperties.toProperties`, `Properties.fromSdl`, and
+  receiver `getInput`/`getOutput`/`read`/`wait`/`kill`; `storage.Storage` adds `Path`,
+  `Interface(UserData)`, `initFile`/`initTitle`/`initUser`, `getFileSize`, and receiver filesystem
+  operations. These are distinct improvements beyond merely adding `init` and `deinit`.
+- **Time and timers include conversion utilities.** Codeberg's `timer` has millisecond and
+  nanosecond delay/conversion helpers plus generic millisecond/nanosecond timer callbacks, and its
+  `Timer` value has optional-safe `fromSdl`/`toSdl`, `initMilliseconds`, `initNanoseconds`, and
+  `deinit`. Codeberg's `time` similarly gives `DateTime`/`Time` conversion and Windows conversion
+  methods. Add both the resource wrapper and the value-level utility methods.
+- **Callback coverage is broader than the common examples suggest.** The complete list includes
+  `audio.PostmixCallback(UserData)`, `audio.StreamCallback(UserData)`,
+  `audio.StreamDataCompleteCallback(UserData)`, `mouse.MotionTransformCallback(UserData)`,
+  `properties.CleanupCallback(UserData, ValueType)`, `properties.EnumerateCallback(UserData)`,
+  and the assertion, clipboard, event, filesystem, hints, IO, joystick, log, storage, system,
+  thread, timer, tray, dialog, and main factories listed above. This should become a matrix of
+  black-box callback tests with explicit userdata and lifetime assertions.
+
 ## Complete per-module declaration audit
 
 The following is the exhaustive public-module checklist for the compared revision. It is based on
@@ -490,7 +549,7 @@ file.
 | Codeberg module  | Concrete API advantage in that module                                                                                                                                        | Our current surface and precise improvement                                                                                                                             |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `assert`         | `Handler(UserData)`, `AssertData`, `State`, and typed report/reset operations.                                                                                               | We have assertion functions and raw callback declarations; add the generic userdata trampoline and typed report value.                                                  |
-| `async_io`       | Adds `File` with `init`, `read`, `write`, and `closeFile`; `Queue.init`/`deinit` and `Queue.loadFile` are receiver APIs.                                                     | We have `AsyncIo`, `Queue`, and free task functions; add the file object and receiver construction/load methods.                                                        |
+| `async_io`       | Adds `File` with `init`/`getSize`; `Queue.closeFile`, `Queue.init`/`deinit`, and `Queue.loadFile` are receiver APIs.                                                       | We have `AsyncIo`, `Queue`, and free task functions; add the file object and receiver construction/load methods.                                                        |
 | `atomic`         | `Int`, `U32`, and `Spinlock` expose value-oriented operations alongside pointer helpers.                                                                                     | We already bind the operations and `Int`/`SpinLock`; add the consistent receiver names and `U32` value wrapper.                                                         |
 | `audio`          | Distinguishes `Device` from `Stream`, with `Device.open`, `close`, `openStream`, `Stream.init`, and `Spec.fromSdl`/`toSdl`.                                                  | We have `DeviceId`, `Stream`, and checked free opens; add the physical-device object, typed spec conversion, and typed callback factories.                              |
 | `bits`           | Small named helpers `hasExactlyOneBitSet` and `mostSignificantBitIndex`.                                                                                                     | Equivalent generated 32-bit helpers exist; no material API gap.                                                                                                         |
@@ -503,7 +562,7 @@ file.
 | `errors`         | Dedicated reusable `wrapCall`, `wrapCallBool`, pointer, null, C-string, and callback-error helpers.                                                                          | We have `core.Error` and many generated checked calls, but no public shared wrapper module; centralize companion-facade conversion here.                                |
 | `events`         | Separate payload records for all event families plus tagged `Event`; `poll` returns `?Event`, `waitAndPop` returns `!Event`, and payloads round-trip with `fromSdl`/`toSdl`. | We generate `SDL_Event` and named payload mirrors with `pollEvent`/`waitEvent`; add discriminated decoding and an explicit drop-string lifetime policy.                 |
 | `extras`         | `FramerateCapper`, error handlers/loggers, and GPU shader metadata loaders/compatibility validation.                                                                         | We have shadercross bindings and generated shader metadata, but no equivalent runtime helper namespace.                                                                 |
-| `filesystem`     | Owned sentinel `Path` (`init`, `clone`, `join`, `parent`, `baseName`, `deinit`), typed `PathInfo`, `GlobFlags`, and generic enumeration callback.                            | We have C-shaped path functions and allocator-owned arrays; add the path value, typed metadata, callback adapter, and path composition.                                 |
+| `filesystem`     | Owned sentinel `Path` (`init`, `get`, `baseName`, `join`, `parent`, `deinit`), `getSeparator`, typed `PathInfo`, `GlobFlags`, and generic enumeration callback.             | We have C-shaped path functions and allocator-owned arrays; add the path value, typed metadata, callback adapter, and path composition.                                 |
 | `gamepad`        | `Gamepad` owns an opened handle and has typed `Properties` and `BindingIterator`; enum values are optional-safe conversions.                                                 | We already have a receiver-oriented `Gamepad` and binding records; add optional-safe enum conversions, iterator ergonomics, and a uniform open/init naming policy.      |
 | `gpu`            | Descriptors, usage flags, regions, locations, pipeline states, and create-info values systematically implement defaults plus checked `fromSdl`/`toSdl`.                      | We already have parent-aware resource structs and `deinit`; the gap is the descriptor conversion/default layer, not GPU handle coverage.                                |
 | `guid`           | `Guid.fromString` and `Guid.toString` are value methods with checked string conversion.                                                                                      | We expose the ABI GUID and C-shaped conversion operations; add the value methods and ownership of returned text.                                                        |
