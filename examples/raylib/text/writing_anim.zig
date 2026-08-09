@@ -9,8 +9,8 @@ const message =
     "The sentence is revealed character by character and restarts on click.";
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     try ttf.init();
     defer ttf.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: writing animation", 800, 450, .{});

@@ -6,8 +6,8 @@ const image = @import("image");
 const sdl = @import("sdl");
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: sprite animation", 800, 450, .{});
     var window = result.window;
     defer window.deinit();

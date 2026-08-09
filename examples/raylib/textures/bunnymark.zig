@@ -8,8 +8,8 @@ const sdl = @import("sdl");
 const Bunny = struct { x: f32, y: f32, vx: f32, vy: f32, color: [3]u8 };
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: bunnymark", 800, 450, .{});
     var window = result.window;
     defer window.deinit();

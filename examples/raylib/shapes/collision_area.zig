@@ -15,8 +15,8 @@ fn intersection(a: sdl.rect.F, b: sdl.rect.F) ?sdl.rect.F {
 }
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: collision area", 800, 450, .{});
     var window = result.window;
     defer window.deinit();

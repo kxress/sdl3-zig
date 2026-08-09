@@ -7,8 +7,8 @@ const Cell = struct { x: i32, y: i32 };
 const Direction = enum { up, down, left, right };
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL demo: snake", 640, 480, .{});
     var window = result.window;
     defer window.deinit();

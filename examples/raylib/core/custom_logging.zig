@@ -15,8 +15,8 @@ fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.LogPriority, mess
 pub fn main() !void {
     sdl.setLogOutputFunction(customLogger, null);
     sdl.logInfo(0, "custom logger installed at tick {d}", .{sdl.timer.getTicks()});
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: custom logging", 800, 450, .{});
     var window = result.window;
     defer window.deinit();

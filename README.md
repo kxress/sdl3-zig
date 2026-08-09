@@ -89,8 +89,8 @@ const sdl3 = @import("sdl3");
 const sdl = sdl3.core;
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
 
     // Use SDL through documented namespaces such as sdl.video, sdl.audio, and sdl.render.
     // Enabled companions are available as sdl3.image, sdl3.ttf, and sdl3.mixer.
@@ -375,9 +375,14 @@ deno task release-check
 `fetch` populates the ignored local cache of verified upstream source trees when it is absent or
 does not match the pinned artifact manifest. `generate` rewrites bindings and package metadata.
 `check` runs formatting, type checks, source verification, metadata tests, binding tests, and
-consumer build tests. Binding checks compare generated output with the committed bindings.
-`deno task package:release` requires that prepared cache and generated bindings, then assembles the
-deterministic archive and its SHA-256 and Zig-hash sidecars.
+consumer build tests. Binding checks compare generated output with the committed bindings. Before
+cutting a release, generate and review the final notes with `deno task generate:release-notes`. The
+command summarizes commit metadata since the nearest reachable `v*` release tag with Codex Luna at
+low reasoning effort and cites each bullet with its source commit hash. The first release, before a
+tag exists, requires an explicit baseline such as `deno task generate:release-notes --from a0902ee`.
+Commit the reviewed `RELEASE_NOTES.md` with the release changes before running the release checks
+and creating the version tag. `deno task package:release` requires that prepared cache and generated
+bindings, then assembles the deterministic archive and its SHA-256 and Zig-hash sidecars.
 
 Source archives and all other release inputs are verified by their pinned SHA-256 checksums.
 

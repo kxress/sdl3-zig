@@ -26,12 +26,14 @@
     "fetch": "deno run --allow-read --allow-write --allow-run=mise scripts/sync-sources.ts update",
     "generate:bindings": "deno run --allow-run=castxml,clang,doxygen,zig --allow-read --allow-write scripts/generate-bindings.ts",
     "generate:metadata": "deno run --allow-read=build.zig.zon,sdl_metadata.zig --allow-write=build.zig.zon,sdl_metadata.zig --allow-run=mise scripts/sync-package-metadata.ts write",
+    "generate:release-notes": "deno run --allow-read --allow-write --allow-run=codex,git scripts/generate-release-notes.ts",
     "package:release": "deno run --allow-env=SDL3_SUPPLEMENTAL_PREBUILTS --allow-read --allow-write --allow-run=castxml,clang,deno,doxygen,mise,7zz,tar,sha256sum,zig scripts/package-release.ts",
     "build:shaders": "deno run --allow-env=GLSLANG_VALIDATOR,SDL_SHADERCROSS --allow-read --allow-write --allow-run scripts/build-shaders.ts",
     "test:release-archive": "deno run --allow-env=SDL3_SUPPLEMENTAL_PREBUILTS --allow-read --allow-write --allow-run=castxml,clang,cmake,deno,doxygen,mise,7zz,tar,sha256sum,zig scripts/release-repro.ts",
     "docs": "zig build docs",
     "package:docs": "deno run --allow-read --allow-write scripts/package-documentation.ts package",
     "test:metadata": "deno run --allow-read=build.zig.zon,sdl_metadata.zig --allow-run=mise scripts/sync-package-metadata.ts check",
+    "test:release-notes": "deno test --frozen --allow-read tests/release-notes.test.ts",
     "test:sources": "deno run --allow-read --allow-write --allow-run=cmp,diff,mise scripts/sync-sources.ts check",
     "test:bindings": "deno test --frozen --allow-read --allow-write --allow-run=castxml,clang,doxygen,zig tests/codegen",
     "test:shaders": "deno test --frozen --allow-env=GLSLANG_VALIDATOR,SDL_SHADERCROSS,SDL_SHADER_DEVICE_LOADER,SDL_SHADER_OUTPUT_DIR --allow-read --allow-write --allow-run tests/shader-build.test.ts",
@@ -52,7 +54,8 @@
         "test:metadata",
         "test:sources",
         "test:bindings",
-        "test:build"
+        "test:build",
+        "test:release-notes"
       ]
     },
     "release-check": {

@@ -28,8 +28,8 @@ fn drawLine(
 }
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     try ttf.init();
     defer ttf.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: words alignment", 800, 450, .{});

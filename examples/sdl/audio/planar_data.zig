@@ -5,8 +5,8 @@ const std = @import("std");
 const sdl = @import("sdl");
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true, .audio = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true, .audio = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL audio: planar data", 640, 480, .{});
     var window = result.window;
     defer window.deinit();

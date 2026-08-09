@@ -16,8 +16,8 @@ fn requestTone(userdata: ?*anyopaque, _: ?*anyopaque, additional: c_int, _: c_in
 }
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true, .audio = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true, .audio = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL audio: playback callback", 640, 480, .{});
     var window = result.window;
     defer window.deinit();

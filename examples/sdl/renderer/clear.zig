@@ -4,8 +4,8 @@
 const sdl = @import("sdl");
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
 
     const result = try sdl.render.createWindowAndRenderer(
         "SDL renderer: clear",

@@ -6,8 +6,8 @@ const sdl = @import("sdl");
 const Point3 = struct { x: f32, y: f32, z: f32 };
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL demo: woodeneye-008", 800, 600, .{});
     var window = result.window;
     defer window.deinit();

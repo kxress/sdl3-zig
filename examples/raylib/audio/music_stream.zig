@@ -6,8 +6,8 @@ const mixer_api = @import("mixer");
 const sdl = @import("sdl");
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true, .audio = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true, .audio = true });
+    defer sdl.init.quit();
     try mixer_api.init();
     defer mixer_api.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: music stream", 800, 450, .{});

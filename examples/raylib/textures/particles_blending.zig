@@ -7,8 +7,8 @@ const sdl = @import("sdl");
 const Particle = struct { x: f32, y: f32, vx: f32, vy: f32, life: f32 };
 
 pub fn main() !void {
-    try sdl.init(.{ .video = true });
-    defer sdl.quit();
+    try sdl.init.default(.{ .video = true });
+    defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: particles blending", 800, 450, .{});
     var window = result.window;
     defer window.deinit();
