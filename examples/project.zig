@@ -140,8 +140,10 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
                 b.allocator,
                 &.{ "sdl3-source", "bin" },
             ) catch @panic("OOM");
-            const inherited_path = b.graph.environ_map.get("PATH") orelse "";
-            run.setEnvironmentVariable("PATH", b.fmt("{s};{s}", .{ source_runtime, inherited_path }));
+            // Keep unrelated SDL3.dll installations (for example Fluidsynth's) out of
+            // the loader search path. SDL3_image and the executable must use the exact
+            // SDL runtime built from this checkout.
+            run.setEnvironmentVariable("PATH", source_runtime);
         }
         if (b.args) |arguments| run.addArgs(arguments);
         const run_step = b.step(
