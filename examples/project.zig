@@ -136,10 +136,11 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
         // build cache. Add that directory to PATH so `zig build run-*` works on
         // Windows without requiring users to copy DLLs manually.
         if (target.result.os.tag == .windows and modules.native_build != null) {
-            const source_runtime = b.cache_root.join(
+            const source_runtime_relative = b.cache_root.join(
                 b.allocator,
                 &.{ "sdl3-source", "bin" },
             ) catch @panic("OOM");
+            const source_runtime = b.pathFromRoot(source_runtime_relative);
             // Keep unrelated SDL3.dll installations (for example Fluidsynth's) out of
             // the loader search path. SDL3_image and the executable must use the exact
             // SDL runtime built from this checkout.
