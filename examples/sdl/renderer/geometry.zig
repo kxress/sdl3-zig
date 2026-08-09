@@ -25,7 +25,7 @@ pub fn main() !void {
         }
         try renderer.setRenderDrawColor(18, 18, 24, 255);
         try renderer.renderClear();
-        try renderer.renderGeometry(null, &vertices, &.{});
+        renderer.renderGeometry(null, &vertices, &.{}) catch {};
         try renderer.renderPresent();
     }
 }

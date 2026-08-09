@@ -18,7 +18,9 @@ pub fn main() !void {
     try renderer.setRenderVSync(1);
     var audio_mixer = try mixer_api.createMixerDevice(std.math.maxInt(u32), null);
     defer audio_mixer.deinit();
-    var module = try mixer_api.loadAudio(audio_mixer, "raylib/mini1111.xm", false);
+    // Keep this example runnable with the portable source profile, which does not
+    // require the optional libxmp dependency for tracker-module decoding.
+    var module = try mixer_api.loadAudio(audio_mixer, "raylib/buttonfx.wav", false);
     defer module.deinit();
     var track = mixer_api.createTrack(audio_mixer) orelse return error.SdlFailure;
     defer track.deinit();

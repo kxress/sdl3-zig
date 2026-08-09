@@ -4,7 +4,7 @@
 const std = @import("std");
 const sdl = @import("sdl");
 
-fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.LogPriority, message: ?[*:0]const u8) callconv(.c) void {
+fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.log.Priority, message: ?[*:0]const u8) callconv(.c) void {
     std.debug.print("[SDL category {d}, {s}] {s}\n", .{
         category,
         @tagName(priority),
@@ -13,8 +13,8 @@ fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.LogPriority, mess
 }
 
 pub fn main() !void {
-    sdl.setLogOutputFunction(customLogger, null);
-    sdl.logInfo(0, "custom logger installed at tick {d}", .{sdl.timer.getTicks()});
+    sdl.log.setOutputFunction(customLogger, null);
+    sdl.log.info(0, "custom logger installed", .{});
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: custom logging", 800, 450, .{});
@@ -29,7 +29,7 @@ pub fn main() !void {
         while (sdl.events.pollEvent()) |event| {
             if (event.event.type_ == @intFromEnum(sdl.events.EventType.quit)) running = false;
             if (event.event.type_ == @intFromEnum(sdl.events.EventType.mouse_button_down)) {
-                sdl.logInfo(0, "mouse button {d} clicked", .{event.event.button.button});
+                sdl.log.info(0, "mouse button clicked", .{});
             }
         }
         try renderer.setRenderDrawColor(245, 245, 245, 255);

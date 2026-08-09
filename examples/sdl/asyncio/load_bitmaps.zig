@@ -52,7 +52,7 @@ pub fn main() !void {
             .{ .x = 288, .y = 375, .w = 64, .h = 64 },
         };
         for (textures, destinations) |texture, destination| {
-            try renderer.renderTexture(texture, null, &destination);
+            if (texture) |loaded| renderer.renderTexture(loaded, null, &destination) catch {};
         }
         try renderer.renderPresent();
     }

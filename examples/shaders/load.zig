@@ -1,8 +1,8 @@
 const std = @import("std");
 const sdl = @import("sdl");
 
-pub fn main() !void {
-    var args = try std.process.argsWithAllocator(std.heap.page_allocator);
+pub fn main(init: std.process.Init) !void {
+    var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, std.heap.page_allocator);
     defer args.deinit();
     _ = args.next();
     const format_name = args.next() orelse return usage();
@@ -10,7 +10,12 @@ pub fn main() !void {
     if (args.next() != null) return usage();
 
     const format = parseFormat(format_name) orelse return usage();
-    const bytes = try std.fs.cwd().readFileAlloc(std.heap.page_allocator, path, 64 * 1024 * 1024);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(
+        init.io,
+        path,
+        std.heap.page_allocator,
+        .limited(64 * 1024 * 1024),
+    );
     defer std.heap.page_allocator.free(bytes);
 
     try sdl.init.default(.{ .video = true });
@@ -21,8 +26,8 @@ pub fn main() !void {
 
     var info = sdl.gpu.ShaderCreateInfo{
         .code_size = bytes.len,
-        .code = bytes.ptr,
-        .entrypoint = "main",
+        .code = @ptrCast(bytes.ptr),
+        .entrypoint = @ptrCast(@as([*:0]const u8, "main")),
         .format = format,
         .stage = .vertex,
         .num_samplers = 0,
@@ -42,10 +47,9 @@ fn parseFormat(name: []const u8) ?u32 {
     return null;
 }
 
-fn usage() error{InvalidArguments} {
+fn usage() void {
     std.debug.print(
         "usage: sdl-shader-device-load <spirv|dxil|msl> <shader-file>\n",
         .{},
     );
-    return error.InvalidArguments;
 }

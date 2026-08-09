@@ -89,6 +89,29 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
         if (modules.native_build) |native_build| executable.step.dependOn(native_build);
 
         const install = b.addInstallArtifact(executable, .{});
+        if (target.result.os.tag == .windows and modules.native_build != null) {
+            // Keep installed examples self-contained as well as runnable through
+            // `zig build run-*`: Windows does not search the source cache for DLLs
+            // when an installed executable is launched directly.
+            const runtime_dlls = comptime [_][]const u8{
+                "SDL3.dll",
+                "SDL3_image.dll",
+                "SDL3_ttf.dll",
+                "SDL3_mixer.dll",
+            };
+            for (runtime_dlls) |dll| {
+                const runtime = b.cache_root.join(
+                    b.allocator,
+                    &.{ "sdl3-source", "bin", dll },
+                ) catch @panic("OOM");
+                const install_runtime = b.addInstallFile(
+                    .{ .cwd_relative = runtime },
+                    b.fmt("bin/{s}", .{dll}),
+                );
+                install_runtime.step.dependOn(modules.native_build.?);
+                install.step.dependOn(&install_runtime.step);
+            }
+        }
         install.step.dependOn(if (example.origin == .sdl)
             &install_sdl_assets.step
         else
@@ -109,6 +132,17 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
 
         const run = b.addRunArtifact(executable);
         run.setCwd(examplePath(b, options, "examples/assets"));
+        // Source-distribution examples use shared SDL-family libraries staged in the
+        // build cache. Add that directory to PATH so `zig build run-*` works on
+        // Windows without requiring users to copy DLLs manually.
+        if (target.result.os.tag == .windows and modules.native_build != null) {
+            const source_runtime = b.cache_root.join(
+                b.allocator,
+                &.{ "sdl3-source", "bin" },
+            ) catch @panic("OOM");
+            const inherited_path = b.graph.environ_map.get("PATH") orelse "";
+            run.setEnvironmentVariable("PATH", b.fmt("{s};{s}", .{ source_runtime, inherited_path }));
+        }
         if (b.args) |arguments| run.addArgs(arguments);
         const run_step = b.step(
             b.fmt("run-{s}", .{example.name}),
