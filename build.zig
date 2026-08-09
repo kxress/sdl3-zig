@@ -2,6 +2,9 @@ const std = @import("std");
 const sdl_metadata = @import("sdl_metadata.zig");
 const maintenance = @import("build/maintenance.zig");
 
+/// Repository example metadata shared with the standalone examples build.
+pub const ExampleCatalog = @import("examples/catalog.zig");
+
 // Public consumer API
 
 const config = @import("build/config.zig");
@@ -818,13 +821,16 @@ pub fn build(b: *std.Build) void {
         .system_version_overrides = options.link.system_version_overrides,
         .allow_unknown_system_versions = options.link.allow_unknown_system_versions,
     };
-    const distribution = resolveDistribution(
-        b,
-        target,
-        options.linkage,
-        options.requested_distribution orelse .none,
-        link_options,
-    );
+    const distribution = if (effective_link_sdl)
+        resolveDistribution(
+            b,
+            target,
+            options.linkage,
+            options.requested_distribution orelse .none,
+            link_options,
+        )
+    else
+        .none;
     const source_build = if (distribution == .source)
         addCmakeSourceBuild(
             b,
@@ -917,7 +923,7 @@ pub fn build(b: *std.Build) void {
         });
     }
 
-    maintenance.add(b, options);
+    maintenance.add(b, options, ExampleCatalog);
 }
 
 // Source distribution

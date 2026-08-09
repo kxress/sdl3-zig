@@ -14,6 +14,7 @@
         "examples/build.zig",
         "examples/catalog.zig",
         "examples/list.zig",
+        "examples/project.zig",
         "prebuilt",
         "vendor/SDL3",
         "vendor/ControllerImage",

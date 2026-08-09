@@ -1,9 +1,8 @@
 const std = @import("std");
 const config = @import("config.zig");
-const catalog = @import("../examples/catalog.zig");
 
 /// Adds repository-only documentation and example steps without polluting package configuration.
-pub fn add(b: *std.Build, options: config.PackageOptions) void {
+pub fn add(b: *std.Build, options: config.PackageOptions, comptime catalog: type) void {
     addProxy(b, options, "docs", "[Documentation] Generate HTML for every public module", false);
     addProxy(b, options, "examples-list", "[Examples] List examples by origin and category", false);
     addProxy(b, options, "examples", "[Examples] Build and install every native example", false);

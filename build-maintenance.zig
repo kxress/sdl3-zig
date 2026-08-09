@@ -1,6 +1,6 @@
 const std = @import("std");
 const sdl = @import("build.zig");
-const example_build = @import("examples/build.zig");
+const example_project = @import("examples/project.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -43,5 +43,25 @@ pub fn build(b: *std.Build) void {
     b.step("docs", "[Documentation] Generate HTML for every public SDL module")
         .dependOn(&install_docs.step);
 
-    example_build.add(b, target, optimize);
+    const example_distribution = b.option(
+        sdl.Distribution,
+        "distribution",
+        "[Distribution] Native SDL libraries: auto, none, system, prebuilt, or source",
+    ) orelse .auto;
+    const example_modules = sdl.addRepositoryModulesWithOptions(b, target, optimize, .{
+        .distribution = example_distribution,
+        .image = true,
+        .ttf = true,
+        .mixer = true,
+        .source_features = .{ .profile = .desktop },
+    });
+    example_project.add(b, .{
+        .target = target,
+        .optimize = optimize,
+        .native_build = example_modules.native_build,
+        .sdl = example_modules.sdl,
+        .image = example_modules.image,
+        .ttf = example_modules.ttf,
+        .mixer = example_modules.mixer,
+    }, .{}, sdl.ExampleCatalog);
 }

@@ -16,6 +16,8 @@ file records its exact upstream example and commit.
 The examples use ordinary Zig `main` functions and native SDL event loops. They intentionally do not
 use SDL's callback-main/Wasm path.
 
+The commands below work from either the repository root or this `examples/` directory.
+
 ```sh
 # Discover exact names grouped by origin and category.
 zig build examples-list

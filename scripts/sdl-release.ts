@@ -184,6 +184,7 @@ export function packagePaths(release: SdlRelease): string[] {
       "examples/build.zig",
       "examples/catalog.zig",
       "examples/list.zig",
+      "examples/project.zig",
       "prebuilt",
       ...release.components.map((component) => `vendor/${component.vendorId}`),
       "LICENSE",
