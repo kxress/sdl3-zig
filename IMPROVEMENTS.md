@@ -251,7 +251,8 @@ does not mistake organization or naming for missing SDL functionality.
   fallible `Queue.init`/`deinit` plus `Queue.loadFile` make queue/task ownership explicit. Ours has
   `AsyncIo`, `Queue`, and free `asyncIoFromFile`/`read`/`write`/`loadFileAsync` operations, but no
   `File` facade or receiver constructor. Add `async_io.File` and preserve the queue-owned close
-  operation rather than inventing a `File.closeFile` method.
+  operation rather than inventing a `File.closeFile` method. Its `IoMode` enum (the four typed
+  modes accepted by `File.init`) should replace raw mode values at the facade boundary.
 - **`audio`:** Codeberg separates a typed physical/logical `Device` from `Stream`, gives both
   receiver-oriented operations, and adds `Stream.init`, `Device.open`, `Device.openStream`,
   `Spec.fromSdl`/`toSdl`, generic callback factories, and `![]Device` enumeration. Ours has
@@ -279,7 +280,8 @@ does not mistake organization or naming for missing SDL functionality.
   `initFromDynamicMem`, `initFromFsFile`, and `initFromReaderWriter` distinguish ownership;
   `Interface(UserData)`, `Reader`, `Writer`, `loadFile`, and `saveFile` bridge to Zig IO. Ours has
   `IoStream` and raw callback-table operations, but lacks this constructor matrix and Zig stream
-  adapters.
+  adapters. Add the typed `FileMode` enum used by `Stream.initFromFile` so text/binary mode is
+  explicit instead of an untyped integer.
 - **`joystick`:** Codeberg has packed `Id`, `AxisMask`, `ButtonMask`, `Joystick.init`/`deinit`,
   `initVirtual`, `deinitVirtual`, and `VirtualJoystickDescription(UserData)`. Ours has the joystick
   handle and virtual descriptor records, but not typed IDs/masks or generic callback trampolines.
@@ -426,7 +428,9 @@ does not mistake organization or naming for missing SDL functionality.
   local-address enumeration, and cleanup. Codeberg adds typed `Timeout`/`Version` values and
   allocator-aware `getLocalAddresses`; ours already copies local addresses into a caller allocator
   and has receiver cleanup, so the remaining advantage is conversion/naming consistency rather than
-  wholesale network coverage.
+  wholesale network coverage. It also models waitable resources as the `Pollable` union and accepts
+  `[]const Pollable` in `waitUntilInputAvailable(..., Timeout) !usize`; add that typed collection
+  API instead of exposing the raw pointer/count pair.
 - **`test`:** Codeberg's root exports its test support alongside the facade. Ours has a separately
   feature-gated generated `test` module; no clear API advantage was found beyond root
   discoverability.
