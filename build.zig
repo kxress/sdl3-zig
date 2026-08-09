@@ -915,6 +915,129 @@ pub fn build(b: *std.Build) void {
     });
     var facade_imports: std.ArrayList(std.Build.Module.Import) = .empty;
     facade_imports.append(b.allocator, .{ .name = "sdl", .module = sdl }) catch @panic("OOM");
+    const errors_module = b.createModule(.{
+        .root_source_file = b.path("src/errors.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "errors", .module = errors_module }) catch @panic("OOM");
+    const value_module = b.createModule(.{
+        .root_source_file = b.path("src/value.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    facade_imports.append(b.allocator, .{ .name = "value", .module = value_module }) catch @panic("OOM");
+    const ownership_module = b.createModule(.{
+        .root_source_file = b.path("src/ownership.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    facade_imports.append(b.allocator, .{ .name = "ownership", .module = ownership_module }) catch @panic("OOM");
+    const geometry_module = b.createModule(.{
+        .root_source_file = b.path("src/geometry.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    facade_imports.append(b.allocator, .{ .name = "geometry", .module = geometry_module }) catch @panic("OOM");
+    const pixels_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/pixels_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "pixels_facade", .module = pixels_facade_module }) catch @panic("OOM");
+    const blend_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/blend_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "blend_facade", .module = blend_facade_module }) catch @panic("OOM");
+    const keycode_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/keycode_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "keycode_facade", .module = keycode_facade_module }) catch @panic("OOM");
+    const scancode_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/scancode_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "scancode_facade", .module = scancode_facade_module }) catch @panic("OOM");
+    const guid_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/guid_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "guid_facade", .module = guid_facade_module }) catch @panic("OOM");
+    const version_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/version_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "version_facade", .module = version_facade_module }) catch @panic("OOM");
+    const time_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/time_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "time_facade", .module = time_facade_module }) catch @panic("OOM");
+    const power_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/power_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "power_facade", .module = power_facade_module }) catch @panic("OOM");
+    const pen_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/pen_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "pen_facade", .module = pen_facade_module }) catch @panic("OOM");
+    const touch_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/touch_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "touch_facade", .module = touch_facade_module }) catch @panic("OOM");
+    const joystick_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/joystick_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "joystick_facade", .module = joystick_facade_module }) catch @panic("OOM");
+    const keyboard_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/keyboard_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "keyboard_facade", .module = keyboard_facade_module }) catch @panic("OOM");
+    const gamepad_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/gamepad_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "gamepad_facade", .module = gamepad_facade_module }) catch @panic("OOM");
+    const sensor_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/sensor_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "sensor_facade", .module = sensor_facade_module }) catch @panic("OOM");
     facade_imports.append(b.allocator, .{ .name = "sdl3_options", .module = facade_options }) catch @panic("OOM");
     const test_module = findLibraryModule(library_modules, "test");
     if (options.facade.test_) {
@@ -931,13 +1054,304 @@ pub fn build(b: *std.Build) void {
     }
     if (options.facade.ttf) {
         facade_imports.append(b.allocator, .{ .name = "ttf", .module = ttf }) catch @panic("OOM");
+        const ttf_facade_module = b.createModule(.{
+            .root_source_file = b.path("src/ttf_facade.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "sdl", .module = sdl }, .{ .name = "ttf", .module = ttf } },
+        });
+        facade_imports.append(b.allocator, .{ .name = "ttf_facade", .module = ttf_facade_module }) catch @panic("OOM");
     }
     if (options.facade.mixer) {
         facade_imports.append(b.allocator, .{ .name = "mixer", .module = mixer }) catch @panic("OOM");
+        const mixer_facade_module = b.createModule(.{
+            .root_source_file = b.path("src/mixer_facade.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "mixer", .module = mixer }},
+        });
+        facade_imports.append(b.allocator, .{ .name = "mixer_facade", .module = mixer_facade_module }) catch @panic("OOM");
     }
     if (options.facade.net) {
         facade_imports.append(b.allocator, .{ .name = "net", .module = net }) catch @panic("OOM");
+        const net_facade_module = b.createModule(.{
+            .root_source_file = b.path("src/net_facade.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "net", .module = net }, .{ .name = "sdl", .module = sdl } },
+        });
+    facade_imports.append(b.allocator, .{ .name = "net_facade", .module = net_facade_module }) catch @panic("OOM");
     }
+    const gpu_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/gpu_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "gpu_facade", .module = gpu_facade_module }) catch @panic("OOM");
+    const haptic_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/haptic_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "haptic_facade", .module = haptic_facade_module }) catch @panic("OOM");
+    const video_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/video_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "video_facade", .module = video_facade_module }) catch @panic("OOM");
+    const dialog_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/dialog_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "dialog_facade", .module = dialog_facade_module }) catch @panic("OOM");
+    const process_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/process_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "process_facade", .module = process_facade_module }) catch @panic("OOM");
+    const render_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/render_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "render_facade", .module = render_facade_module }) catch @panic("OOM");
+    const surface_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/surface_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "surface_facade", .module = surface_facade_module }) catch @panic("OOM");
+    const audio_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/audio_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "audio_facade", .module = audio_facade_module }) catch @panic("OOM");
+    const camera_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/camera_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "camera_facade", .module = camera_facade_module }) catch @panic("OOM");
+    const io_stream_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/io_stream_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "io_stream_facade", .module = io_stream_facade_module }) catch @panic("OOM");
+    const async_io_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/async_io_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "async_io_facade", .module = async_io_facade_module }) catch @panic("OOM");
+    const filesystem_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/filesystem_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{ .{ .name = "sdl", .module = sdl }, .{ .name = "ownership", .module = ownership_module } },
+    });
+    facade_imports.append(b.allocator, .{ .name = "filesystem_facade", .module = filesystem_facade_module }) catch @panic("OOM");
+    const properties_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/properties_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "properties_facade", .module = properties_facade_module }) catch @panic("OOM");
+    const storage_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/storage_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{ .{ .name = "sdl", .module = sdl }, .{ .name = "filesystem_facade", .module = filesystem_facade_module } },
+    });
+    facade_imports.append(b.allocator, .{ .name = "storage_facade", .module = storage_facade_module }) catch @panic("OOM");
+    const timer_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/timer_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "timer_facade", .module = timer_facade_module }) catch @panic("OOM");
+    const tray_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/tray_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "tray_facade", .module = tray_facade_module }) catch @panic("OOM");
+    const hid_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/hid_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "hid_facade", .module = hid_facade_module }) catch @panic("OOM");
+    const thread_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/thread_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "thread_facade", .module = thread_facade_module }) catch @panic("OOM");
+    const mutex_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/mutex_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "mutex_facade", .module = mutex_facade_module }) catch @panic("OOM");
+    const mouse_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/mouse_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "mouse_facade", .module = mouse_facade_module }) catch @panic("OOM");
+    const metal_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/metal_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "metal_facade", .module = metal_facade_module }) catch @panic("OOM");
+    const vulkan_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/vulkan_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "vulkan_facade", .module = vulkan_facade_module }) catch @panic("OOM");
+    const assert_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/assert_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "assert_facade", .module = assert_facade_module }) catch @panic("OOM");
+    const clipboard_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/clipboard_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{ .{ .name = "sdl", .module = sdl }, .{ .name = "ownership", .module = ownership_module } },
+    });
+    facade_imports.append(b.allocator, .{ .name = "clipboard_facade", .module = clipboard_facade_module }) catch @panic("OOM");
+    const events_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/events_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "events_facade", .module = events_facade_module }) catch @panic("OOM");
+    const hints_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/hints_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "hints_facade", .module = hints_facade_module }) catch @panic("OOM");
+    const log_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/log_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "log_facade", .module = log_facade_module }) catch @panic("OOM");
+    const system_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/system_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "system_facade", .module = system_facade_module }) catch @panic("OOM");
+    const app_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/app_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "app_facade", .module = app_facade_module }) catch @panic("OOM");
+    const shader_assets_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/shader_assets_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "shader_assets_facade", .module = shader_assets_facade_module }) catch @panic("OOM");
+    const extras_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/extras_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    facade_imports.append(b.allocator, .{ .name = "extras_facade", .module = extras_facade_module }) catch @panic("OOM");
+    const atomic_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/atomic_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "atomic_facade", .module = atomic_facade_module }) catch @panic("OOM");
+    const platform_info_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/platform_info_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    facade_imports.append(b.allocator, .{ .name = "platform_info_facade", .module = platform_info_facade_module }) catch @panic("OOM");
+    const loadso_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/loadso_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "loadso_facade", .module = loadso_facade_module }) catch @panic("OOM");
+    const init_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/init_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "init_facade", .module = init_facade_module }) catch @panic("OOM");
+    if (options.facade.image) {
+        const surface_image_facade_module = b.createModule(.{
+            .root_source_file = b.path("src/surface_image_facade.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "sdl", .module = sdl },
+                .{ .name = "image", .module = image },
+                .{ .name = "surface_facade", .module = surface_facade_module },
+            },
+        });
+        facade_imports.append(b.allocator, .{ .name = "surface_image_facade", .module = surface_image_facade_module }) catch @panic("OOM");
+        const image_facade_module = b.createModule(.{
+            .root_source_file = b.path("src/image_facade.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{ .{ .name = "image", .module = image }, .{ .name = "sdl", .module = sdl } },
+        });
+        facade_imports.append(b.allocator, .{ .name = "image_facade", .module = image_facade_module }) catch @panic("OOM");
+    }
+    const message_box_facade_module = b.createModule(.{
+        .root_source_file = b.path("src/message_box_facade.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "sdl", .module = sdl }},
+    });
+    facade_imports.append(b.allocator, .{ .name = "message_box_facade", .module = message_box_facade_module }) catch @panic("OOM");
     _ = b.addModule("sdl3", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,

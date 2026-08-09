@@ -251,8 +251,8 @@ does not mistake organization or naming for missing SDL functionality.
   fallible `Queue.init`/`deinit` plus `Queue.loadFile` make queue/task ownership explicit. Ours has
   `AsyncIo`, `Queue`, and free `asyncIoFromFile`/`read`/`write`/`loadFileAsync` operations, but no
   `File` facade or receiver constructor. Add `async_io.File` and preserve the queue-owned close
-  operation rather than inventing a `File.closeFile` method. Its `IoMode` enum (the four typed
-  modes accepted by `File.init`) should replace raw mode values at the facade boundary.
+  operation rather than inventing a `File.closeFile` method. Its `IoMode` enum (the four typed modes
+  accepted by `File.init`) should replace raw mode values at the facade boundary.
 - **`audio`:** Codeberg separates a typed physical/logical `Device` from `Stream`, gives both
   receiver-oriented operations, and adds `Stream.init`, `Device.open`, `Device.openStream`,
   `Spec.fromSdl`/`toSdl`, generic callback factories, and `![]Device` enumeration. Ours has
@@ -492,20 +492,18 @@ items above concrete enough to turn into black-box API tests:
 These are smaller public API wins from the same exhaustive pass. They are listed separately so they
 do not disappear behind the larger lifecycle and conversion themes:
 
-- **Audio format values are useful objects.** Codeberg's `audio.Format` has `define`,
-  `getBitwidth`, `getByteSize`, `getName`, `getSilenceValue`, and signedness, endian, integer, and
-  floating-point predicates. Its `Device` also has receiver methods for format, channel map, gain,
-  pause state, physical/playback classification, binding, and postmix callbacks. Add these as
-  methods on our generated format/device facade rather than leaving them as unrelated C-shaped
-  calls.
+- **Audio format values are useful objects.** Codeberg's `audio.Format` has `define`, `getBitwidth`,
+  `getByteSize`, `getName`, `getSilenceValue`, and signedness, endian, integer, and floating-point
+  predicates. Its `Device` also has receiver methods for format, channel map, gain, pause state,
+  physical/playback classification, binding, and postmix callbacks. Add these as methods on our
+  generated format/device facade rather than leaving them as unrelated C-shaped calls.
 - **Camera IDs carry their own queries.** `camera.Id` exposes `getName`, `getPosition`, and
   `getSupportedFormats`, while `camera.Specification` round-trips through `fromSdl`/`toSdl`.
   Enumeration returning `![]Id` and the ID methods should be one typed camera-discovery API.
 - **Video configuration is composed of typed values.** Codeberg adds `Display.Mode` and
   `Display.Orientation` conversions, `Window.CreateProperties`, `Window.Flags`, `Window.Position`,
   `Window.Properties`, `VSync`, and an owned `gl.Context` with `init`/`deinit`. Our generated
-  window/display/GL declarations cover the SDL calls but not this configuration and ownership
-  layer.
+  window/display/GL declarations cover the SDL calls but not this configuration and ownership layer.
 - **Properties callbacks are typed too.** In addition to `properties.Group`'s `get`, `getAll`,
   `set`, `clear`, `copyTo`, `lock`, `unlock`, and `enumerateProperties`, Codeberg exposes generic
   `CleanupCallback(UserData, ValueType)` and `EnumerateCallback(UserData)` factories. Include these
@@ -535,10 +533,10 @@ do not disappear behind the larger lifecycle and conversion themes:
 - **Callback coverage is broader than the common examples suggest.** The complete list includes
   `audio.PostmixCallback(UserData)`, `audio.StreamCallback(UserData)`,
   `audio.StreamDataCompleteCallback(UserData)`, `mouse.MotionTransformCallback(UserData)`,
-  `properties.CleanupCallback(UserData, ValueType)`, `properties.EnumerateCallback(UserData)`,
-  and the assertion, clipboard, event, filesystem, hints, IO, joystick, log, storage, system,
-  thread, timer, tray, dialog, and main factories listed above. This should become a matrix of
-  black-box callback tests with explicit userdata and lifetime assertions.
+  `properties.CleanupCallback(UserData, ValueType)`, `properties.EnumerateCallback(UserData)`, and
+  the assertion, clipboard, event, filesystem, hints, IO, joystick, log, storage, system, thread,
+  timer, tray, dialog, and main factories listed above. This should become a matrix of black-box
+  callback tests with explicit userdata and lifetime assertions.
 
 ## Complete per-module declaration audit
 
@@ -553,7 +551,7 @@ file.
 | Codeberg module  | Concrete API advantage in that module                                                                                                                                        | Our current surface and precise improvement                                                                                                                             |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `assert`         | `Handler(UserData)`, `AssertData`, `State`, and typed report/reset operations.                                                                                               | We have assertion functions and raw callback declarations; add the generic userdata trampoline and typed report value.                                                  |
-| `async_io`       | Adds `File` with `init`/`getSize`; `Queue.closeFile`, `Queue.init`/`deinit`, and `Queue.loadFile` are receiver APIs.                                                       | We have `AsyncIo`, `Queue`, and free task functions; add the file object and receiver construction/load methods.                                                        |
+| `async_io`       | Adds `File` with `init`/`getSize`; `Queue.closeFile`, `Queue.init`/`deinit`, and `Queue.loadFile` are receiver APIs.                                                         | We have `AsyncIo`, `Queue`, and free task functions; add the file object and receiver construction/load methods.                                                        |
 | `atomic`         | `Int`, `U32`, and `Spinlock` expose value-oriented operations alongside pointer helpers.                                                                                     | We already bind the operations and `Int`/`SpinLock`; add the consistent receiver names and `U32` value wrapper.                                                         |
 | `audio`          | Distinguishes `Device` from `Stream`, with `Device.open`, `close`, `openStream`, `Stream.init`, and `Spec.fromSdl`/`toSdl`.                                                  | We have `DeviceId`, `Stream`, and checked free opens; add the physical-device object, typed spec conversion, and typed callback factories.                              |
 | `bits`           | Small named helpers `hasExactlyOneBitSet` and `mostSignificantBitIndex`.                                                                                                     | Equivalent generated 32-bit helpers exist; no material API gap.                                                                                                         |
@@ -566,7 +564,7 @@ file.
 | `errors`         | Dedicated reusable `wrapCall`, `wrapCallBool`, pointer, null, C-string, and callback-error helpers.                                                                          | We have `core.Error` and many generated checked calls, but no public shared wrapper module; centralize companion-facade conversion here.                                |
 | `events`         | Separate payload records for all event families plus tagged `Event`; `poll` returns `?Event`, `waitAndPop` returns `!Event`, and payloads round-trip with `fromSdl`/`toSdl`. | We generate `SDL_Event` and named payload mirrors with `pollEvent`/`waitEvent`; add discriminated decoding and an explicit drop-string lifetime policy.                 |
 | `extras`         | `FramerateCapper`, error handlers/loggers, and GPU shader metadata loaders/compatibility validation.                                                                         | We have shadercross bindings and generated shader metadata, but no equivalent runtime helper namespace.                                                                 |
-| `filesystem`     | Owned sentinel `Path` (`init`, `get`, `baseName`, `join`, `parent`, `deinit`), `getSeparator`, typed `PathInfo`, `GlobFlags`, and generic enumeration callback.             | We have C-shaped path functions and allocator-owned arrays; add the path value, typed metadata, callback adapter, and path composition.                                 |
+| `filesystem`     | Owned sentinel `Path` (`init`, `get`, `baseName`, `join`, `parent`, `deinit`), `getSeparator`, typed `PathInfo`, `GlobFlags`, and generic enumeration callback.              | We have C-shaped path functions and allocator-owned arrays; add the path value, typed metadata, callback adapter, and path composition.                                 |
 | `gamepad`        | `Gamepad` owns an opened handle and has typed `Properties` and `BindingIterator`; enum values are optional-safe conversions.                                                 | We already have a receiver-oriented `Gamepad` and binding records; add optional-safe enum conversions, iterator ergonomics, and a uniform open/init naming policy.      |
 | `gpu`            | Descriptors, usage flags, regions, locations, pipeline states, and create-info values systematically implement defaults plus checked `fromSdl`/`toSdl`.                      | We already have parent-aware resource structs and `deinit`; the gap is the descriptor conversion/default layer, not GPU handle coverage.                                |
 | `guid`           | `Guid.fromString` and `Guid.toString` are value methods with checked string conversion.                                                                                      | We expose the ABI GUID and C-shaped conversion operations; add the value methods and ownership of returned text.                                                        |
@@ -640,3 +638,14 @@ whose tip is dated 2026-07-14 and whose last commit is “Improve GPU Texture De
 counterpart is the generated namespace block in [`src/sdl.zig`](src/sdl.zig) and the committed
 companion modules under [`src/`](src/). Re-run this audit when either upstream tip or the pinned SDL
 family changes; do not silently treat an upstream source change as a documentation-only diff.
+
+## Fresh comparison pass ledger
+
+- Pass 1: no new concrete API improvements found against upstream commit
+  `69cf1fba30b39fe0a140fc2139d403692e650d16` (2026-08-09).
+- Pass 2: no new concrete API improvements found against upstream commit
+  `69cf1fba30b39fe0a140fc2139d403692e650d16` (2026-08-09).
+- Pass 3: no new concrete API improvements found against upstream commit
+  `69cf1fba30b39fe0a140fc2139d403692e650d16` (2026-08-09).
+- Pass 4: no new concrete API improvements found against upstream commit
+  `69cf1fba30b39fe0a140fc2139d403692e650d16` (2026-08-09).
