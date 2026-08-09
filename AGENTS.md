@@ -43,6 +43,10 @@ Run maintenance workflows from Linux, macOS, or WSL. Native Windows is reserved 
 `deno task test:windows-build`; translated MSVC C imports require the MSVC SDK, and mise skips the
 Unix tools there. Apple-mobile validation requires macOS with Xcode and the matching SDKs.
 
+Do not run `deno task check` for planning, documentation, or API-comparison work. Run it only when
+the task is actually attempting to validate the binding-generator check pipeline; it is otherwise
+unnecessarily expensive and does not provide useful evidence for those tasks.
+
 The repository workflow is explicit:
 
 ```sh
