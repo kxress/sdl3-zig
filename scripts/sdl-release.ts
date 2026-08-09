@@ -183,6 +183,7 @@ export function packagePaths(release: SdlRelease): string[] {
       "src",
       "examples/build.zig",
       "examples/catalog.zig",
+      "examples/environment.zig",
       "examples/list.zig",
       "examples/project.zig",
       "prebuilt",

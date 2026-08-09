@@ -173,6 +173,8 @@ const SourceBuild = struct {
     runtime_directory: ?[]const u8,
 };
 
+pub const PrebuiltRuntimeFile = config.PrebuiltRuntimeFile;
+
 fn findLibraryModule(library_modules: []const BuiltLibrary, module_name: []const u8) *std.Build.Module {
     for (library_modules) |library| {
         if (std.mem.eql(u8, library.configuration.module_name, module_name)) return library.module;
@@ -185,6 +187,7 @@ pub const RepositoryModules = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     native_build: ?*std.Build.Step,
+    prebuilt_runtime_files: []const PrebuiltRuntimeFile,
     sdl: *std.Build.Module,
     test_: *std.Build.Module,
     controller_image: *std.Build.Module,
@@ -285,6 +288,10 @@ pub fn addRepositoryModulesWithOptions(
         .target = target,
         .optimize = optimize,
         .native_build = if (source_build) |source| source.step else null,
+        .prebuilt_runtime_files = if (distribution == .prebuilt)
+            repositoryPrebuiltRuntimeFiles(b, target, options)
+        else
+            &.{},
         .sdl = findLibraryModule(library_modules, "sdl"),
         .test_ = findLibraryModule(library_modules, "test"),
         .controller_image = findLibraryModule(library_modules, "controller_image"),
@@ -312,6 +319,36 @@ pub fn addRepositoryModulesWithOptions(
         installRepositorySourceRuntime(b, source_build.?, target);
     }
     return modules;
+}
+
+fn repositoryPrebuiltRuntimeFiles(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    options: RepositoryOptions,
+) []const PrebuiltRuntimeFile {
+    if (target.result.os.tag != .windows) return &.{};
+    const policy = findPrebuiltTarget(target) orelse return &.{};
+    const selections = [_]struct { key: []const u8, name: []const u8, selected: bool }{
+        .{ .key = "sdl", .name = "SDL3", .selected = true },
+        .{ .key = "image", .name = "SDL3_image", .selected = options.image },
+        .{ .key = "ttf", .name = "SDL3_ttf", .selected = options.ttf },
+        .{ .key = "mixer", .name = "SDL3_mixer", .selected = options.mixer },
+        .{ .key = "net", .name = "SDL3_net", .selected = options.net },
+    };
+    var files: std.ArrayList(PrebuiltRuntimeFile) = .empty;
+    for (selections) |selection| {
+        if (!selection.selected) continue;
+        const directory = b.fmt(
+            "prebuilt/{s}/{s}/{s}/bin",
+            .{ selection.key, policy.package_family, policy.arch },
+        );
+        files.append(b.allocator, .{
+            .source = b.path(b.fmt("{s}/{s}.dll", .{ directory, selection.name })),
+            .directory = b.pathFromRoot(directory),
+            .filename = b.fmt("{s}.dll", .{selection.name}),
+        }) catch @panic("OOM");
+    }
+    return files.toOwnedSlice(b.allocator) catch @panic("OOM");
 }
 
 // Distribution resolution and library module wiring

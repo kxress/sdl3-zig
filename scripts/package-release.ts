@@ -269,6 +269,37 @@ async function stagePrebuilts(
   }
 }
 
+/**
+ * Stage the official Windows GNU development artifacts in the package-local layout.
+ *
+ * This is used by `deno task fetch` on Windows so repository examples can link the
+ * shipped DLL/import-library pairs without compiling SDL through CMake.
+ */
+export async function stageWindowsGnuPrebuilts(packageRoot: string): Promise<void> {
+  const release = await loadSdlRelease();
+  const components = release.components.filter((component) => component.prebuilt === "upstream");
+  const installations = await installArtifacts(components.flatMap((component) => [
+    artifactName(component, "mingw"),
+    ...(component.windowsOptionalRuntime
+      ? [
+        artifactName(component, "mingw-x86-runtime"),
+        artifactName(component, "mingw-x86_64-runtime"),
+      ]
+      : []),
+  ]));
+  for (const component of components) {
+    await Deno.remove(`${packageRoot}/prebuilt/${component.key}/windows-gnu`, { recursive: true })
+      .catch((error: unknown) => {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+      });
+    const upstreamDirectory = `${component.id}-${component.version}`;
+    const extracted = `${
+      requireInstallation(installations, artifactName(component, "mingw"))
+    }/${upstreamDirectory}`;
+    await stageMinGW(component, extracted, packageRoot, installations);
+  }
+}
+
 async function stageMinGW(
   component: SdlComponent,
   extracted: string,

@@ -15,11 +15,40 @@ import {
 
 const companions = ["image", "ttf", "mixer", "net"];
 const sourceAllFixture = `${import.meta.dirname}/fixtures/source_all`;
+const repository = `${import.meta.dirname}/../..`;
 const stageLog = new URL("../../windows-stage.log", import.meta.url);
 
 async function traceStage(message: string): Promise<void> {
   await Deno.writeTextFile(stageLog, `${new Date().toISOString()} ${message}\n`, { append: true });
 }
+
+Deno.test({
+  name: "Windows GNU examples fetch prebuilt DLLs and link without compiling SDL",
+  ignore: Deno.build.os !== "windows",
+  timeout: 10 * 60 * 1000,
+  async fn() {
+    await run("deno", ["task", "fetch"], { cwd: repository, stdout: "inherit", stderr: "inherit" });
+    await withTempDirectory("sdl-windows-gnu-examples-", async (temporary) => {
+      await run("zig", [
+        "build",
+        "--build-file",
+        "build-maintenance.zig",
+        "build-example",
+        `-Dtarget=${Deno.build.arch}-windows-gnu`,
+        "-Dexample=sdl-renderer-clear",
+        "-p",
+        `${temporary}/output`,
+        "--cache-dir",
+        `${temporary}/cache/local`,
+        "--global-cache-dir",
+        `${temporary}/cache/global`,
+      ], { cwd: repository });
+      for (const library of ["SDL3", "SDL3_image", "SDL3_ttf", "SDL3_mixer"]) {
+        await Deno.stat(`${temporary}/output/bin/${library}.dll`);
+      }
+    });
+  },
+});
 
 Deno.test({
   name: "Windows MSVC builds and runs the CMake source distribution for SDL and every companion",

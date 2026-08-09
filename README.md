@@ -403,6 +403,11 @@ zig build examples-raylib
 zig build run-example -Dexample=sdl-renderer-clear
 ```
 
+On Windows GNU x86 and x86_64, `deno task fetch` stages official SDL DLL/import-library pairs for
+the examples, so Zig can build them without a separately installed MSVC or MinGW toolchain. See the
+[examples guide](examples/README.md#Windows-without-MSVC-or-MinGW) for optional MinGW source-build
+environment controls and the Windows ARM64 limitation.
+
 Every example also has stable `<name>` and `run-<name>` steps for shell completion and scripts.
 
 ## License

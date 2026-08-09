@@ -43,6 +43,31 @@ prebuilts, compatible system libraries, then the verified SDL3 sources bundled i
 Examples that load images, fonts, or music additionally select the matching SDL3_image, SDL3_ttf, or
 SDL3_mixer distribution. `zig build example` remains an alias for `sdl-renderer-clear`.
 
+### Windows without MSVC or MinGW
+
+On Windows GNU x86 and x86_64 targets, examples link the verified official shared SDL DLLs and their
+import libraries; no separately installed MSVC or MinGW toolchain is needed. In a Git checkout, run
+`deno task fetch` once to stage those ignored local prebuilts before building examples. Published
+package releases already contain them. Windows examples deliberately do not fall back to compiling
+SDL when the prebuilt cache is missing. Official SDL does not provide a Windows ARM64 MinGW
+development archive, so this zero-toolchain path does not cover native ARM64 Windows builds.
+
+To intentionally build SDL from source with a MinGW installation, set these examples-only variables
+before invoking a normal example command:
+
+```powershell
+$env:SDL3_ZIG_EXAMPLES_DISTRIBUTION = "source"
+$env:SDL3_ZIG_EXAMPLES_CMAKE_GENERATOR = "MinGW Makefiles"
+$env:SDL3_ZIG_EXAMPLES_C_COMPILER = "gcc"
+$env:SDL3_ZIG_EXAMPLES_CXX_COMPILER = "g++"
+$env:SDL3_ZIG_EXAMPLES_MAKE_PROGRAM = "mingw32-make"
+zig build build-example -Dexample=sdl-renderer-clear
+```
+
+`SDL3_ZIG_EXAMPLES_DISTRIBUTION` accepts `auto`, `none`, `system`, `prebuilt`, or `source`. Explicit
+`-Ddistribution=...` arguments take precedence over the environment variable. The CMake variables
+apply only if the selected distribution builds from source.
+
 Arguments after `--` are forwarded to examples launched by either `run-example` or an individual
 `run-<name>` step:
 

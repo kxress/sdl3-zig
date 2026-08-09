@@ -1,5 +1,11 @@
 const std = @import("std");
 
+pub const PrebuiltRuntimeFile = struct {
+    source: std.Build.LazyPath,
+    directory: []const u8,
+    filename: []const u8,
+};
+
 pub const Distribution = enum {
     /// Prefer package-local official prebuilts, then discoverable system libraries, then source.
     auto,

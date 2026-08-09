@@ -1,16 +1,19 @@
 const std = @import("std");
 const catalog = @import("catalog.zig");
-
-const Distribution = enum { auto, none, system, prebuilt, source };
+const environment = @import("environment.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const environment_options = environment.load(b);
     const distribution = b.option(
-        Distribution,
+        environment.Distribution,
         "distribution",
         "[Distribution] Native SDL libraries: auto, none, system, prebuilt, or source",
-    );
+    ) orelse if (environment_options.distribution) |value|
+        environment.parseDistribution(value)
+    else
+        null;
     const selected_example = b.option(
         []const u8,
         "example",

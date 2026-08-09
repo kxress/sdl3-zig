@@ -1,9 +1,11 @@
 const std = @import("std");
+const build_config = @import("../build/config.zig");
 
 pub const Modules = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     native_build: ?*std.Build.Step,
+    prebuilt_runtime_files: []const build_config.PrebuiltRuntimeFile = &.{},
     sdl: *std.Build.Module,
     image: *std.Build.Module,
     ttf: *std.Build.Module,
@@ -111,6 +113,11 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
                 install_runtime.step.dependOn(modules.native_build.?);
                 install.step.dependOn(&install_runtime.step);
             }
+        } else if (target.result.os.tag == .windows) {
+            for (modules.prebuilt_runtime_files) |runtime| {
+                const install_runtime = b.addInstallFile(runtime.source, b.fmt("bin/{s}", .{runtime.filename}));
+                install.step.dependOn(&install_runtime.step);
+            }
         }
         install.step.dependOn(if (example.origin == .sdl)
             &install_sdl_assets.step
@@ -145,6 +152,12 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
             // the loader search path. SDL3_image and the executable must use the exact
             // SDL runtime built from this checkout.
             run.setEnvironmentVariable("PATH", source_runtime);
+        } else if (target.result.os.tag == .windows and modules.prebuilt_runtime_files.len != 0) {
+            var directories: std.ArrayList([]const u8) = .empty;
+            for (modules.prebuilt_runtime_files) |runtime| {
+                directories.append(b.allocator, runtime.directory) catch @panic("OOM");
+            }
+            run.setEnvironmentVariable("PATH", std.mem.join(b.allocator, ";", directories.items) catch @panic("OOM"));
         }
         if (b.args) |arguments| run.addArgs(arguments);
         const run_step = b.step(
