@@ -391,15 +391,19 @@ Source archives and all other release inputs are verified by their pinned SHA-25
 The repository includes SDL and selected 2D raylib-derived example ports. By default, examples use
 the same automatic distribution order as library consumers: shipped official prebuilts, compatible
 system libraries, then the verified SDL-family sources bundled in the repository. The authoritative
-example inventory is the table in [`examples/build.zig`](examples/build.zig); see
-[`examples/README.md`](examples/README.md) for assets, origins, and licensing.
+example inventory is [`examples/catalog.zig`](examples/catalog.zig); see
+[`examples/README.md`](examples/README.md) for the full command reference, assets, origins, and
+licensing.
 
 ```sh
+zig build examples-list
 zig build examples
 zig build examples-sdl
 zig build examples-raylib
-zig build run-sdl-renderer-clear
+zig build run-example -Dexample=sdl-renderer-clear
 ```
+
+Every example also has stable `<name>` and `run-<name>` steps for shell completion and scripts.
 
 ## License
 

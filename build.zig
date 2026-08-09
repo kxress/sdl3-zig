@@ -1,43 +1,18 @@
 const std = @import("std");
 const sdl_metadata = @import("sdl_metadata.zig");
-const maintenance_steps = @import("examples/steps.zig");
+const maintenance = @import("build/maintenance.zig");
 
-pub const Distribution = enum {
-    /// Prefer package-local official prebuilts, then discoverable system libraries, then source.
-    auto,
-    /// Import bindings without selecting or linking an SDL implementation.
-    none,
-    /// Link SDL libraries supplied by the system or consumer.
-    system,
-    /// Link the pinned official shared libraries shipped in the release package.
-    prebuilt,
-    /// Build the verified upstream sources in the consumer's build cache.
-    source,
-};
+// Public consumer API
 
-pub const Linkage = enum { static, shared };
+const config = @import("build/config.zig");
 
-/// Selects how a source SDL_shadercross build enables its optional DXC support.
-pub const ShadercrossDxc = enum { disabled, bundled, external, source };
-
-/// Selects the baseline for SDL's optional core subsystems in a source build.
-///
-/// `headless` keeps source builds independent of host audio and display SDKs. `desktop` enables
-/// SDL's audio, video, GPU, renderer, and camera subsystems; platform-specific CMake checks still
-/// decide which concrete drivers are available.
-pub const SourceFeatureProfile = enum { headless, desktop };
-
-/// A shared runtime emitted by a source distribution.
-pub const SourceRuntime = enum {
-    sdl,
-    shadercross,
-    image,
-    ttf,
-    mixer,
-    net,
-    shadercross_dxc_dxcompiler,
-    shadercross_dxc_dxil,
-};
+pub const Distribution = config.Distribution;
+pub const Linkage = config.Linkage;
+pub const ShadercrossDxc = config.ShadercrossDxc;
+pub const SourceFeatureProfile = config.SourceFeatureProfile;
+pub const SourceRuntime = config.SourceRuntime;
+pub const SourceFeatureOptions = config.SourceFeatureOptions;
+pub const AddOptions = config.AddOptions;
 
 /// Returns the exact staged runtime artifact for a selected shared source component.
 ///
@@ -59,64 +34,6 @@ pub fn sourceControllerImageDataArtifact(
     _ = b;
     return dependency.namedLazyPath("source-controller-image-data");
 }
-
-pub const SourceFeatureOptions = struct {
-    profile: SourceFeatureProfile = .headless,
-    audio: ?bool = null,
-    video: ?bool = null,
-    gpu: ?bool = null,
-    renderer: ?bool = null,
-    camera: ?bool = null,
-
-    fn enabled(self: @This(), feature: Feature) bool {
-        const override = switch (feature) {
-            .audio => self.audio,
-            .video => self.video,
-            .gpu => self.gpu,
-            .renderer => self.renderer,
-            .camera => self.camera,
-        };
-        return override orelse switch (self.profile) {
-            .headless => false,
-            .desktop => true,
-        };
-    }
-
-    const Feature = enum { audio, video, gpu, renderer, camera };
-};
-
-pub const AddOptions = struct {
-    /// Select the native library distribution for this consumer. `auto` prefers package-local
-    /// official prebuilts, then discoverable system libraries, then a verified source build.
-    distribution: Distribution = .auto,
-    linkage: Linkage = .shared,
-    sdl3_test: bool = false,
-    controller_image: bool = false,
-    install_controller_image_data: bool = false,
-    shadercross: bool = false,
-    image: bool = false,
-    ttf: bool = false,
-    mixer: bool = false,
-    net: bool = false,
-    optional_codecs: bool = false,
-    install_runtime: bool = true,
-    /// Component=version entries used when pkg-config cannot discover a system version.
-    system_version_overrides: []const []const u8 = &.{},
-    /// Permit caller-supplied system libraries without discoverable pkg-config metadata.
-    allow_unknown_system_versions: bool = false,
-    source_cmake_generator: ?[]const u8 = null,
-    source_cmake_toolchain: ?[]const u8 = null,
-    /// Emscripten sysroot containing the C headers required by Zig translate-c.
-    emscripten_sysroot: ?[]const u8 = null,
-    /// Android NDK root containing the sysroot required by Zig translate-c.
-    android_ndk_root: ?[]const u8 = null,
-    source_features: SourceFeatureOptions = .{},
-    source_cmake_options: []const []const u8 = &.{},
-    /// Additional arguments passed only to the SDL3_mixer source CMake configure step.
-    source_mixer_cmake_options: []const []const u8 = &.{},
-    shadercross_dxc: ShadercrossDxc = .disabled,
-    shadercross_dxc_root: ?[]const u8 = null,
-};
 
 /// Adds the selected modules and shared implementation to an executable or library.
 pub fn addTo(
@@ -225,6 +142,8 @@ pub fn addTo(
     return dependency;
 }
 
+// Repository module assembly
+
 const BuiltLibrary = struct {
     configuration: *const sdl_metadata.Library,
     module: *std.Build.Module,
@@ -258,6 +177,7 @@ fn findLibraryModule(library_modules: []const BuiltLibrary, module_name: []const
     std.debug.panic("library configuration dependency '{s}' was not created first", .{module_name});
 }
 
+/// Modules used by repository documentation, examples, and validation builds.
 pub const RepositoryModules = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
@@ -272,6 +192,7 @@ pub const RepositoryModules = struct {
     net: *std.Build.Module,
 };
 
+/// Configures repository-owned module builds without creating a package dependency cycle.
 pub const RepositoryOptions = struct {
     distribution: Distribution = .none,
     linkage: Linkage = .shared,
@@ -287,6 +208,7 @@ pub const RepositoryOptions = struct {
     install_runtime: bool = true,
 };
 
+/// Creates every repository module without linking a native SDL implementation.
 pub fn addRepositoryModules(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -295,6 +217,7 @@ pub fn addRepositoryModules(
     return addRepositoryModulesWithOptions(b, target, optimize, .{});
 }
 
+/// Creates repository modules and optionally configures their shared native implementation.
 pub fn addRepositoryModulesWithOptions(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -387,6 +310,8 @@ pub fn addRepositoryModulesWithOptions(
     }
     return modules;
 }
+
+// Distribution resolution and library module wiring
 
 fn linkOptionEnabled(configuration: sdl_metadata.Library, options: LinkOptions) bool {
     if (std.mem.eql(u8, configuration.module_name, "sdl")) return options.sdl;
@@ -868,148 +793,13 @@ fn windowsAarch64LibcFile(b: *std.Build) std.Build.LazyPath {
     return b.addWriteFiles().add("windows-aarch64-libc.txt", arm64_paths);
 }
 
+// Package build entrypoint
+
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const link_sdl = b.option(
-        bool,
-        "link_sdl",
-        "Propagate a system SDL3 link dependency through the sdl module",
-    ) orelse false;
-    const link_test = b.option(
-        bool,
-        "link_test",
-        "Propagate an SDL3_test link dependency through the test module",
-    ) orelse false;
-    const link_controller_image = b.option(
-        bool,
-        "link_controller_image",
-        "Propagate a ControllerImage link dependency through the controller_image module",
-    ) orelse false;
-    const link_shadercross = b.option(
-        bool,
-        "link_shadercross",
-        "Propagate an SDL_shadercross link dependency through the shadercross module",
-    ) orelse false;
-    const link_image = b.option(
-        bool,
-        "link_image",
-        "Propagate a system SDL3_image link dependency through the image module",
-    ) orelse false;
-    const link_ttf = b.option(
-        bool,
-        "link_ttf",
-        "Propagate a system SDL3_ttf link dependency through the ttf module",
-    ) orelse false;
-    const link_mixer = b.option(
-        bool,
-        "link_mixer",
-        "Propagate a system SDL3_mixer link dependency through the mixer module",
-    ) orelse false;
-    const link_net = b.option(
-        bool,
-        "link_net",
-        "Propagate a system SDL3_net link dependency through the net module",
-    ) orelse false;
-    const system_version_overrides = b.option(
-        []const []const u8,
-        "system_version_overrides",
-        "Component=version overrides for system SDL libraries",
-    ) orelse &.{};
-    const allow_unknown_system_versions = b.option(
-        bool,
-        "allow_unknown_system_versions",
-        "Allow system SDL libraries without discoverable pkg-config versions",
-    ) orelse false;
-    const effective_link_sdl = link_sdl or link_test or link_controller_image or link_shadercross or link_image or link_ttf or link_mixer or link_net;
-    const requested_distribution = b.option(
-        Distribution,
-        "distribution",
-        "SDL library distribution: auto, none, system, prebuilt, or source",
-    );
-    const optional_codecs = b.option(
-        bool,
-        "optional_codecs",
-        "Install and link the official SDL_image and SDL_mixer codec dependencies",
-    ) orelse false;
-    const linkage = b.option(Linkage, "linkage", "SDL library linkage") orelse .shared;
-    const source_cmake_generator = b.option([]const u8, "source_cmake_generator", "CMake generator") orelse null;
-    const source_cmake_toolchain = b.option([]const u8, "source_cmake_toolchain", "CMake toolchain file") orelse null;
-    const emscripten_sysroot = b.option(
-        []const u8,
-        "emscripten_sysroot",
-        "Emscripten sysroot containing libc headers for wasm32-emscripten",
-    ) orelse null;
-    const android_ndk_root = b.option(
-        []const u8,
-        "android_ndk_root",
-        "Android NDK root containing the sysroot for Android targets",
-    ) orelse null;
-    const source_feature_profile = b.option(
-        SourceFeatureProfile,
-        "source_feature_profile",
-        "Source SDL core feature profile: headless or desktop",
-    ) orelse .headless;
-    const source_audio = b.option(bool, "source_audio", "Enable SDL audio in source builds");
-    const source_video = b.option(bool, "source_video", "Enable SDL video in source builds");
-    const source_gpu = b.option(bool, "source_gpu", "Enable SDL GPU in source builds");
-    const source_renderer = b.option(bool, "source_renderer", "Enable SDL renderer in source builds");
-    const source_camera = b.option(bool, "source_camera", "Enable SDL camera in source builds");
-    const source_cmake_options = b.option(
-        []const []const u8,
-        "source_cmake_options",
-        "Additional arguments passed to each upstream CMake configure step",
-    ) orelse &.{};
-    const source_mixer_cmake_options = b.option(
-        []const []const u8,
-        "source_mixer_cmake_options",
-        "Additional arguments passed only to the SDL3_mixer CMake configure step",
-    ) orelse &.{};
-    const shadercross_dxc = b.option(
-        ShadercrossDxc,
-        "shadercross_dxc",
-        "SDL_shadercross DXC mode: disabled, bundled, external, or source",
-    ) orelse .disabled;
-    const shadercross_dxc_root = b.option(
-        []const u8,
-        "shadercross_dxc_root",
-        "Root containing an externally supplied DirectXShaderCompiler runtime",
-    ) orelse null;
-    const enable_image = b.option(
-        bool,
-        "enable_image",
-        "Expose SDL_image through the sdl3 façade",
-    ) orelse false;
-    const enable_test = b.option(
-        bool,
-        "enable_test",
-        "Expose SDL3_test through the sdl3 façade",
-    ) orelse false;
-    const enable_controller_image = b.option(
-        bool,
-        "enable_controller_image",
-        "Expose ControllerImage through the sdl3 façade",
-    ) orelse false;
-    const enable_shadercross = b.option(
-        bool,
-        "enable_shadercross",
-        "Expose SDL_shadercross through the sdl3 façade",
-    ) orelse false;
-    const enable_ttf = b.option(
-        bool,
-        "enable_ttf",
-        "Expose SDL_ttf through the sdl3 façade",
-    ) orelse false;
-    const enable_mixer = b.option(
-        bool,
-        "enable_mixer",
-        "Expose SDL_mixer through the sdl3 façade",
-    ) orelse false;
-    const enable_net = b.option(
-        bool,
-        "enable_net",
-        "Expose SDL_net through the sdl3 façade",
-    ) orelse false;
+    const options = config.PackageOptions.parse(b);
+    const target = options.target;
+    const optimize = options.optimize;
+    const effective_link_sdl = options.link.effectiveSdl();
     const support = b.createModule(.{
         .root_source_file = b.path("src/support.zig"),
         .target = target,
@@ -1018,21 +808,21 @@ pub fn build(b: *std.Build) void {
 
     const link_options = LinkOptions{
         .sdl = effective_link_sdl,
-        .test_ = link_test,
-        .controller_image = link_controller_image,
-        .shadercross = link_shadercross,
-        .image = link_image,
-        .ttf = link_ttf,
-        .mixer = link_mixer,
-        .net = link_net,
-        .system_version_overrides = system_version_overrides,
-        .allow_unknown_system_versions = allow_unknown_system_versions,
+        .test_ = options.link.test_,
+        .controller_image = options.link.controller_image,
+        .shadercross = options.link.shadercross,
+        .image = options.link.image,
+        .ttf = options.link.ttf,
+        .mixer = options.link.mixer,
+        .net = options.link.net,
+        .system_version_overrides = options.link.system_version_overrides,
+        .allow_unknown_system_versions = options.link.allow_unknown_system_versions,
     };
     const distribution = resolveDistribution(
         b,
         target,
-        linkage,
-        requested_distribution orelse .none,
+        options.linkage,
+        options.requested_distribution orelse .none,
         link_options,
     );
     const source_build = if (distribution == .source)
@@ -1040,21 +830,14 @@ pub fn build(b: *std.Build) void {
             b,
             target,
             link_options,
-            linkage,
-            source_cmake_generator,
-            source_cmake_toolchain,
-            .{
-                .profile = source_feature_profile,
-                .audio = source_audio,
-                .video = source_video,
-                .gpu = source_gpu,
-                .renderer = source_renderer,
-                .camera = source_camera,
-            },
-            source_cmake_options,
-            source_mixer_cmake_options,
-            shadercross_dxc,
-            shadercross_dxc_root,
+            options.linkage,
+            options.source.cmake_generator,
+            options.source.cmake_toolchain,
+            options.source.features,
+            options.source.cmake_options,
+            options.source.mixer_cmake_options,
+            options.source.shadercross_dxc,
+            options.source.shadercross_dxc_root,
         )
     else
         null;
@@ -1065,9 +848,9 @@ pub fn build(b: *std.Build) void {
         support,
         distribution,
         link_options,
-        linkage,
-        emscripten_sysroot,
-        android_ndk_root,
+        options.linkage,
+        options.emscripten_sysroot,
+        options.android_ndk_root,
         &sdl_metadata.libraries,
         source_build,
     );
@@ -1082,7 +865,7 @@ pub fn build(b: *std.Build) void {
     const facade_options = b.createModule(.{
         .root_source_file = facade_options_files.add("sdl3_options.zig", b.fmt(
             "pub const test_ = {};\npub const controller_image = {};\npub const shadercross = {};\npub const image = {};\npub const ttf = {};\npub const mixer = {};\npub const net = {};\n",
-            .{ enable_test, enable_controller_image, enable_shadercross, enable_image, enable_ttf, enable_mixer, enable_net },
+            .{ options.facade.test_, options.facade.controller_image, options.facade.shadercross, options.facade.image, options.facade.ttf, options.facade.mixer, options.facade.net },
         )),
         .target = target,
         .optimize = optimize,
@@ -1091,25 +874,25 @@ pub fn build(b: *std.Build) void {
     facade_imports.append(b.allocator, .{ .name = "sdl", .module = sdl }) catch @panic("OOM");
     facade_imports.append(b.allocator, .{ .name = "sdl3_options", .module = facade_options }) catch @panic("OOM");
     const test_module = findLibraryModule(library_modules, "test");
-    if (enable_test) {
+    if (options.facade.test_) {
         facade_imports.append(b.allocator, .{ .name = "test", .module = test_module }) catch @panic("OOM");
     }
-    if (enable_controller_image) {
+    if (options.facade.controller_image) {
         facade_imports.append(b.allocator, .{ .name = "controller_image", .module = controller_image }) catch @panic("OOM");
     }
-    if (enable_shadercross) {
+    if (options.facade.shadercross) {
         facade_imports.append(b.allocator, .{ .name = "shadercross", .module = shadercross }) catch @panic("OOM");
     }
-    if (enable_image) {
+    if (options.facade.image) {
         facade_imports.append(b.allocator, .{ .name = "image", .module = image }) catch @panic("OOM");
     }
-    if (enable_ttf) {
+    if (options.facade.ttf) {
         facade_imports.append(b.allocator, .{ .name = "ttf", .module = ttf }) catch @panic("OOM");
     }
-    if (enable_mixer) {
+    if (options.facade.mixer) {
         facade_imports.append(b.allocator, .{ .name = "mixer", .module = mixer }) catch @panic("OOM");
     }
-    if (enable_net) {
+    if (options.facade.net) {
         facade_imports.append(b.allocator, .{ .name = "net", .module = net }) catch @panic("OOM");
     }
     _ = b.addModule("sdl3", .{
@@ -1120,51 +903,24 @@ pub fn build(b: *std.Build) void {
     });
 
     if (distribution == .prebuilt) {
-        configurePrebuilt(b, target, linkage, .{
+        configurePrebuilt(b, target, options.linkage, .{
             .sdl = if (effective_link_sdl) sdl else null,
-            .test_ = if (link_test) test_module else null,
-            .controller_image = if (link_controller_image) controller_image else null,
-            .shadercross = if (link_shadercross) shadercross else null,
-            .image = if (link_image) image else null,
-            .ttf = if (link_ttf) ttf else null,
-            .mixer = if (link_mixer) mixer else null,
-            .net = if (link_net) net else null,
-            .optional_codecs = optional_codecs,
-            .shadercross_dxc = shadercross_dxc,
+            .test_ = if (options.link.test_) test_module else null,
+            .controller_image = if (options.link.controller_image) controller_image else null,
+            .shadercross = if (options.link.shadercross) shadercross else null,
+            .image = if (options.link.image) image else null,
+            .ttf = if (options.link.ttf) ttf else null,
+            .mixer = if (options.link.mixer) mixer else null,
+            .net = if (options.link.net) net else null,
+            .optional_codecs = options.optional_codecs,
+            .shadercross_dxc = options.source.shadercross_dxc,
         });
     }
 
-    addMaintenanceProxy(b, "docs", requested_distribution);
-    addMaintenanceProxy(b, "examples", requested_distribution);
-    addMaintenanceProxy(b, "examples-sdl", requested_distribution);
-    addMaintenanceProxy(b, "examples-raylib", requested_distribution);
-    addMaintenanceProxy(b, "example", requested_distribution);
-    for (maintenance_steps.names) |name| {
-        addMaintenanceProxy(b, name, requested_distribution);
-        addMaintenanceProxy(b, b.fmt("run-{s}", .{name}), requested_distribution);
-    }
+    maintenance.add(b, options);
 }
 
-fn addMaintenanceProxy(
-    b: *std.Build,
-    name: []const u8,
-    requested_distribution: ?Distribution,
-) void {
-    const step = b.step(name, b.fmt("Run repository maintenance step {s}", .{name}));
-    const command = if (requested_distribution) |distribution|
-        b.addSystemCommand(&.{
-            "zig",
-            "build",
-            "--build-file",
-            "build-maintenance.zig",
-            name,
-            b.fmt("-Ddistribution={s}", .{@tagName(distribution)}),
-        })
-    else
-        b.addSystemCommand(&.{ "zig", "build", "--build-file", "build-maintenance.zig", name });
-    command.setCwd(b.path("."));
-    step.dependOn(&command.step);
-}
+// Source distribution
 
 fn addCmakeSourceBuild(
     b: *std.Build,
@@ -1759,6 +1515,8 @@ fn addTranslateCTargetDefines(
 fn isAndroidTarget(target: std.Build.ResolvedTarget) bool {
     return target.result.abi == .android or target.result.abi == .androideabi;
 }
+
+// Official prebuilt distribution
 
 const PrebuiltModules = struct {
     sdl: ?*std.Build.Module,

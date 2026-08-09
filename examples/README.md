@@ -17,12 +17,19 @@ The examples use ordinary Zig `main` functions and native SDL event loops. They 
 use SDL's callback-main/Wasm path.
 
 ```sh
+# Discover exact names grouped by origin and category.
+zig build examples-list
+
 # Build and install one group, or both groups.
 zig build examples-sdl
 zig build examples-raylib
 zig build examples
 
-# Build or run one example.
+# Select one example without changing the step name.
+zig build build-example -Dexample=sdl-renderer-clear
+zig build run-example -Dexample=sdl-renderer-clear
+
+# Individual steps remain available for completion and scripting.
 zig build sdl-renderer-clear
 zig build run-sdl-renderer-clear
 zig build raylib-textures-bunnymark
@@ -33,6 +40,16 @@ The group and individual build/run steps use the automatic distribution order: s
 prebuilts, compatible system libraries, then the verified SDL3 sources bundled in the repository.
 Examples that load images, fonts, or music additionally select the matching SDL3_image, SDL3_ttf, or
 SDL3_mixer distribution. `zig build example` remains an alias for `sdl-renderer-clear`.
+
+Arguments after `--` are forwarded to examples launched by either `run-example` or an individual
+`run-<name>` step:
+
+```sh
+zig build run-example -Dexample=sdl-renderer-clear -- --application-argument
+```
+
+The catalog in [`catalog.zig`](catalog.zig) is the single source of truth for example names,
+categories, source paths, and optional companion-module requirements.
 
 The repository-owned `shaders/` directory is a separate opt-in helper. It builds deterministic
 SPIR-V, DXIL, MSL, and reflection outputs from GLSL, HLSL, or Zig shader inputs, then provides a

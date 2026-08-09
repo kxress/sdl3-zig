@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
         .install_dir = .prefix,
         .install_subdir = "docs",
     });
-    b.step("docs", "Generate HTML documentation for every public SDL module")
+    b.step("docs", "[Documentation] Generate HTML for every public SDL module")
         .dependOn(&install_docs.step);
 
     example_build.add(b, target, optimize);
