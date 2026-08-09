@@ -67,11 +67,15 @@ pub fn main() !void {
                 length = 3;
                 head = .{ .x = 16, .y = 12 };
             }
+            const old_tail = snake[length - 1];
             var index = length;
             while (index > 1) : (index -= 1) snake[index - 1] = snake[index - 2];
             snake[0] = head;
             if (head.x == food.x and head.y == food.y) {
-                if (length < snake.len) length += 1;
+                if (length < snake.len) {
+                    snake[length] = old_tail;
+                    length += 1;
+                }
                 random = random *% 1664525 +% 1013904223;
                 food.x = @intCast(random % 32);
                 food.y = @intCast((random >> 8) % 24);
