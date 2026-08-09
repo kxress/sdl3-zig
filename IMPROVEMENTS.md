@@ -636,3 +636,12 @@ whose tip is dated 2026-07-14 and whose last commit is “Improve GPU Texture De
 counterpart is the generated namespace block in [`src/sdl.zig`](src/sdl.zig) and the committed
 companion modules under [`src/`](src/). Re-run this audit when either upstream tip or the pinned SDL
 family changes; do not silently treat an upstream source change as a documentation-only diff.
+
+## Fresh comparison verification
+
+- **2026-08-09 pass 1:** A fresh luna-medium comparison of the complete public API found no concrete
+  improvement missing from this document. It revalidated the upstream tip as `69cf1fba` and made no
+  source changes.
+- **2026-08-09 pass 2:** A second independent fresh luna-medium comparison covered all 64 upstream
+  modules plus 6 `extras` files and found no concrete improvement missing from this document. It
+  revalidated the same upstream tip and made no source changes.
