@@ -17,6 +17,7 @@ pub fn main() !void {
     defer std.heap.page_allocator.free(ids);
     var gamepad: ?sdl.gamepad.Gamepad = if (ids.len > 0) sdl.gamepad.open(ids[0]) else null;
     defer if (gamepad) |*device| device.close();
+    var rumble_available = gamepad != null;
     var next_rumble: u64 = 0;
 
     var running = true;
@@ -27,7 +28,10 @@ pub fn main() !void {
         const now = sdl.timer.getTicks();
         if (gamepad) |device| {
             if (now >= next_rumble) {
-                try device.rumble(0xffff, 0x8000, 300);
+                device.rumble(0xffff, 0x8000, 300) catch {
+                    // A mapped gamepad may not expose a rumble actuator.
+                    rumble_available = false;
+                };
                 next_rumble = now + 2000;
             }
         }
@@ -37,7 +41,10 @@ pub fn main() !void {
         try renderer.renderDebugText(
             32,
             64,
-            if (gamepad != null) "Rumbling for 300 ms every two seconds." else "No gamepad connected.",
+            if (!rumble_available)
+                if (gamepad != null) "Gamepad rumble is unavailable." else "No gamepad connected."
+            else
+                "Rumbling for 300 ms every two seconds.",
         );
         try renderer.renderPresent();
     }
