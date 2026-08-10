@@ -1,13 +1,19 @@
 const std = @import("std");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
 pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, std.heap.page_allocator);
     defer args.deinit();
     _ = args.next();
     const format_name = args.next() orelse return usage();
     const path = args.next() orelse return usage();
-    if (args.next() != null) return usage();
+    while (args.next()) |argument| {
+        if (!std.mem.eql(u8, argument, "--test-ping")) return usage();
+        if (args.next() == null) return usage();
+    }
 
     const format = parseFormat(format_name) orelse return usage();
     const bytes = try std.Io.Dir.cwd().readFileAlloc(
@@ -38,6 +44,7 @@ pub fn main(init: std.process.Init) !void {
     };
     var shader = try sdl.gpu.createShader(device, &info);
     shader.deinit();
+    if (test_ping.shouldExit()) return;
 }
 
 fn parseFormat(name: []const u8) ?u32 {

@@ -10,6 +10,7 @@ pub const Modules = struct {
     image: *std.Build.Module,
     ttf: *std.Build.Module,
     mixer: *std.Build.Module,
+    test_ping: *std.Build.Module,
 };
 
 pub const Options = struct {
@@ -72,6 +73,7 @@ pub fn add(b: *std.Build, modules: Modules, options: Options, comptime catalog: 
             .image = modules.image,
             .ttf = modules.ttf,
             .mixer = modules.mixer,
+            .test_ping = modules.test_ping,
         }, example);
         const root_module = b.createModule(.{
             .root_source_file = examplePath(b, options, example.source),
@@ -208,6 +210,8 @@ fn importsFor(
 ) []const std.Build.Module.Import {
     var imports: std.ArrayList(std.Build.Module.Import) = .empty;
     imports.append(b.allocator, .{ .name = "sdl", .module = modules.sdl }) catch @panic("OOM");
+    imports.append(b.allocator, .{ .name = "example_test", .module = modules.test_ping }) catch
+        @panic("OOM");
     if (example.image) {
         imports.append(b.allocator, .{ .name = "image", .module = modules.image }) catch
             @panic("OOM");

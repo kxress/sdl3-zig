@@ -75,6 +75,17 @@ Arguments after `--` are forwarded to examples launched by either `run-example` 
 zig build run-example -Dexample=sdl-renderer-clear -- --application-argument
 ```
 
+The full catalog can also be smoke-tested without leaving example windows open. Each example accepts
+the internal `--test-ping <file>` argument in this mode; it initializes its normal startup systems,
+writes `ok` after deferred cleanup, and exits before entering its event loop:
+
+```sh
+deno task test:examples
+deno task test:examples -- --filter 'sdl-renderer-*'
+```
+
+Startup failures are reported with the example's captured build and runtime diagnostics.
+
 The catalog in [`catalog.zig`](catalog.zig) is the single source of truth for example names,
 categories, source paths, and optional companion-module requirements.
 

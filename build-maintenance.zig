@@ -73,6 +73,11 @@ pub fn build(b: *std.Build) void {
         .source_cmake_options = source_cmake_options.items,
         .source_features = .{ .profile = .desktop },
     });
+    const test_ping = b.createModule(.{
+        .root_source_file = b.path("examples/test_ping.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
     example_project.add(b, .{
         .target = target,
         .optimize = optimize,
@@ -82,6 +87,7 @@ pub fn build(b: *std.Build) void {
         .image = example_modules.image,
         .ttf = example_modules.ttf,
         .mixer = example_modules.mixer,
+        .test_ping = test_ping,
     }, .{}, sdl.ExampleCatalog);
 }
 

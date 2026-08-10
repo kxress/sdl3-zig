@@ -1,9 +1,13 @@
 //! Port of SDL's examples/renderer/15-cliprect.
 //! Upstream: libsdl-org/SDL@6880bed495226e7b87e9ef08fc552c0bcfd5fc29.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL renderer: clip rectangle", 640, 480, .{});
@@ -13,6 +17,8 @@ pub fn main() !void {
     defer renderer.deinit();
     try renderer.setRenderVSync(1);
     const clip = sdl.rect.Rect{ .x = 160, .y = 100, .w = 320, .h = 280 };
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

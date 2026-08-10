@@ -8,6 +8,7 @@
         "build.zig",
         "build.zig.zon",
         "catalog.zig",
+        "test_ping.zig",
         "README.md",
     },
 }

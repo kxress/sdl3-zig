@@ -3,9 +3,12 @@
 
 const std = @import("std");
 const image = @import("image");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: sprite animation", 800, 450, .{});
@@ -19,6 +22,8 @@ pub fn main() !void {
     const size = try sdl.render.getTextureSize(texture);
     var speed: u32 = 8;
     var line_buffer: [80]u8 = undefined;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

@@ -1,6 +1,8 @@
 //! RAYLIB-DERIVED: SDL3 port of examples/text/text_writing_anim.c.
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 const ttf = @import("ttf");
 
@@ -8,7 +10,9 @@ const message =
     "This sample illustrates a text writing animation using SDL_ttf. " ++
     "The sentence is revealed character by character and restarts on click.";
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     try ttf.init();
@@ -22,6 +26,8 @@ pub fn main() !void {
     var font = try ttf.openFont("raylib/pixantiqua.ttf", 24);
     defer font.close();
     var started = sdl.timer.getTicks();
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

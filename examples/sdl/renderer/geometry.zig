@@ -1,9 +1,13 @@
 //! Port of SDL's examples/renderer/10-geometry.
 //! Upstream: libsdl-org/SDL@6880bed495226e7b87e9ef08fc552c0bcfd5fc29.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL renderer: geometry", 640, 480, .{});
@@ -17,6 +21,8 @@ pub fn main() !void {
         .{ .position = .{ .x = 80, .y = 420 }, .color = .{ .r = 0, .g = 1, .b = 0, .a = 1 }, .tex_coord = .{ .x = 0, .y = 0 } },
         .{ .position = .{ .x = 560, .y = 420 }, .color = .{ .r = 0, .g = 0, .b = 1, .a = 1 }, .tex_coord = .{ .x = 0, .y = 0 } },
     };
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

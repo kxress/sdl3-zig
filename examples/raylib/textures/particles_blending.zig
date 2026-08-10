@@ -1,12 +1,16 @@
 //! RAYLIB-DERIVED: SDL3 port of examples/textures/textures_particles_blending.c.
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
+const std = @import("std");
 
 const image = @import("image");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
 const Particle = struct { x: f32, y: f32, vx: f32, vy: f32, life: f32 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: particles blending", 800, 450, .{});
@@ -21,6 +25,8 @@ pub fn main() !void {
     var particles: [300]Particle = undefined;
     var random: u32 = 0x4f1bbcdc;
     for (&particles) |*particle| particle.life = 0;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

@@ -2,6 +2,7 @@
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
 
 const std = @import("std");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
 fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.log.Priority, message: ?[*:0]const u8) callconv(.c) void {
@@ -12,7 +13,9 @@ fn customLogger(_: ?*anyopaque, category: c_int, priority: sdl.log.Priority, mes
     });
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     sdl.log.setOutputFunction(customLogger, null);
     sdl.log.info(0, "custom logger installed", .{});
     try sdl.init.default(.{ .video = true });
@@ -23,6 +26,8 @@ pub fn main() !void {
     var renderer = result.renderer;
     defer renderer.deinit();
     try renderer.setRenderVSync(1);
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

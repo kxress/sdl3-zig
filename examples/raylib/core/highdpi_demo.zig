@@ -2,9 +2,12 @@
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
 
 const std = @import("std");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer(
@@ -19,6 +22,8 @@ pub fn main() !void {
     defer renderer.deinit();
     try renderer.setRenderVSync(1);
     var line_buffer: [160]u8 = undefined;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

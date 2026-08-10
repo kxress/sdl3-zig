@@ -3,9 +3,12 @@
 
 const std = @import("std");
 const image = @import("image");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true, .audio = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: sprite button", 800, 450, .{});
@@ -25,6 +28,8 @@ pub fn main() !void {
     const frame_height = size.h / 3;
     const bounds = sdl.rect.F{ .x = 400 - size.w / 2, .y = 225 - frame_height / 2, .w = size.w, .h = frame_height };
     var state: usize = 0;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

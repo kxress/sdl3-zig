@@ -1,12 +1,16 @@
 //! Port of SDL's examples/demo/01-snake.
 //! Upstream: libsdl-org/SDL@6880bed495226e7b87e9ef08fc552c0bcfd5fc29.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
 const Cell = struct { x: i32, y: i32 };
 const Direction = enum { up, down, left, right };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL demo: snake", 640, 480, .{});
@@ -25,6 +29,8 @@ pub fn main() !void {
     var food = Cell{ .x = 23, .y = 8 };
     var random: u32 = 0x12345678;
     var next_step: u64 = 0;
+    if (test_ping.shouldExit()) return;
+
     var running = true;
     while (running) {
         while (sdl.events.pollEvent()) |polled| {

@@ -3,9 +3,12 @@
 
 const std = @import("std");
 const mixer_api = @import("mixer");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true, .audio = true });
     defer sdl.init.quit();
     try mixer_api.init();
@@ -26,6 +29,8 @@ pub fn main() !void {
     try track.play(0);
     const duration = @max(music.getDuration(), 1);
     var paused = false;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

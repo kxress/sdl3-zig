@@ -1,6 +1,8 @@
 //! RAYLIB-DERIVED: SDL3 port of examples/text/text_words_alignment.c.
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 const ttf = @import("ttf");
 
@@ -27,7 +29,9 @@ fn drawLine(
     try renderer.renderTexture(texture, null, &.{ .x = x, .y = y, .w = size.w, .h = size.h });
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     try ttf.init();
@@ -46,6 +50,8 @@ pub fn main() !void {
         "Press L, C, or R to change the layout.",
     };
     var alignment: Alignment = .left;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

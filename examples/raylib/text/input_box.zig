@@ -2,6 +2,7 @@
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
 
 const std = @import("std");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 const ttf = @import("ttf");
 
@@ -21,7 +22,9 @@ fn drawText(
     try renderer.renderTexture(texture, null, &.{ .x = x, .y = y, .w = size.w, .h = size.h });
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     try ttf.init();
@@ -38,6 +41,8 @@ pub fn main() !void {
     defer font.close();
     var text: [128:0]u8 = [_:0]u8{0} ** 128;
     var length: usize = 0;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

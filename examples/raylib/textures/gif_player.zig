@@ -1,10 +1,14 @@
 //! RAYLIB-DERIVED: SDL3 port of examples/textures/textures_gif_player.c.
 //! Upstream: raysan5/raylib@3e49c8079949c51f69d55a879d490cd6d41a58fa.
+const std = @import("std");
 
 const image = @import("image");
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("raylib port: GIF player", 800, 450, .{});
@@ -18,6 +22,8 @@ pub fn main() !void {
     if (animation.count <= 0) return error.SdlFailure;
     var frame: usize = 0;
     var next_frame: u64 = 0;
+
+    if (test_ping.shouldExit()) return;
 
     var running = true;
     while (running) {

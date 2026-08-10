@@ -1,9 +1,13 @@
 //! Port of SDL's examples/renderer/14-viewport.
 //! Upstream: libsdl-org/SDL@6880bed495226e7b87e9ef08fc552c0bcfd5fc29.
+const std = @import("std");
 
+const example_test = @import("example_test");
 const sdl = @import("sdl");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    var test_ping = try example_test.TestPing.init(init);
+    defer test_ping.deinit();
     try sdl.init.default(.{ .video = true });
     defer sdl.init.quit();
     const result = try sdl.render.createWindowAndRenderer("SDL renderer: viewport", 640, 480, .{});
@@ -25,6 +29,8 @@ pub fn main() !void {
         .{ 70, 120, 230, 255 },
         .{ 220, 190, 60, 255 },
     };
+    if (test_ping.shouldExit()) return;
+
     var running = true;
     while (running) {
         while (sdl.events.pollEvent()) |event| {
