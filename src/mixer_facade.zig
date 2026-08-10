@@ -50,11 +50,11 @@ pub const Mixer = struct {
     }
 
     pub fn createTrack(self: @This()) ?Track {
-        return if (mixer.createTrack(self.raw)) |raw| .{ .raw = raw } else null;
+        return if (mixer.createTrack(self.raw)) |track| .{ .raw = track } else null;
     }
 
     pub fn createGroup(self: @This()) ?Group {
-        return if (mixer.createGroup(self.raw)) |raw| .{ .raw = raw } else null;
+        return if (mixer.createGroup(self.raw)) |group| .{ .raw = group } else null;
     }
 };
 

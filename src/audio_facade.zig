@@ -104,7 +104,7 @@ test "typed stream callback invokes userdata handler" {
     }.call;
     var state = State{};
     var callback = StateCallback.init(&state, handler);
-    var stream: sdl.audio.Stream = undefined;
+    const stream: sdl.audio.Stream = undefined;
     callback.cCallback()(callback.cUserdata(), stream, 0, 0);
     try std.testing.expectEqual(@as(usize, 1), state.calls);
 }

@@ -5,8 +5,8 @@ pub fn EnumValue(comptime Enum: type) type {
     return struct {
         raw: Enum,
 
-        pub fn fromSdl(raw: Enum) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Enum) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Enum {
             return self.raw;
@@ -36,8 +36,8 @@ pub const Month = enum(u8) {
 pub const DateTime = struct {
     raw: sdl.time.Date,
 
-    pub fn fromSdl(raw: sdl.time.Date) DateTime {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.time.Date) DateTime {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: DateTime) sdl.time.Date {

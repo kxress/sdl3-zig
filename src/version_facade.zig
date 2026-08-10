@@ -4,8 +4,8 @@ const sdl = @import("sdl");
 pub const Version = struct {
     value: u32,
 
-    pub fn make(major: u32, minor: u32, micro: u32) Version {
-        return .{ .value = major * 1_000_000 + minor * 1_000 + micro };
+    pub fn make(major_value: u32, minor_value: u32, micro_value: u32) Version {
+        return .{ .value = major_value * 1_000_000 + minor_value * 1_000 + micro_value };
     }
 
     pub fn get() Version {

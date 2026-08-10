@@ -4,9 +4,9 @@ const sdl = @import("sdl");
 pub const Scancode = struct {
     raw: sdl.scancode.Scancode,
 
-    pub fn fromSdl(raw: sdl.scancode.Scancode) ?Scancode {
-        if (raw == .scancode_unknown) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.scancode.Scancode) ?Scancode {
+        if (value == .scancode_unknown) return null;
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Scancode) sdl.scancode.Scancode {

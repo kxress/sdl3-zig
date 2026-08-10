@@ -4,8 +4,8 @@ const sdl = @import("sdl");
 pub const Factor = struct {
     raw: sdl.blendmode.BlendFactor,
 
-    pub fn fromSdl(raw: sdl.blendmode.BlendFactor) Factor {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.blendmode.BlendFactor) Factor {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Factor) sdl.blendmode.BlendFactor {
@@ -17,8 +17,8 @@ pub const Factor = struct {
 pub const Operation = struct {
     raw: sdl.blendmode.BlendOperation,
 
-    pub fn fromSdl(raw: sdl.blendmode.BlendOperation) Operation {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.blendmode.BlendOperation) Operation {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Operation) sdl.blendmode.BlendOperation {
@@ -30,8 +30,8 @@ pub const Operation = struct {
 pub const Mode = struct {
     raw: sdl.blendmode.BlendMode,
 
-    pub fn fromSdl(raw: sdl.blendmode.BlendMode) Mode {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.blendmode.BlendMode) Mode {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Mode) sdl.blendmode.BlendMode {

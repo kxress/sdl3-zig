@@ -3,8 +3,8 @@ const std = @import("std");
 
 pub const Direction = struct {
     raw: sdl.haptic.Direction,
-    pub fn fromSdl(raw: sdl.haptic.Direction) Direction {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.haptic.Direction) Direction {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Direction) sdl.haptic.Direction {
         return self.raw;
@@ -13,8 +13,8 @@ pub const Direction = struct {
 
 pub const Features = struct {
     raw: u32 = 0,
-    pub fn fromSdl(raw: u32) Features {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: u32) Features {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Features) u32 {
         return self.raw;
@@ -26,8 +26,8 @@ pub const Features = struct {
 
 pub const Effect = struct {
     raw: sdl.haptic.Effect,
-    pub fn fromSdl(raw: sdl.haptic.Effect) Effect {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.haptic.Effect) Effect {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Effect) sdl.haptic.Effect {
         return self.raw;
@@ -40,8 +40,8 @@ pub const Effect = struct {
 pub fn Variant(comptime Raw: type) type {
     return struct {
         raw: Raw,
-        pub fn fromSdl(raw: Raw) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Raw) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Raw {
             return self.raw;

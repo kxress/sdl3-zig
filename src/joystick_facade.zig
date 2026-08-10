@@ -2,9 +2,9 @@ const sdl = @import("sdl");
 
 pub const Id = struct {
     raw: sdl.joystick.Id,
-    pub fn fromSdl(raw: sdl.joystick.Id) ?Id {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.joystick.Id) ?Id {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Id) sdl.joystick.Id {
         return self.raw;
@@ -33,8 +33,8 @@ pub const ButtonMask = struct {
 
 pub const ConnectionState = struct {
     raw: sdl.joystick.ConnectionState,
-    pub fn fromSdl(raw: sdl.joystick.ConnectionState) ConnectionState {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.joystick.ConnectionState) ConnectionState {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: ConnectionState) sdl.joystick.ConnectionState {
         return self.raw;

@@ -5,8 +5,8 @@ pub fn EnumValue(comptime Enum: type) type {
     return struct {
         raw: Enum,
 
-        pub fn fromSdl(raw: Enum) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Enum) @This() {
+            return .{ .raw = value };
         }
 
         pub fn toSdl(self: @This()) Enum {
@@ -41,8 +41,8 @@ pub const Palette = struct {
 pub const Format = struct {
     raw: sdl.pixels.PixelFormat,
 
-    pub fn fromSdl(raw: sdl.pixels.PixelFormat) Format {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.pixels.PixelFormat) Format {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Format) sdl.pixels.PixelFormat {

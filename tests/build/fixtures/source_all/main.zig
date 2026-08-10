@@ -9,6 +9,38 @@ const mixer = @import("mixer");
 const net = @import("net");
 const build_options = @import("source_all_options");
 
+fn verifyRootAliases() void {
+    _ = sdl3.core;
+    _ = sdl3.assert;
+    _ = sdl3.async_io;
+    _ = sdl3.atomic;
+    _ = sdl3.audio;
+    _ = sdl3.camera;
+    _ = sdl3.events;
+    _ = sdl3.filesystem;
+    _ = sdl3.gamepad;
+    _ = sdl3.gpu;
+    _ = sdl3.image;
+    _ = sdl3.joystick;
+    _ = sdl3.mixer;
+    _ = sdl3.mutex;
+    _ = sdl3.net;
+    _ = sdl3.pixels;
+    _ = sdl3.properties;
+    _ = sdl3.render;
+    _ = sdl3.surface;
+    _ = sdl3.thread;
+    _ = sdl3.ttf;
+    _ = sdl3.timer;
+    _ = sdl3.tray;
+    _ = sdl3.video;
+    _ = sdl3.vulkan;
+    _ = sdl3.io_stream;
+    _ = sdl3.blend_mode;
+    _ = sdl3.hid_api;
+    _ = sdl3.message_box;
+}
+
 fn threadEntry(data: ?*anyopaque) callconv(.c) c_int {
     const refcount: *sdl.atomic.Int = @ptrCast(@alignCast(data.?));
     _ = sdl.atomic.incRef(refcount);
@@ -37,6 +69,7 @@ const decoder_gif = [_]u8{
 };
 
 pub fn main() !void {
+    verifyRootAliases();
     // SDL_RectEmpty is SDL_FORCE_INLINE in the pinned headers. A side-effecting argument
     // producer proves the generated wrapper and the C helper observe C's one-evaluation call
     // contract without adding any production bookkeeping.

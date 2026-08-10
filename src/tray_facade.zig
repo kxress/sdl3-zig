@@ -22,7 +22,6 @@ pub fn Callback(comptime UserData: type) type {
 }
 
 pub const EntryFlags = sdl.tray.EntryFlags;
-pub const Callback = sdl.tray.Callback;
 pub const Entry = sdl.tray.Entry;
 pub const Menu = sdl.tray.Menu;
 
@@ -30,7 +29,7 @@ pub const Tray = struct {
     raw: sdl.tray.Tray,
 
     pub fn init(icon: ?*sdl.surface.Surface, tooltip: ?[:0]const u8) ?Tray {
-        return if (sdl.tray.create(icon, tooltip)) |raw| .{ .raw = raw } else null;
+        return if (sdl.tray.create(icon, tooltip)) |tray| .{ .raw = tray } else null;
     }
 
     pub fn deinit(self: *@This()) void {

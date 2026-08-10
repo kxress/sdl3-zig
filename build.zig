@@ -648,15 +648,16 @@ fn addLibraryModules(
                     b.allocator,
                     &.{ "sdl3-source-build", "ControllerImage" },
                 ) catch @panic("OOM");
-                for ([_][]const u8{
-                    b.fmt("{s}/lib", .{source.prefix}),
-                    b.fmt("{s}/lib/Debug", .{source.prefix}),
-                    controller_image_build,
-                    b.fmt("{s}/Debug", .{controller_image_build}),
-                    b.fmt("{s}/lib", .{controller_image_build}),
-                    b.fmt("{s}/lib/Debug", .{controller_image_build}),
-                }) |search_path| {
-                    module.addLibraryPath(.{ .cwd_relative = search_path });
+                module.addLibraryPath(.{ .cwd_relative = controller_image_build });
+                if (target.result.os.tag == .windows) {
+                    for ([_][]const u8{
+                        b.fmt("{s}/lib/Debug", .{source.prefix}),
+                        b.fmt("{s}/Debug", .{controller_image_build}),
+                        b.fmt("{s}/lib", .{controller_image_build}),
+                        b.fmt("{s}/lib/Debug", .{controller_image_build}),
+                    }) |search_path| {
+                        module.addLibraryPath(.{ .cwd_relative = search_path });
+                    }
                 }
             }
             module.linkSystemLibrary(sourceLibraryName(b, configuration.library_name, target, source.linkage), .{});
@@ -676,15 +677,16 @@ fn addLibraryModules(
                     b.allocator,
                     &.{ "sdl3-source-build", "SDL3_shadercross", "external", "SPIRV-Cross" },
                 ) catch @panic("OOM");
-                for ([_][]const u8{
-                    spirv_cross_build,
-                    b.fmt("{s}/Debug", .{spirv_cross_build}),
-                    b.fmt("{s}/lib", .{spirv_cross_build}),
-                    b.fmt("{s}/lib/Debug", .{spirv_cross_build}),
-                    b.fmt("{s}/lib", .{source.prefix}),
-                    b.fmt("{s}/lib/Debug", .{source.prefix}),
-                }) |search_path| {
-                    module.addLibraryPath(.{ .cwd_relative = search_path });
+                module.addLibraryPath(.{ .cwd_relative = spirv_cross_build });
+                if (target.result.os.tag == .windows) {
+                    for ([_][]const u8{
+                        b.fmt("{s}/Debug", .{spirv_cross_build}),
+                        b.fmt("{s}/lib", .{spirv_cross_build}),
+                        b.fmt("{s}/lib/Debug", .{spirv_cross_build}),
+                        b.fmt("{s}/lib/Debug", .{source.prefix}),
+                    }) |search_path| {
+                        module.addLibraryPath(.{ .cwd_relative = search_path });
+                    }
                 }
                 const spirv_cross_libraries = [_][]const u8{
                     "c",
@@ -1080,7 +1082,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{ .{ .name = "net", .module = net }, .{ .name = "sdl", .module = sdl } },
         });
-    facade_imports.append(b.allocator, .{ .name = "net_facade", .module = net_facade_module }) catch @panic("OOM");
+        facade_imports.append(b.allocator, .{ .name = "net_facade", .module = net_facade_module }) catch @panic("OOM");
     }
     const gpu_facade_module = b.createModule(.{
         .root_source_file = b.path("src/gpu_facade.zig"),

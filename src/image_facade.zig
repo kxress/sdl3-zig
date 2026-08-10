@@ -4,8 +4,8 @@ const sdl = @import("sdl");
 pub const Animation = struct {
     raw: *image.Animation,
 
-    pub fn init(raw: *image.Animation) Animation {
-        return .{ .raw = raw };
+    pub fn init(animation: *image.Animation) Animation {
+        return .{ .raw = animation };
     }
 
     pub fn deinit(self: *@This()) void {
@@ -14,19 +14,19 @@ pub const Animation = struct {
     }
 
     pub fn initIo(stream: ?*sdl.ioStream.IoStream, close_stream: bool) ?Animation {
-        return if (image.loadAnimationIo(stream, close_stream)) |raw| .{ .raw = raw } else null;
+        return if (image.loadAnimationIo(stream, close_stream)) |animation| .{ .raw = animation } else null;
     }
 
     pub fn initTypedIo(stream: ?*sdl.ioStream.IoStream, close_stream: bool, type_name: ?[:0]const u8) ?Animation {
-        return if (image.loadAnimationTypedIo(stream, close_stream, type_name)) |raw| .{ .raw = raw } else null;
+        return if (image.loadAnimationTypedIo(stream, close_stream, type_name)) |animation| .{ .raw = animation } else null;
     }
 
     pub fn initGifIo(stream: ?*sdl.ioStream.IoStream) ?Animation {
-        return if (image.loadGifAnimationIo(stream)) |raw| .{ .raw = raw } else null;
+        return if (image.loadGifAnimationIo(stream)) |animation| .{ .raw = animation } else null;
     }
 
     pub fn initWebpIo(stream: ?*sdl.ioStream.IoStream) ?Animation {
-        return if (image.loadWebpAnimationIo(stream)) |raw| .{ .raw = raw } else null;
+        return if (image.loadWebpAnimationIo(stream)) |animation| .{ .raw = animation } else null;
     }
 };
 

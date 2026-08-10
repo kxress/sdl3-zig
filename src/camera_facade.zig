@@ -9,8 +9,8 @@ pub const Specification = struct {
     framerate_numerator: i32,
     framerate_denominator: i32,
 
-    pub fn fromSdl(raw: sdl.camera.Spec) Specification {
-        return .{ .format = raw.format, .colorspace = raw.colorspace, .width = raw.width, .height = raw.height, .framerate_numerator = raw.framerate_numerator, .framerate_denominator = raw.framerate_denominator };
+    pub fn fromSdl(value: sdl.camera.Spec) Specification {
+        return .{ .format = value.format, .colorspace = value.colorspace, .width = value.width, .height = value.height, .framerate_numerator = value.framerate_numerator, .framerate_denominator = value.framerate_denominator };
     }
 
     pub fn toSdl(self: Specification) sdl.camera.Spec {

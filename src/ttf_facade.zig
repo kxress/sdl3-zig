@@ -5,8 +5,8 @@ const std = @import("std");
 pub fn EnumValue(comptime Enum: type) type {
     return struct {
         raw: Enum,
-        pub fn fromSdl(raw: Enum) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Enum) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Enum {
             return self.raw;
@@ -22,8 +22,8 @@ pub const GpuTextEngineWinding = EnumValue(ttf.GpuTextEngineWinding);
 
 pub const StyleFlags = struct {
     raw: ttf.FontStyleFlags = .{},
-    pub fn fromSdl(raw: ttf.FontStyleFlags) StyleFlags {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: ttf.FontStyleFlags) StyleFlags {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: StyleFlags) ttf.FontStyleFlags {
         return self.raw;
@@ -38,8 +38,8 @@ pub const StyleFlags = struct {
 
 pub const Color = struct {
     raw: sdl.pixels.Color,
-    pub fn fromSdl(raw: sdl.pixels.Color) Color {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.pixels.Color) Color {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Color) sdl.pixels.Color {
         return self.raw;
@@ -49,8 +49,8 @@ pub const Color = struct {
 pub fn Descriptor(comptime Raw: type) type {
     return struct {
         raw: Raw,
-        pub fn fromSdl(raw: Raw) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Raw) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Raw {
             return self.raw;

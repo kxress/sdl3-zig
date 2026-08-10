@@ -21,18 +21,17 @@ pub fn Function(comptime UserData: type) type {
     };
 }
 
-pub const Function = sdl.thread.Function;
 pub const PropertiesId = sdl.properties.Id;
 
 pub const Thread = struct {
     raw: sdl.thread.Thread,
 
     pub fn init(function: Function, name: ?[:0]const u8, data: ?*anyopaque) ?Thread {
-        return if (sdl.thread.create(function, name, data)) |raw| .{ .raw = raw } else null;
+        return if (sdl.thread.create(function, name, data)) |thread| .{ .raw = thread } else null;
     }
 
     pub fn initWithProperties(properties: PropertiesId) ?Thread {
-        return if (sdl.thread.createWithProperties(properties)) |raw| .{ .raw = raw } else null;
+        return if (sdl.thread.createWithProperties(properties)) |thread| .{ .raw = thread } else null;
     }
 
     pub fn wait(self: *@This()) c_int {

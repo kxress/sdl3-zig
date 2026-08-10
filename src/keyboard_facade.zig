@@ -2,9 +2,9 @@ const sdl = @import("sdl");
 
 pub const Id = struct {
     raw: sdl.keyboard.Id,
-    pub fn fromSdl(raw: sdl.keyboard.Id) ?Id {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.keyboard.Id) ?Id {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Id) sdl.keyboard.Id {
         return self.raw;

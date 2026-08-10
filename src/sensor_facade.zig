@@ -3,9 +3,9 @@ const std = @import("std");
 
 pub const Id = struct {
     raw: sdl.sensor.Id,
-    pub fn fromSdl(raw: sdl.sensor.Id) ?Id {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.sensor.Id) ?Id {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Id) sdl.sensor.Id {
         return self.raw;
@@ -14,10 +14,10 @@ pub const Id = struct {
 
 pub const Type = struct {
     raw: sdl.sensor.Type,
-    pub fn fromSdl(raw: sdl.sensor.Type) ?Type {
-        return switch (raw) {
+    pub fn fromSdl(value: sdl.sensor.Type) ?Type {
+        return switch (value) {
             .unknown, .invalid => null,
-            else => .{ .raw = raw },
+            else => .{ .raw = value },
         };
     }
     pub fn toSdl(self: Type) sdl.sensor.Type {

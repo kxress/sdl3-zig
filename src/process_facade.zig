@@ -7,11 +7,11 @@ pub const Process = struct {
     raw: sdl.process.Process,
 
     pub fn init(args: ?*const ?[*:0]const u8, pipe_stdio: bool) ?Process {
-        return if (sdl.process.create(args, pipe_stdio)) |raw| .{ .raw = raw } else null;
+        return if (sdl.process.create(args, pipe_stdio)) |process| .{ .raw = process } else null;
     }
 
     pub fn initWithProperties(properties: PropertiesId) ?Process {
-        return if (sdl.process.createWithProperties(properties)) |raw| .{ .raw = raw } else null;
+        return if (sdl.process.createWithProperties(properties)) |process| .{ .raw = process } else null;
     }
 
     pub fn deinit(self: *@This()) void {

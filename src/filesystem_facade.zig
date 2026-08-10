@@ -80,8 +80,8 @@ pub const PathType = sdl.filesystem.PathType;
 pub const PathInfo = sdl.filesystem.PathInfo;
 pub const Info = struct {
     raw: sdl.filesystem.PathInfo,
-    pub fn fromSdl(raw: sdl.filesystem.PathInfo) Info {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.filesystem.PathInfo) Info {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Info) sdl.filesystem.PathInfo {
         return self.raw;
@@ -90,8 +90,8 @@ pub const Info = struct {
 pub const EnumerationResult = sdl.filesystem.EnumerationResult;
 pub const GlobFlags = struct {
     raw: sdl.filesystem.GlobFlags = 0,
-    pub fn fromSdl(raw: sdl.filesystem.GlobFlags) GlobFlags {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.filesystem.GlobFlags) GlobFlags {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: GlobFlags) sdl.filesystem.GlobFlags {
         return self.raw;

@@ -3,8 +3,8 @@ const sdl = @import("sdl");
 pub fn EnumValue(comptime Enum: type) type {
     return struct {
         raw: Enum,
-        pub fn fromSdl(raw: Enum) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Enum) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Enum {
             return self.raw;
@@ -19,10 +19,10 @@ pub const ButtonLabel = EnumValue(sdl.gamepad.ButtonLabel);
 
 pub const Type = struct {
     raw: sdl.gamepad.Type,
-    pub fn fromSdl(raw: sdl.gamepad.Type) ?Type {
-        return switch (raw) {
+    pub fn fromSdl(value: sdl.gamepad.Type) ?Type {
+        return switch (value) {
             .unknown, .invalid => null,
-            else => .{ .raw = raw },
+            else => .{ .raw = value },
         };
     }
     pub fn toSdl(self: Type) sdl.gamepad.Type {
@@ -38,7 +38,7 @@ pub const Gamepad = struct {
     raw: sdl.gamepad.Gamepad,
 
     pub fn init(id: Id) ?Gamepad {
-        return if (sdl.gamepad.open(id)) |raw| .{ .raw = raw } else null;
+        return if (sdl.gamepad.open(id)) |opened| .{ .raw = opened } else null;
     }
 
     pub fn deinit(self: *@This()) void {

@@ -2,9 +2,9 @@ const sdl = @import("sdl");
 
 pub const Id = struct {
     raw: sdl.mouse.Id,
-    pub fn fromSdl(raw: sdl.mouse.Id) ?Id {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.mouse.Id) ?Id {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Id) sdl.mouse.Id {
         return self.raw;
@@ -13,8 +13,8 @@ pub const Id = struct {
 
 pub const ButtonFlags = struct {
     raw: sdl.mouse.ButtonFlags,
-    pub fn fromSdl(raw: sdl.mouse.ButtonFlags) ButtonFlags {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.mouse.ButtonFlags) ButtonFlags {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: ButtonFlags) sdl.mouse.ButtonFlags {
         return self.raw;

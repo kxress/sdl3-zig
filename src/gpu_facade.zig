@@ -4,8 +4,8 @@ const std = @import("std");
 pub fn Descriptor(comptime Raw: type) type {
     return struct {
         raw: Raw,
-        pub fn fromSdl(raw: Raw) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Raw) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Raw {
             return self.raw;
@@ -24,9 +24,9 @@ pub const ComputePipelineCreateInfo = Descriptor(sdl.gpu.ComputePipelineCreateIn
 
 pub const TextureFormat = struct {
     raw: sdl.gpu.TextureFormat,
-    pub fn fromSdl(raw: sdl.gpu.TextureFormat) ?TextureFormat {
-        if (raw == .invalid) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.gpu.TextureFormat) ?TextureFormat {
+        if (value == .invalid) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: TextureFormat) sdl.gpu.TextureFormat {
         return self.raw;
@@ -54,8 +54,8 @@ pub const Device = struct {
 
 pub const ShaderFormat = struct {
     raw: sdl.gpu.ShaderFormat,
-    pub fn fromSdl(raw: sdl.gpu.ShaderFormat) ShaderFormat {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.gpu.ShaderFormat) ShaderFormat {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: ShaderFormat) sdl.gpu.ShaderFormat {
         return self.raw;
@@ -64,8 +64,8 @@ pub const ShaderFormat = struct {
 
 pub const BufferUsage = struct {
     raw: sdl.gpu.BufferUsageFlags = 0,
-    pub fn fromSdl(raw: sdl.gpu.BufferUsageFlags) BufferUsage {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.gpu.BufferUsageFlags) BufferUsage {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: BufferUsage) sdl.gpu.BufferUsageFlags {
         return self.raw;
@@ -80,8 +80,8 @@ pub const BufferUsage = struct {
 
 pub const TextureUsage = struct {
     raw: sdl.gpu.TextureUsageFlags = 0,
-    pub fn fromSdl(raw: sdl.gpu.TextureUsageFlags) TextureUsage {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.gpu.TextureUsageFlags) TextureUsage {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: TextureUsage) sdl.gpu.TextureUsageFlags {
         return self.raw;
@@ -100,8 +100,8 @@ pub const BufferLocation = struct {
     pub fn toSdl(self: BufferLocation) sdl.gpu.BufferLocation {
         return .{ .buffer = self.buffer, .offset = self.offset };
     }
-    pub fn fromSdl(raw: sdl.gpu.BufferLocation) BufferLocation {
-        return .{ .buffer = raw.buffer, .offset = raw.offset };
+    pub fn fromSdl(value: sdl.gpu.BufferLocation) BufferLocation {
+        return .{ .buffer = value.buffer, .offset = value.offset };
     }
 };
 
@@ -115,8 +115,8 @@ pub const TextureLocation = struct {
     pub fn toSdl(self: TextureLocation) sdl.gpu.TextureLocation {
         return .{ .texture = self.texture, .mip_level = self.mip_level, .layer = self.layer, .x = self.x, .y = self.y, .z = self.z };
     }
-    pub fn fromSdl(raw: sdl.gpu.TextureLocation) TextureLocation {
-        return .{ .texture = raw.texture, .mip_level = raw.mip_level, .layer = raw.layer, .x = raw.x, .y = raw.y, .z = raw.z };
+    pub fn fromSdl(value: sdl.gpu.TextureLocation) TextureLocation {
+        return .{ .texture = value.texture, .mip_level = value.mip_level, .layer = value.layer, .x = value.x, .y = value.y, .z = value.z };
     }
 };
 
@@ -127,8 +127,8 @@ pub const BufferRegion = struct {
     pub fn toSdl(self: BufferRegion) sdl.gpu.BufferRegion {
         return .{ .buffer = self.buffer, .offset = self.offset, .size = self.size };
     }
-    pub fn fromSdl(raw: sdl.gpu.BufferRegion) BufferRegion {
-        return .{ .buffer = raw.buffer, .offset = raw.offset, .size = raw.size };
+    pub fn fromSdl(value: sdl.gpu.BufferRegion) BufferRegion {
+        return .{ .buffer = value.buffer, .offset = value.offset, .size = value.size };
     }
 };
 
@@ -145,8 +145,8 @@ pub const TextureRegion = struct {
     pub fn toSdl(self: TextureRegion) sdl.gpu.TextureRegion {
         return .{ .texture = self.texture, .mip_level = self.mip_level, .layer = self.layer, .x = self.x, .y = self.y, .z = self.z, .w = self.w, .h = self.h, .d = self.d };
     }
-    pub fn fromSdl(raw: sdl.gpu.TextureRegion) TextureRegion {
-        return .{ .texture = raw.texture, .mip_level = raw.mip_level, .layer = raw.layer, .x = raw.x, .y = raw.y, .z = raw.z, .w = raw.w, .h = raw.h, .d = raw.d };
+    pub fn fromSdl(value: sdl.gpu.TextureRegion) TextureRegion {
+        return .{ .texture = value.texture, .mip_level = value.mip_level, .layer = value.layer, .x = value.x, .y = value.y, .z = value.z, .w = value.w, .h = value.h, .d = value.d };
     }
 };
 

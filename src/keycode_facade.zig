@@ -4,9 +4,9 @@ const sdl = @import("sdl");
 pub const Keycode = struct {
     raw: sdl.keycode.Keycode,
 
-    pub fn fromSdl(raw: sdl.keycode.Keycode) ?Keycode {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.keycode.Keycode) ?Keycode {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: Keycode) sdl.keycode.Keycode {
@@ -34,8 +34,8 @@ pub const Keycode = struct {
 pub const KeyModifier = struct {
     raw: sdl.keycode.Keymod,
 
-    pub fn fromSdl(raw: sdl.keycode.Keymod) KeyModifier {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.keycode.Keymod) KeyModifier {
+        return .{ .raw = value };
     }
 
     pub fn toSdl(self: KeyModifier) sdl.keycode.Keymod {

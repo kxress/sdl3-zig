@@ -4,10 +4,10 @@ const sdl = @import("sdl");
 pub const State = struct {
     raw: sdl.power.State,
 
-    pub fn fromSdl(raw: sdl.power.State) ?State {
-        return switch (raw) {
+    pub fn fromSdl(value: sdl.power.State) ?State {
+        return switch (value) {
             .error_, .unknown => null,
-            else => .{ .raw = raw },
+            else => .{ .raw = value },
         };
     }
 

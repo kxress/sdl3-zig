@@ -7,15 +7,14 @@ pub const core = @import("sdl");
 /// Focused aliases for the generated SDL namespaces. The `core` namespace remains available for
 /// source compatibility, while these names provide the discoverable root-level module graph.
 pub const assert = core.assert;
-pub const async_io = core.asyncIo;
+pub const async_io = @import("async_io_facade");
 pub const atomic = core.atomic;
 pub const audio = core.audio;
 pub const camera = core.camera;
 pub const events = core.events;
 pub const filesystem = core.filesystem;
-pub const gamepad = core.gamepad;
+pub const io_stream = @import("io_stream_facade");
 pub const gpu = core.gpu;
-pub const joystick = core.joystick;
 pub const mutex = core.mutex;
 pub const pixels = @import("pixels_facade");
 pub const properties = core.properties;
@@ -141,6 +140,7 @@ test "focused root aliases remain importable" {
     _ = camera;
     _ = events;
     _ = filesystem;
+    _ = io_stream;
     _ = gamepad;
     _ = gpu;
     _ = joystick;

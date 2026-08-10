@@ -3,8 +3,8 @@ const sdl = @import("sdl");
 pub fn EnumValue(comptime Enum: type) type {
     return struct {
         raw: Enum,
-        pub fn fromSdl(raw: Enum) @This() {
-            return .{ .raw = raw };
+        pub fn fromSdl(value: Enum) @This() {
+            return .{ .raw = value };
         }
         pub fn toSdl(self: @This()) Enum {
             return self.raw;
@@ -14,8 +14,8 @@ pub fn EnumValue(comptime Enum: type) type {
 
 pub const Flags = struct {
     raw: sdl.surface.Flags = .{},
-    pub fn fromSdl(raw: sdl.surface.Flags) Flags {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.surface.Flags) Flags {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Flags) sdl.surface.Flags {
         return self.raw;

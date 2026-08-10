@@ -3,9 +3,9 @@ const std = @import("std");
 
 pub const Id = struct {
     raw: sdl.touch.Id,
-    pub fn fromSdl(raw: sdl.touch.Id) ?Id {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.touch.Id) ?Id {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Id) sdl.touch.Id {
         return self.raw;
@@ -14,9 +14,9 @@ pub const Id = struct {
 
 pub const FingerId = struct {
     raw: sdl.touch.FingerId,
-    pub fn fromSdl(raw: sdl.touch.FingerId) ?FingerId {
-        if (raw == 0) return null;
-        return .{ .raw = raw };
+    pub fn fromSdl(value: sdl.touch.FingerId) ?FingerId {
+        if (value == 0) return null;
+        return .{ .raw = value };
     }
     pub fn toSdl(self: FingerId) sdl.touch.FingerId {
         return self.raw;
@@ -29,8 +29,8 @@ pub const Finger = struct {
     y: f32,
     pressure: f32,
 
-    pub fn fromSdl(raw: sdl.touch.Finger) ?Finger {
-        return .{ .id = FingerId.fromSdl(raw.id) orelse return null, .x = raw.x, .y = raw.y, .pressure = raw.pressure };
+    pub fn fromSdl(value: sdl.touch.Finger) ?Finger {
+        return .{ .id = FingerId.fromSdl(value.id) orelse return null, .x = value.x, .y = value.y, .pressure = value.pressure };
     }
 };
 

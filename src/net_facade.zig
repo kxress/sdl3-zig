@@ -52,8 +52,8 @@ pub const Timeout = struct {
 
 pub const Status = struct {
     raw: net.Status,
-    pub fn fromSdl(raw: net.Status) Status {
-        return .{ .raw = raw };
+    pub fn fromSdl(value: net.Status) Status {
+        return .{ .raw = value };
     }
     pub fn toSdl(self: Status) net.Status {
         return self.raw;

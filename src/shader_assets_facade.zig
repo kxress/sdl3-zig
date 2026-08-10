@@ -104,7 +104,7 @@ pub const Directory = struct {
     pub fn init(allocator: std.mem.Allocator, root: []const u8) !Directory {
         const owned_root = try allocator.dupe(u8, root);
         errdefer allocator.free(owned_root);
-        var manifest_path = try std.fs.path.join(allocator, &.{ root, "shader-manifest.json" });
+        const manifest_path = try std.fs.path.join(allocator, &.{ root, "shader-manifest.json" });
         defer allocator.free(manifest_path);
         const metadata = Metadata.loadFile(allocator, manifest_path) catch |err| return err;
         return .{ .allocator = allocator, .root = owned_root, .metadata = metadata };
