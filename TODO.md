@@ -1,31 +1,37 @@
-# Generic facade-pattern migration checklist
+# Generated facade-pattern migration checklist
 
 This checklist preserves the detailed API inventory while changing its implementation strategy:
-rewrite existing facades to use generic pattern detection in the binding generator. Work in dependency
-order and complete one unchecked box at a time. A completed item must be reproducible from pinned SDL
-inputs and generator configuration; generated bindings are never hand-edited.
+detect recurring SDL declaration patterns, plan a typed facade replacement, and render that replacement
+in the generated module that owns the declaration. Work in dependency order and complete one unchecked
+box at a time. A completed item must be reproducible from pinned SDL inputs and generator configuration;
+generated bindings are never hand-edited.
 
 ## Generator-emission and removal policy
 
-Generate the improved API directly in the existing module that already contains the raw SDL
-declaration. Do not create handwritten or generated `*_facade.zig` files, forwarding facade
-modules, or a parallel public API. Retain the generated C-shaped declaration unless an intentional,
-documented compatibility change says otherwise.
+Generate each improved API directly in the existing module that owns the SDL declaration. Do not create
+handwritten or generated `*_facade.zig` files, forwarding facade modules, overlays, or a parallel public
+API. When a facade pattern matches safely, it replaces the generated public C-shaped wrapper for that
+declaration with the typed facade; the raw C import remains an implementation detail for the generated
+facade body. Keep a public C-shaped wrapper only when the pattern explicitly documents why no faithful
+facade replacement is possible.
 
-When porting an existing facade, first encode its semantics in a reusable detection and rendering
-pattern, regenerate the affected module, and verify the generated API at the package boundary.
-Then remove the superseded facade implementation and its facade-only imports, re-exports,
-configuration branches, and duplicate tests. Keep only compatibility aliases that remain part of
-the public API, and generate those aliases through the same generic mechanism.
+When porting an existing facade, first encode its candidate detection, semantic analysis, naming,
+replacement rendering, availability, and ownership rules in a reusable pattern. Regenerate the affected
+module and verify its package-boundary API. Then remove the superseded implementation and its
+facade-only imports, re-exports, configuration branches, and duplicate tests. A compatibility alias is
+allowed only when it is part of the intended public API and is emitted by the same replacement plan;
+it must not retain a second public implementation of the operation.
 
-Items beginning “Refactor” identify existing implementations to port and remove. Items beginning
-“Writing” identify behavior that has no existing facade implementation and must be added through
-the generic mechanism. Verification and documentation items retain their action-oriented wording.
+Items beginning “Refactor” identify existing implementations to port into a generated replacement and
+remove. Items beginning “Writing” identify behavior with no existing facade implementation that must be
+added through the generic mechanism. Every implementation item must prove that the matched declaration
+caused the generated replacement and that no parallel `*_facade` module or public C-shaped wrapper
+remains. Verification and documentation items retain their action-oriented wording.
 
 ## Generic pattern framework
 
-- [ ] Writing the declarative pattern registry with explicit matching, naming, rendering,
-      availability, conflict-resolution, and data-driven override rules.
+- [ ] Writing the declarative pattern registry with explicit candidate matching, replacement naming,
+      in-module rendering, availability, conflict-resolution, and data-driven override rules.
 - [ ] Writing a common analysis model for matched declarations, related types, ownership, error
       conventions, target availability, and renderer inputs.
 - [ ] Writing diagnostics for unmatched, ambiguous, and conflicting candidates that identify the
@@ -39,7 +45,7 @@ the generic mechanism. Verification and documentation items retain their action-
 
 ## 1. Public facade foundation
 
-- [ ] Refactor the existing implementation to use generic pattern detection: Add and validate direct root aliases (including feature-gated companion aliases where
+- [ ] Refactor the existing implementation to use generic pattern detection: Add and validate direct root exports (including feature-gated companion exports where
       applicable) for `assert`, `async_io`, `atomic`, `audio`, `camera`, `events`, `filesystem`,
       `gamepad`, `gpu`, `image`, `joystick`, `mixer`, `mutex`, `net`, `pixels`, `properties`,
       `render`, `surface`, `thread`, `ttf`, `timer`, `tray`, `video`, and `vulkan` while retaining
@@ -393,7 +399,7 @@ the generic mechanism. Verification and documentation items retain their action-
 - [ ] Writing generic generator support for: Add enum/flag unknown-value and round-trip tests for implemented value facades.
 - [ ] Writing generic generator support for: Add callback userdata and teardown tests for implemented callback adapters.
 - [ ] Refactor the existing implementation to use generic pattern detection: Add allocator leak/double-free regression tests.
-- [ ] Refactor the existing implementation to use generic pattern detection: Add migration aliases without removing generated C-shaped functions.
+- [ ] Refactor the existing implementation to use generic pattern detection: Add only documented compatibility aliases while removing the superseded generated C-shaped wrappers.
 - [ ] Updating the generated public API pattern-coverage inventory after implementation; generated
       SDL declaration coverage in `COVERAGE.md` does not satisfy this item.
 - [ ] Re-running the full API comparison when the upstream tip or pinned SDL family changes; do not
